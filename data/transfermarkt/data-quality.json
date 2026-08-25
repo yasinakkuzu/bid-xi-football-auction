@@ -1,0 +1,173 @@
+{
+  "generatedAt": "2026-08-25T11:31:08.951Z",
+  "sourceRows": 50149,
+  "playableProfiles": 3466,
+  "missingSubPosition": 586,
+  "unsupportedSubPositions": [],
+  "tiers": {
+    "current": {
+      "GK": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "RB": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "CB1": {
+        "Süperstar": 10,
+        "Elit": 14,
+        "Çok iyi": 24,
+        "İyi": 26,
+        "Ortalama": 28,
+        "Standart": 18
+      },
+      "LB": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "DM": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "CM": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "AM": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "RW": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "LW": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "ST": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      }
+    },
+    "legends": {
+      "GK": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "RB": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "CB1": {
+        "Süperstar": 10,
+        "Elit": 14,
+        "Çok iyi": 24,
+        "İyi": 26,
+        "Ortalama": 28,
+        "Standart": 18
+      },
+      "LB": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "DM": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "CM": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "AM": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "RW": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "LW": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      },
+      "ST": {
+        "Süperstar": 20,
+        "Elit": 28,
+        "Çok iyi": 48,
+        "İyi": 53,
+        "Ortalama": 55,
+        "Standart": 36
+      }
+    }
+  }
+}
