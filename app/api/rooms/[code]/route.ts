@@ -1,0 +1,2 @@
+import {NextResponse} from 'next/server';import {publicRoom} from '../../../../lib/rooms';
+export async function GET(request:Request,{params}:{params:Promise<{code:string}>}){try{const {code}=await params;const token=new URL(request.url).searchParams.get('token')||'';return NextResponse.json(await publicRoom(code.toUpperCase(),token),{headers:{'Cache-Control':'no-store'}})}catch(error){return NextResponse.json({error:(error as Error).message},{status:401})}}
