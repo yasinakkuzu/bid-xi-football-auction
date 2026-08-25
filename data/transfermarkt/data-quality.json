@@ -1,9 +1,13 @@
 {
-  "generatedAt": "2026-08-25T16:10:16.637Z",
+  "generatedAt": "2026-08-25T18:32:09.624Z",
   "sourceRows": 50149,
   "playableProfiles": 3466,
   "missingSubPosition": 586,
   "unsupportedSubPositions": [],
+  "wingMappings": {
+    "right": 3735,
+    "left": 3863
+  },
   "tiers": {
     "current": {
       "GK": {
