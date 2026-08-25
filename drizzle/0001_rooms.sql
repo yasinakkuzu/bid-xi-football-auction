@@ -18,3 +18,4 @@ CREATE TABLE IF NOT EXISTS room_members (
 );
 CREATE INDEX IF NOT EXISTS idx_rooms_expires_at ON rooms(expires_at);
 CREATE INDEX IF NOT EXISTS idx_room_members_room_code ON room_members(room_code);
+

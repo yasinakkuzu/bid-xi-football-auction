@@ -40,3 +40,4 @@ next-env.d.ts
 *.sqlite-wal
 /data/transfermarkt/*.csv
 /data/transfermarkt/*.sqlite
+

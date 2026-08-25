@@ -95,3 +95,4 @@ for(const era of ['current','legends'])quality.tiers[era]=Object.fromEntries(bas
 writeFileSync('data/transfermarkt/data-quality.json',JSON.stringify(quality,null,2));
 console.log(JSON.stringify({players:Number(count),playable,current:Object.values(pool.current).reduce((n,a)=>n+a.length,0),legends:Object.values(pool.legends).reduce((n,a)=>n+a.length,0),database:DB_PATH,pool:POOL_PATH}));
 db.close();
+

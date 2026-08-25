@@ -10,3 +10,4 @@ test('every simulated manager can finish eleven slots without negative budget',(
 test('score ranking uses hundredth precision and deterministic tie breakers',()=>{const squad=Object.fromEntries(slots.map((s,i)=>[s,player(s,80+i%3,5,i)]));const ranked=rankManagers([{id:0,name:'A',budget:100,squad,spent:55},{id:1,name:'B',budget:90,squad:{...squad,ST:player('ST',90)},spent:65}]);assert.equal(ranked[0].name,'B');assert.equal(Number.isInteger(ranked[0].score*100),true)});
 test('names and CSV cells are hardened',()=>{assert.equal(validManagerNames(['Yasin',' yasin ']),false);assert.equal(validManagerNames(['','Yakup']),false);assert.match(safeCsvCell('=1+1'),/^"'/)});
 test('all-mode budget stays below one billion',()=>{const pool=slots.flatMap(s=>[player(s,80,30),player(s,82,40,1)]);assert.ok(calculateStartingBudget(pool,'all')<1000);assert.equal(calculateStartingBudget(pool,'best'),1000)});
+

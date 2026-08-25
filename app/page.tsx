@@ -279,3 +279,4 @@ function Results({managers,onReset}:{managers:Manager[];onReset:()=>void}){
 function ResultFormation({squad}:{squad:Partial<Record<Slot,Footballer>>}){
   return <div className="result-formation"><div className="result-halfway"/><div className="result-center-circle"/>{SLOTS.map(s=>{const player=squad[s.key];return <div key={s.key} className="result-player" style={FORMATION_POSITIONS[s.key]}><b>{player?.rating||'—'}</b><span>{player?.name||s.short}</span></div>})}</div>;
 }
+
