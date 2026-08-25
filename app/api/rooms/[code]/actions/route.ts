@@ -1,0 +1,3 @@
+import {NextResponse} from 'next/server';import {act} from '../../../../../lib/rooms';
+export async function POST(request:Request,{params}:{params:Promise<{code:string}>}){try{const {code}=await params;const body=await request.json() as {token?:string;type?:string;payload?:Record<string,unknown>};if(!body.token||!body.type)throw new Error('Eksik işlem');return NextResponse.json({state:await act(code.toUpperCase(),body.token,body.type,body.payload)})}catch(error){const message=(error as Error).message;return NextResponse.json({error:message},{status:message.includes('Durum değişti')?409:400})}}
+
