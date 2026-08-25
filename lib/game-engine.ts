@@ -16,6 +16,7 @@ export function seededRandom(seed:number){let a=seed>>>0;return()=>{a|=0;a=a+0x6
 export function shuffleSeeded<T>(input:T[],random:()=>number){const out=[...input];for(let i=out.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[out[i],out[j]]=[out[j],out[i]]}return out}
 
 export function affordableLimit(m:Manager){return m.budget-Math.max(0,10-Object.keys(m.squad).length)*5}
+export function canPlaceBid(m:Manager,lot:Footballer,offer:number,managerIndex:number,passed:number[]=[]){return !m.squad[lot.slot]&&!passed.includes(managerIndex)&&offer>=5&&offer<=affordableLimit(m)}
 export function openingPrice(lot:Footballer,managers:Manager[]){const limits=managers.filter(m=>!m.squad[lot.slot]).map(affordableLimit);return Math.max(5,Math.min(lot.price,Math.max(5,...limits)))}
 export function passIsSafe(pool:Footballer[],index:number,managers:Manager[]){const lot=pool[index];if(!lot)return false;return pool.slice(index).filter(p=>p.slot===lot.slot).length>managers.filter(m=>!m.squad[lot.slot]).length}
 export function calculateStartingBudget(pool:Footballer[],quality:QualityMode){if(quality==='best')return 1000;const expected=SLOT_KEYS.reduce((sum,slot)=>{const c=pool.filter(x=>x.slot===slot);return sum+c.reduce((n,x)=>n+x.price,0)/Math.max(1,c.length)},0);return Math.min(900,Math.max(300,Math.ceil(expected*1.18/10)*10))}
