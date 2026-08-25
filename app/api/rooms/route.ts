@@ -1,0 +1,4 @@
+import {NextResponse} from 'next/server';import {createRoom,defaultSettings,joinRoom,type RoomSettings} from '../../../lib/rooms';
+const clean=(v:unknown)=>String(v||'').trim().slice(0,24);
+export async function POST(request:Request){try{const body=await request.json() as {action?:string;code?:string;name?:string;role?:'manager'|'spectator';settings?:RoomSettings};const name=clean(body.name);if(!name)throw new Error('İsim gerekli');if(body.action==='join'){const code=String(body.code||'').trim().toUpperCase();if(!/^[A-Z2-9]{6}$/.test(code))throw new Error('Oda kodu geçersiz');return NextResponse.json(await joinRoom(code,name,body.role==='spectator'?'spectator':'manager'))}const settings=body.settings||defaultSettings;return NextResponse.json(await createRoom(name,settings))}catch(error){return NextResponse.json({error:(error as Error).message},{status:400})}}
+
