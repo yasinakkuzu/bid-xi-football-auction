@@ -9,6 +9,7 @@ export type AuctionLot=Footballer|Coach;
 export type Manager = { id:number; name:string; budget:number; squad:Partial<Record<Slot,Footballer>>; spent:number; coach?:Coach };
 export type PoolSourceEntry = { id:number; name:string; country:string; club:string; rating:number; price:number; value:number; image?:string; clubLogo?:string };
 export type ScoreBreakdown = Manager & {score:number;avg:number;defense:number;midfield:number;attack:number;weakest:number;balance:number;completion:number;budgetEfficiency:number;coachBoost:number;coachFit:number};
+export type ForcedAssignment={managerId:number;managerName:string;player:Footballer;fee:number};
 
 export const SLOT_KEYS:Slot[]=['GK','RB','CB1','CB2','LB','DM','CM','AM','RW','LW','ST'];
 export const RATING_TIERS:RatingTier[]=['Süperstar','Elit','Çok iyi','İyi','Ortalama','Standart'];
@@ -31,6 +32,17 @@ export function auctionOpeningPrice(lot:AuctionLot,managers:Manager[]){const lim
 export function auctionPassIsSafe(pool:AuctionLot[],index:number,managers:Manager[]){const lot=pool[index];if(!lot)return false;return pool.slice(index).filter(p=>p.slot===lot.slot).length>managers.filter(m=>!lotFilled(m,lot)).length}
 export function calculateStartingBudget(pool:Footballer[],quality:QualityMode){if(quality==='best')return 1000;const expected=SLOT_KEYS.reduce((sum,slot)=>{const c=pool.filter(x=>x.slot===slot);return sum+c.reduce((n,x)=>n+x.price,0)/Math.max(1,c.length)},0);return Math.min(900,Math.max(300,Math.ceil(expected*1.18/10)*10))}
 
+export function fillMissingSlot(managers:Manager[],slot:Slot,candidates:PoolSourceEntry[],role:string,seed:string,excludedNames:Iterable<string>=[]){
+ const random=seededRandom(hashSeed(`${seed}-${slot}`)),used=new Set([...excludedNames,...managers.flatMap(m=>Object.values(m.squad).map(p=>p?.name||''))]);
+ const lowPool=shuffleSeeded([...candidates].sort((a,b)=>a.rating-b.rating||a.value-b.value).slice(0,Math.max(24,managers.length*4)),random);
+ const assignments:ForcedAssignment[]=[];let cursor=0;
+ const next=managers.map(manager=>{if(manager.squad[slot])return manager;let source=lowPool.find((candidate,index)=>index>=cursor&&!used.has(candidate.name));if(!source)source=lowPool.find(candidate=>!used.has(candidate.name))||lowPool[cursor%Math.max(1,lowPool.length)];cursor++;
+  const rating=62+Math.floor(random()*6),fee=Math.min(5,Math.max(0,manager.budget));
+  const player:Footballer={id:`fallback-${source?.id||hashSeed(`${seed}-${manager.id}`)}-${slot}-${manager.id}`,name:source?.name||`Rastgele ${role}`,slot,role:`${role} · Standart altı`,rating,price:5,nation:(source?.country||'Bilinmiyor').slice(0,3).toUpperCase(),club:source?.club||'Serbest oyuncu',image:source?.image,clubLogo:source?.clubLogo};
+  used.add(player.name);assignments.push({managerId:manager.id,managerName:manager.name,player,fee});return{...manager,budget:manager.budget-fee,spent:manager.spent+fee,squad:{...manager.squad,[slot]:player}}});
+ return{managers:next,assignments};
+}
+
 export function coachImpact(m:Manager,defense:number,midfield:number,attack:number){
  const c=m.coach;if(!c)return{coachBoost:0,coachFit:0};
  const sector=c.specialty==='attack'?attack:c.specialty==='defense'?defense:c.specialty==='development'?Math.min(defense,midfield,attack):((defense+midfield+attack)/3);
@@ -46,7 +58,7 @@ export function scoreManager(m:Manager):ScoreBreakdown{
  const defense=(r('GK')+r('RB')+r('CB1')+r('CB2')+r('LB'))/5,midfield=(r('DM')+r('CM')+r('AM'))/3,attack=(r('RW')+r('LW')+r('ST'))/3;
  const weakest=squad.length?Math.min(...squad.map(p=>p.rating)):0,strongest=squad.length?Math.max(...squad.map(p=>p.rating)):0;
  const balance=Math.max(0,100-(strongest-weakest)*2.25),completion=squad.length/11*100,budgetEfficiency=Math.min(100,m.budget/2.5);
- const raw=avg*.46+defense*.13+midfield*.13+attack*.13+weakest*.06+balance*.035+completion*.045+budgetEfficiency*.015+m.budget*.00037;
+ const raw=avg*.46+defense*.13+midfield*.13+attack*.13+weakest*.06+balance*.035+completion*.045+budgetEfficiency*.0015;
  const {coachBoost,coachFit}=coachImpact(m,defense,midfield,attack);
  const one=(n:number)=>Math.round(n*10)/10;
  return {...m,score:Math.round((raw+coachBoost)*100)/100,avg:one(avg),defense:one(defense),midfield:one(midfield),attack:one(attack),weakest:one(weakest),balance:one(balance),completion:one(completion),budgetEfficiency:one(budgetEfficiency),coachBoost,coachFit};

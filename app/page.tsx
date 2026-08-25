@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import {auctionLimit,auctionOpeningPrice,auctionPassIsSafe,calculateStartingBudget,canPlaceLotBid,hashSeed,isCoach,lotFilled,preferFresh,rankManagers,ratingLevel,RATING_TIERS,safeCsvCell,seededRandom,shuffleSeeded,validManagerNames,type AuctionLot,type Era,type Footballer,type Manager,type PoolSourceEntry,type QualityMode,type RatingTier,type Slot} from '../lib/game-engine';
+import {auctionLimit,auctionOpeningPrice,auctionPassIsSafe,calculateStartingBudget,canPlaceLotBid,fillMissingSlot,hashSeed,isCoach,lotFilled,preferFresh,rankManagers,ratingLevel,RATING_TIERS,safeCsvCell,seededRandom,shuffleSeeded,validManagerNames,type AuctionLot,type Era,type Footballer,type ForcedAssignment,type Manager,type PoolSourceEntry,type QualityMode,type RatingTier,type Slot} from '../lib/game-engine';
 import {COACHES} from '../lib/coaches';
 
 type Stage = 'setup' | 'names' | 'auction' | 'results';
@@ -119,7 +119,7 @@ export default function Home() {
   const canBid = (m:Manager,offer:number) => Boolean(current&&leader!==m.id&&canPlaceLotBid(m,current,offer,m.id,passed));
   const remainingForSlot = current ? pool.slice(index).filter(p=>p.slot===current.slot).length : 0;
   const passIsSafe = auctionPassIsSafe(pool,index,managers);
-  timeoutActionRef.current=()=>leader===null?(passIsSafe?passTurn():placeBid(0)):passTurn();
+  timeoutActionRef.current=passTurn;
   const resetClock=()=>{setTimeLeft(20);setDeadline(Date.now()+20000)};
 
   function tone(kind:'bid'|'sold'){
@@ -132,6 +132,10 @@ export default function Home() {
     for(let step=1;step<=ms.length;step++){const id=(after+step)%ms.length,m=ms[id];if(id!==newLeader&&canPlaceLotBid(m,lot,offer,id,newPassed))return id}
     return null;
   }
+  const fallbackFeed=(assignments:ForcedAssignment[])=>assignments.map(item=>`${item.managerName}, ${item.player.slot} pozisyonunu boş bıraktığı için ${item.player.name} standart altı oyuncu olarak ${money(item.fee)} karşılığında otomatik atandı.`);
+  function fallbackCandidates(slot:Slot){if(poolSource?.[era]?.[slot]?.length)return poolSource[era][slot];return pool.filter((lot):lot is Footballer=>!isCoach(lot)&&lot.slot===slot).map((lot,i)=>({id:i+1,name:lot.name,country:lot.nation,club:lot.club||'',rating:lot.rating,price:lot.price,value:lot.price*1000000,image:lot.image,clubLogo:lot.clubLogo}))}
+  function completeLeavingSlot(ms:Manager[],lot:AuctionLot,nextIndex:number){if(isCoach(lot)||(nextIndex<pool.length&&pool[nextIndex].slot===lot.slot))return{managers:ms,assignments:[] as ForcedAssignment[]};const info=SLOTS.find(item=>item.key===lot.slot);return fillMissingSlot(ms,lot.slot,fallbackCandidates(lot.slot),info?.label||lot.slot,`${gameId}-${index}`,pool.map(item=>item.name))}
+  function finishGame(ms:Manager[]){let completed=ms;const assignments:ForcedAssignment[]=[];for(const info of SLOTS){const result=fillMissingSlot(completed,info.key,fallbackCandidates(info.key),info.label,`${gameId}-final-${info.key}`,pool.map(item=>item.name));completed=result.managers;assignments.push(...result.assignments)}setManagers(completed);if(assignments.length)setFeed(f=>[...fallbackFeed(assignments),...f].slice(0,8));localStorage.removeItem('bidxi-game');setStage('results')}
 
   async function goNames(){if(!poolSource){const loaded=await import('./data/auction-pool.generated.json');setPoolSource(loaded.default as PoolSource)}setStage('names')}
   function begin(){
@@ -153,40 +157,38 @@ export default function Home() {
   }
   function passTurn(){
     if(activeTurn===null||paused)return;
-    if(leader===null&&!passIsSafe)return;
     const id=activeTurn,nextPassed=[...passed,id];setPassed(nextPassed);setFeed(f=>[`${managers[id].name} pas geçti.`,...f].slice(0,6));resetClock();
     const next=nextEligible(id,(leader===null?openingPrice:bid+5),nextPassed,leader);
     if(next===null&&leader===null){setTimeout(()=>skipLot(),0);return}
     setActiveTurn(next);
   }
   function skipLot(){
-    setFeed(f=>[`${current.name} için teklif çıkmadı; sürpriz aday bekliyor.`,...f].slice(0,6));
-    if(index+1>=pool.length){setStage('results');return}
-    const nextIndex=index+1,nextPlayer=pool[nextIndex];
-    if(managers.every(m=>lotFilled(m,nextPlayer))){setIndex(nextIndex);setTimeout(()=>skipFilledLots(nextIndex),0);return}
-    const nextOpening=auctionOpeningPrice(nextPlayer,managers);setIndex(nextIndex);setBid(0);setLeader(null);setPassed([]);resetClock();setActiveTurn(managers.find(m=>canPlaceLotBid(m,nextPlayer,nextOpening,m.id))?.id??null);
+    const nextIndex=index+1,completion=completeLeavingSlot(managers,current,nextIndex),updated=completion.managers;setManagers(updated);setFeed(f=>[...fallbackFeed(completion.assignments),`${current.name} için teklif çıkmadı.`,...f].slice(0,8));
+    if(nextIndex>=pool.length){finishGame(updated);return}
+    const nextPlayer=pool[nextIndex];
+    if(updated.every(m=>lotFilled(m,nextPlayer))){setIndex(nextIndex);setTimeout(()=>skipFilledLots(nextIndex,updated),0);return}
+    const nextOpening=auctionOpeningPrice(nextPlayer,updated);setIndex(nextIndex);setBid(0);setLeader(null);setPassed([]);resetClock();setActiveTurn(updated.find(m=>canPlaceLotBid(m,nextPlayer,nextOpening,m.id))?.id??null);
   }
-  function skipFilledLots(from:number){
-    let next=from;while(next<pool.length&&managers.every(m=>lotFilled(m,pool[next])))next++;
-    if(next>=pool.length){localStorage.removeItem('bidxi-game');setStage('results');return}
-    const nextPlayer=pool[next],nextOpening=auctionOpeningPrice(nextPlayer,managers);setIndex(next);setBid(0);setLeader(null);setPassed([]);resetClock();setActiveTurn(managers.find(m=>canPlaceLotBid(m,nextPlayer,nextOpening,m.id))?.id??null);
+  function skipFilledLots(from:number,ms=managers){
+    let next=from;while(next<pool.length&&ms.every(m=>lotFilled(m,pool[next])))next++;
+    if(next>=pool.length){finishGame(ms);return}
+    const nextPlayer=pool[next],nextOpening=auctionOpeningPrice(nextPlayer,ms);setIndex(next);setBid(0);setLeader(null);setPassed([]);resetClock();setActiveTurn(ms.find(m=>canPlaceLotBid(m,nextPlayer,nextOpening,m.id))?.id??null);
   }
   function sell(){
     if(leader === null) return;
     const winner = managers[leader];
     setUndoSnapshot({managers,pool,index,bid,leader,feed,passed,activeTurn,era,quality,revealRatings,selectedTiers,count,names});
-    const updated=managers.map(m=>m.id===leader?(isCoach(current)?{...m,budget:m.budget-bid,spent:m.spent+bid,coach:current}:{...m,budget:m.budget-bid,spent:m.spent+bid,squad:{...m.squad,[current.slot]:current}}):m);
-    const message=`${current.name}, ${winner.name} takımına ${money(bid)} karşılığında katıldı.`;tone('sold');setSaleFlash(`${current.name} → ${winner.name}`);setTimeout(()=>setSaleFlash(''),1100);setManagers(updated);setFeed(f=>[message,...f].slice(0,6));
-    if(index+1>=pool.length){localStorage.removeItem('bidxi-game');setStage('results');return}
-    let nextIndex=index+1;while(nextIndex<pool.length&&updated.every(m=>lotFilled(m,pool[nextIndex])))nextIndex++;
-    if(nextIndex>=pool.length){localStorage.removeItem('bidxi-game');setStage('results');return}
+    let updated=managers.map(m=>m.id===leader?(isCoach(current)?{...m,budget:m.budget-bid,spent:m.spent+bid,coach:current}:{...m,budget:m.budget-bid,spent:m.spent+bid,squad:{...m.squad,[current.slot]:current}}):m);
+    const message=`${current.name}, ${winner.name} takımına ${money(bid)} karşılığında katıldı.`;tone('sold');setSaleFlash(`${current.name} → ${winner.name}`);setTimeout(()=>setSaleFlash(''),1100);
+    let nextIndex=index+1;while(nextIndex<pool.length&&updated.every(m=>lotFilled(m,pool[nextIndex])))nextIndex++;const completion=completeLeavingSlot(updated,current,nextIndex);updated=completion.managers;setManagers(updated);setFeed(f=>[...fallbackFeed(completion.assignments),message,...f].slice(0,8));
+    if(nextIndex>=pool.length){finishGame(updated);return}
     const nextPlayer=pool[nextIndex];
     const nextLimits=updated.filter(m=>!lotFilled(m,nextPlayer)).map(m=>auctionLimit(m,nextPlayer));
     const nextOpening=Math.max(5,Math.min(nextPlayer.price,Math.max(5,...nextLimits)));
     setIndex(nextIndex);setBid(0);setLeader(null);setPassed([]);resetClock();setActiveTurn(updated.find(m=>canPlaceLotBid(m,nextPlayer,nextOpening,m.id))?.id??null);
   }
   function undoSale(){if(!undoSnapshot)return;const s=undoSnapshot;setManagers(s.managers);setPool(s.pool);setIndex(s.index);setBid(s.bid);setLeader(s.leader);setFeed(s.feed);setPassed(s.passed);setActiveTurn(s.activeTurn);setEra(s.era);setQuality(s.quality||'best');setRevealRatings(s.revealRatings||false);setSelectedTiers(s.selectedTiers||RATING_TIERS);setCount(s.count);setNames(s.names);setUndoSnapshot(null);setStage('auction')}
-  function resume(){const raw=localStorage.getItem('bidxi-game');if(!raw)return;try{const s=JSON.parse(raw) as SavedGame;if(s.version!==2||!Array.isArray(s.managers)||!Array.isArray(s.pool)||s.index<0||s.index>=s.pool.length)throw new Error('Geçersiz kayıt');setManagers(s.managers);setPool(s.pool);setIndex(s.index);setBid(s.bid);setLeader(s.leader);setFeed(s.feed);setPassed(s.passed||[]);setActiveTurn(s.activeTurn);setEra(s.era);setQuality(s.quality);setRevealRatings(s.revealRatings);setSelectedTiers(s.selectedTiers);setCount(s.count);setNames(s.names);setGameId(s.gameId);setPaused(s.paused);setSoundOn(s.soundOn);setUndoSnapshot(s.undoSnapshot);setTimeLeft(Math.max(1,Math.ceil(s.remainingMs/1000)));setDeadline(s.paused?null:Date.now()+s.remainingMs);setStage('auction')}catch{localStorage.removeItem('bidxi-game');setHasSaved(false)}}
+  async function resume(){const raw=localStorage.getItem('bidxi-game');if(!raw)return;try{if(!poolSource){const loaded=await import('./data/auction-pool.generated.json');setPoolSource(loaded.default as PoolSource)}const s=JSON.parse(raw) as SavedGame;if(s.version!==2||!Array.isArray(s.managers)||!Array.isArray(s.pool)||s.index<0||s.index>=s.pool.length)throw new Error('Geçersiz kayıt');setManagers(s.managers);setPool(s.pool);setIndex(s.index);setBid(s.bid);setLeader(s.leader);setFeed(s.feed);setPassed(s.passed||[]);setActiveTurn(s.activeTurn);setEra(s.era);setQuality(s.quality);setRevealRatings(s.revealRatings);setSelectedTiers(s.selectedTiers);setCount(s.count);setNames(s.names);setGameId(s.gameId);setPaused(s.paused);setSoundOn(s.soundOn);setUndoSnapshot(s.undoSnapshot);setTimeLeft(Math.max(1,Math.ceil(s.remainingMs/1000)));setDeadline(s.paused?null:Date.now()+s.remainingMs);setStage('auction')}catch{localStorage.removeItem('bidxi-game');setHasSaved(false)}}
   function reset(){if(managers.length&&typeof window!=='undefined'&&!window.confirm('Mevcut oyun silinecek. Yeni oyun kurulsun mu?'))return;localStorage.removeItem('bidxi-game');setHasSaved(false);setStage('setup');setManagers([]);setPool([]);setIndex(0);setBid(0);setLeader(null);setDeadline(null);setSelectedManager(null)}
   function togglePause(){setPaused(p=>{if(p)setDeadline(Date.now()+timeLeft*1000);else setDeadline(null);return !p})}
   function changeCount(n:number){setCount(n);setNames(old=>Array.from({length:n},(_,i)=>old[i]||DEFAULT_MANAGER_NAMES[i]||`Menajer ${i+1}`))}
@@ -212,7 +214,7 @@ export default function Home() {
         </div>
         <div className="bid-panel">
           <div><p className="text-xs uppercase tracking-widest text-zinc-500">{leader===null?'Açılış fiyatı':'Mevcut teklif'}</p><p className="mt-1 text-4xl font-black text-lime-300">{money(visibleBid)}</p><p className="mt-1 text-sm text-zinc-400">{leader===null?'İlk teklif bu tutardan başlar':`Lider: ${managers[leader].name}`}</p></div>
-          <div className="turn-controls"><div className="turn-label"><span>{paused?'DURAKLATILDI':activeTurn===null?'TEKLİFLER BİTTİ':`SIRA: ${managers[activeTurn].name}`}</span><b>{activeTurn===null?'—':`${timeLeft}s`}</b></div><div className="flex flex-wrap gap-2">{leader===null?<button disabled={activeTurn===null||paused||!canBid(managers[activeTurn],openingPrice)} onClick={()=>placeBid(0)} className="increment primary">{money(openingPrice)} teklif ver</button>:[5,10,25].map(n=><button key={n} disabled={activeTurn===null||paused||!canBid(managers[activeTurn],bid+n)} onClick={()=>placeBid(n)} className="increment">+{n}M</button>)}<button disabled={activeTurn===null||paused||(leader===null&&!passIsSafe)} onClick={passTurn} className="pass">Pas</button><button disabled={leader===null||activeTurn!==null||paused} onClick={sell} className="sell">Satışı Bitir</button></div>{leader===null&&<p className="pass-hint">{passIsSafe?`Bu pozisyonda ${remainingForSlot} aday kaldı; sürpriz için pas geçilebilir.`:'Son güvenli adaylar: kadronu tamamlamak için teklif zorunlu.'}</p>}</div>
+          <div className="turn-controls"><div className="turn-label"><span>{paused?'DURAKLATILDI':activeTurn===null?'TEKLİFLER BİTTİ':`SIRA: ${managers[activeTurn].name}`}</span><b>{activeTurn===null?'—':`${timeLeft}s`}</b></div><div className="flex flex-wrap gap-2">{leader===null?<button disabled={activeTurn===null||paused||!canBid(managers[activeTurn],openingPrice)} onClick={()=>placeBid(0)} className="increment primary">{money(openingPrice)} teklif ver</button>:[5,10,25].map(n=><button key={n} disabled={activeTurn===null||paused||!canBid(managers[activeTurn],bid+n)} onClick={()=>placeBid(n)} className="increment">+{n}M</button>)}<button disabled={activeTurn===null||paused} onClick={passTurn} className="pass">Pas</button><button disabled={leader===null||activeTurn!==null||paused} onClick={sell} className="sell">Satışı Bitir</button></div>{leader===null&&<p className="pass-hint">{isCoach(current)?'Teknik direktör adayını pas geçebilirsin.':passIsSafe?`Bu pozisyonda ${remainingForSlot} normal aday kaldı.`:'Bu son normal aday da geçilirse eksik pozisyona 5M karşılığında standart altı oyuncu atanır.'}</p>}</div>
         </div>
       </section>
       <aside className="order-3"><p className="eyebrow">4-2-3-1 PLANI</p><h2 className="mb-5 mt-2 text-xl font-bold">Açık artırma sırası</h2><div className="slot-list">{SLOTS.map((s,i)=><div key={s.key} className={`${!isCoach(current)&&i===SLOTS.findIndex(x=>x.key===current.slot)?'now':''} ${isCoach(current)||i<SLOTS.findIndex(x=>x.key===current.slot)?'done':''}`}><span>{i+1}</span><p>{s.label}</p></div>)}<div className={isCoach(current)?'now':''}><span>12</span><p>Teknik direktör</p></div></div>{feed.length>0&&<div className="feed">{feed.map((f,i)=><p key={i}>{f}</p>)}</div>}</aside>
@@ -271,7 +273,7 @@ function Results({managers,onReset}:{managers:Manager[];onReset:()=>void}){
   return <section className="mx-auto max-w-6xl py-12">
     <div className="text-center"><p className="eyebrow">İHALE TAMAMLANDI</p><h1 className="mt-3 text-5xl font-black">Gecenin şampiyonu</h1><p className="mt-3 text-zinc-400">Kadro gücü, denge, bütçe verimliliği ve teknik direktör uyumuna göre.</p></div>
     {ranked[0]&&<div className="winner"><span className="crown">♛</span><p>1. SIRA</p><h2>{ranked[0].name}</h2><strong>{ranked[0].score.toFixed(2)}</strong><small>TAKIM PUANI</small></div>}
-    <div className="result-grid">{ranked.map((m,i)=><article key={m.id} className="result-card"><div className="flex items-center justify-between"><span className="rank">#{i+1}</span><div className="flex items-center gap-3"><button aria-pressed={Boolean(formationViews[m.id])} className="view-toggle" onClick={()=>setFormationViews(v=>({...v,[m.id]:!v[m.id]}))}>{formationViews[m.id]?'☰ Liste':'⌄ Diziliş'}</button><span className="score">{m.score.toFixed(2)}</span></div></div><h3>{m.name}</h3><div className="stats"><span>Ort. <b>{m.avg}</b></span><span>DEF <b>{m.defense}</b></span><span>ORT <b>{m.midfield}</b></span><span>HÜC <b>{m.attack}</b></span><span>Kalan <b>{money(m.budget)}</b></span></div><div className="result-coach"><span>TD</span><p><b>{m.coach?.name||'Teknik direktör yok'}</b>{m.coach&&<small>{m.coach.preferredFormation} · +{m.coachBoost} takım puanı · %{m.coachFit} uyum</small>}</p></div><details className="score-details"><summary>Puan hesabı</summary><p>En zayıf halka <b>{m.weakest}</b> · Denge <b>{m.balance}</b> · Tamamlama <b>%{m.completion}</b> · Bütçe verimi <b>{m.budgetEfficiency}</b> · TD katkısı <b>+{m.coachBoost}</b></p></details>{formationViews[m.id]?<ResultFormation squad={m.squad}/>:<div className="mini-squad">{SLOTS.map(s=><div key={s.key}><span>{s.short}</span><p>{m.squad[s.key]?.name||'Boş'}</p><b>{m.squad[s.key]?.rating||'—'}</b></div>)}</div>}</article>)}</div>
+    <div className="result-grid">{ranked.map((m,i)=><article key={m.id} className="result-card"><div className="flex items-center justify-between"><span className="rank">#{i+1}</span><div className="flex items-center gap-3"><button aria-pressed={Boolean(formationViews[m.id])} className="view-toggle" onClick={()=>setFormationViews(v=>({...v,[m.id]:!v[m.id]}))}>{formationViews[m.id]?'☰ Liste':'⌄ Diziliş'}</button><span className="score">{m.score.toFixed(2)}</span></div></div><h3>{m.name}</h3><div className="stats"><span>Ort. <b>{m.avg}</b></span><span>DEF <b>{m.defense}</b></span><span>ORT <b>{m.midfield}</b></span><span>HÜC <b>{m.attack}</b></span><span>Kalan <b>{money(m.budget)}</b></span></div><div className="result-coach"><span>TD</span><p><b>{m.coach?.name||'Teknik direktör yok'}</b>{m.coach&&<small>{m.coach.preferredFormation} · +{m.coachBoost} takım puanı · %{m.coachFit} uyum</small>}</p></div><details className="score-details"><summary>Puan hesabı</summary><p>En zayıf halka <b>{m.weakest}</b> · Denge <b>{m.balance}</b> · Tamamlama <b>%{m.completion}</b> · Bütçe verimi <b>{m.budgetEfficiency}</b> (puan etkisi en fazla 0,15) · TD katkısı <b>+{m.coachBoost}</b></p></details>{formationViews[m.id]?<ResultFormation squad={m.squad}/>:<div className="mini-squad">{SLOTS.map(s=><div key={s.key}><span>{s.short}</span><p>{m.squad[s.key]?.name||'Boş'}</p><b>{m.squad[s.key]?.rating||'—'}</b></div>)}</div>}</article>)}</div>
     <div className="result-actions"><button onClick={exportCsv}>↓ CSV indir</button><button onClick={share}>↗ Sonucu paylaş</button></div><button onClick={onReset} className="start mx-auto mt-4 w-full max-w-md">Yeni oyun kur <span>↻</span></button>
   </section>;
 }
