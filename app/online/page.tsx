@@ -748,7 +748,7 @@ export function OnlineGame() {
               </div>
             )}
             <article className={`online-player ${isCoach(current) ? 'coach-lot' : ''} ${bonusLot ? 'bonus-lot-card' : ''}`}>
-              {!isCoach(current)&&<div className="auction-mini-formation" aria-label={`${current.role} mevki konumu`}><i className="mini-halfway"/>{SLOT_KEYS.map(slot=><span key={slot} className={slot===current.slot?'active':''} style={FORMATION_POSITIONS[myManager?.formation||room.settings.formation||'4-2-3-1'][slot]}>{slot===current.slot?slot:''}</span>)}</div>}
+              {!isCoach(current)&&<div className="auction-mini-formation" aria-label={`${current.role} mevki konumu, yatay saha görünümü`}><i className="mini-halfway"/>{SLOT_KEYS.map(slot=>{const point=FORMATION_POSITIONS[myManager?.formation||room.settings.formation||'4-2-3-1'][slot];return <span key={slot} className={slot===current.slot?'active':''} style={{left:point.top,top:point.left}}>{slot===current.slot?slot:''}</span>})}</div>}
               <div className="online-player-visual">
                 <span>{current.name[0]}</span>
                 <PlayerImage player={current} className="online-player-photo" />
