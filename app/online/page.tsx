@@ -3,13 +3,15 @@
 /* eslint-disable @next/next/no-img-element */
 
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {auctionOpeningPrice, auctionPassIsSafe, auctionProgressLabel, BENCH_SLOTS, isBonusPlayerLot, isCoach, lotFilled, rankManagers, ratingLevel, RATING_TIERS, resultInsights, SLOT_KEYS, type AuctionLot, type Manager, type RatingTier, type Slot} from '../../lib/game-engine';
+import {auctionOpeningPrice, auctionPassIsSafe, auctionProgressLabel, BENCH_SLOTS, FORMATIONS, FORMATION_POSITIONS, isBonusPlayerLot, isCoach, lotFilled, rankManagers, ratingLevel, RATING_TIERS, resultInsights, simulateTournament, SLOT_KEYS, type AuctionLot, type Formation, type Manager, type PoolSourceEntry, type RatingTier, type Slot} from '../../lib/game-engine';
 
 type Member = {
   id: string;
   name: string;
   role: 'manager' | 'spectator';
   approved: boolean;
+  isBot?: boolean;
+  botStyle?: 'balanced'|'aggressive'|'value';
 };
 type AuctionMode = 'live' | 'manual';
 type Settings = {
@@ -19,6 +21,14 @@ type Settings = {
   selectedTiers: RatingTier[];
   auctionMode?: AuctionMode;
   includeBench?: boolean;
+  timerSeconds?: 10|15|20|30;
+  bidIncrement?: 5|10|25;
+  secondChance?: boolean;
+  seasonLength?: 1|3|5;
+  scenarioId?: 'classic'|'hidden-gems'|'stars-and-scrubs'|'budget-crunch'|'speed-auction';
+  formation?: Formation;
+  poolMode?: 'generated'|'custom';
+  customPlayerIds?: string[];
 };
 type Game = {
   managers: Manager[];
@@ -39,6 +49,7 @@ type Room = {
   settings: Settings;
   members: Member[];
   game?: Game;
+  season?:{round:number;length:number;standings:Record<string,{name:string;points:number;wins:number;totalScore:number}>};
 };
 type Session = {code: string; token: string; memberToken?: string};
 
@@ -50,21 +61,16 @@ const defaults: Settings = {
   selectedTiers: RATING_TIERS,
   auctionMode: 'live',
   includeBench: false,
+  timerSeconds: 20,
+  bidIncrement: 5,
+  secondChance: true,
+  seasonLength: 1,
+  scenarioId: 'classic',
+  formation: '4-2-3-1',
+  poolMode:'generated',
+  customPlayerIds:[],
 };
-const coordinates: Record<Slot, {left: string; top: string}> = {
-  GK: {left: '50%', top: '91%'},
-  RB: {left: '82%', top: '72%'},
-  CB1: {left: '61%', top: '77%'},
-  CB2: {left: '39%', top: '77%'},
-  LB: {left: '18%', top: '72%'},
-  DM: {left: '36%', top: '57%'},
-  CM: {left: '64%', top: '57%'},
-  AM: {left: '50%', top: '32%'},
-  RW: {left: '82%', top: '32%'},
-  LW: {left: '18%', top: '32%'},
-  ST: {left: '50%', top: '13%'},
-};
-
+const coordinates:Record<Slot,{left:string;top:string}>={GK:{left:'50%',top:'91%'},RB:{left:'82%',top:'72%'},CB1:{left:'61%',top:'77%'},CB2:{left:'39%',top:'77%'},LB:{left:'18%',top:'72%'},DM:{left:'36%',top:'57%'},CM:{left:'64%',top:'57%'},AM:{left:'50%',top:'32%'},RW:{left:'82%',top:'32%'},LW:{left:'18%',top:'32%'},ST:{left:'50%',top:'13%'}};
 async function json(url: string, options?: RequestInit) {
   let response: Response;
   try {
@@ -105,7 +111,7 @@ function SquadPanel({manager, compact = false}: {manager: Manager; compact?: boo
     <section className={`online-squad-panel ${compact ? 'compact' : ''}`}>
       <div className="online-squad-summary">
         <div>
-          <p className="eyebrow">4-2-3-1 KADRO</p>
+          <p className="eyebrow">{manager.formation||'4-2-3-1'} KADRO</p>
           <h2>{manager.name}</h2>
         </div>
         <div>
@@ -122,7 +128,7 @@ function SquadPanel({manager, compact = false}: {manager: Manager; compact?: boo
         {SLOT_KEYS.map((slot) => {
           const player = manager.squad[slot];
           return (
-            <div className={`online-formation-player ${player ? 'filled' : ''}`} style={coordinates[slot]} key={slot}>
+            <div className={`online-formation-player ${player ? 'filled' : ''}`} style={(manager.formation&&manager.formation!=='4-2-3-1'?FORMATION_POSITIONS[manager.formation]:coordinates)[slot]} key={slot}>
               {player ? (
                 <>
                   <PlayerImage player={player} className="squad-player-photo" />
@@ -290,6 +296,9 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
   const [view, setView] = useState<'auction' | 'squad'>('auction');
   const [selectedManager, setSelectedManager] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  const [presentation,setPresentation]=useState(false);
+  const [poolCatalog,setPoolCatalog]=useState<Array<PoolSourceEntry&{slot:Slot}>>([]);
+  const [poolQuery,setPoolQuery]=useState('');
 
   const loadRoom = useCallback(async (s: Session) => {
     try {
@@ -340,6 +349,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
     const id = setInterval(() => {if (!document.hidden) setNow(Date.now())}, 1000);
     return () => clearInterval(id);
   }, [screen, room?.status]);
+  useEffect(()=>{if(screen!=='entry'||tab!=='create'||settings.poolMode!=='custom')return;let cancelled=false;void json(`/api/pool?era=${settings.era}`).then(data=>{if(cancelled)return;const source=data as unknown as Record<Slot,PoolSourceEntry[]>;setPoolCatalog(SLOT_KEYS.flatMap(slot=>(source[slot]||[]).map(player=>({...player,slot}))))}).catch(()=>setError('Özel oyuncu havuzu yüklenemedi.'));return()=>{cancelled=true}},[screen,tab,settings.poolMode,settings.era]);
 
   const game = room?.game;
   const approvedManagers = room?.members.filter((member) => member.role === 'manager' && member.approved) || [];
@@ -430,6 +440,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
     setScreen('entry');
     setView('auction');
   }
+  async function togglePresentation(){const next=!presentation;setPresentation(next);try{if(next)await document.documentElement.requestFullscreen?.();else if(document.fullscreenElement)await document.exitFullscreen()}catch{}}
 
   if (screen === 'entry')
     return (
@@ -580,6 +591,18 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
                     </span>
                   </button>
                 </div>
+                <label className="label mt-5">Gelişmiş kurallar</label>
+                <div className="advanced-settings">
+                  <label>Senaryo<select value={settings.scenarioId} onChange={event=>setSettings(value=>({...value,scenarioId:event.target.value as Settings['scenarioId']}))}><option value="classic">Klasik</option><option value="hidden-gems">Gizli cevherler</option><option value="stars-and-scrubs">Yıldızlar ve sürprizler</option><option value="budget-crunch">Dar bütçe</option><option value="speed-auction">Hızlı açık artırma</option></select></label>
+                  <label>Süre<select value={settings.timerSeconds} onChange={event=>setSettings(value=>({...value,timerSeconds:Number(event.target.value) as Settings['timerSeconds']}))}>{[10,15,20,30].map(value=><option key={value} value={value}>{value} saniye</option>)}</select></label>
+                  <label>Teklif artışı<select value={settings.bidIncrement} onChange={event=>setSettings(value=>({...value,bidIncrement:Number(event.target.value) as Settings['bidIncrement']}))}>{[5,10,25].map(value=><option key={value} value={value}>${value}M</option>)}</select></label>
+                  <label>Diziliş<select value={settings.formation} onChange={event=>setSettings(value=>({...value,formation:event.target.value as Formation}))}>{FORMATIONS.map(value=><option key={value}>{value}</option>)}</select></label>
+                  <label>Sezon<select value={settings.seasonLength} onChange={event=>setSettings(value=>({...value,seasonLength:Number(event.target.value) as Settings['seasonLength']}))}>{[1,3,5].map(value=><option key={value} value={value}>{value} oyun</option>)}</select></label>
+                  <label className="check-setting"><input type="checkbox" checked={settings.secondChance} onChange={event=>setSettings(value=>({...value,secondChance:event.target.checked}))}/> Satılmayanlara ikinci şans</label>
+                </div>
+                <label className="label mt-5">Oyuncu havuzu</label>
+                <div className="pool-mode"><button className={settings.poolMode!=='custom'?'active':''} onClick={()=>setSettings(value=>({...value,poolMode:'generated',customPlayerIds:[]}))}>Otomatik havuz</button><button className={settings.poolMode==='custom'?'active':''} onClick={()=>setSettings(value=>({...value,poolMode:'custom'}))}>Favorilerimi ekle</button></div>
+                {settings.poolMode==='custom'&&<div className="custom-pool"><input className="online-input" value={poolQuery} onChange={event=>setPoolQuery(event.target.value)} placeholder="Oyuncu veya kulüp ara"/><small>{settings.customPlayerIds?.length||0} favori seçildi · eksik pozisyonları sistem tamamlar</small>{poolQuery.trim().length>1&&<div>{poolCatalog.filter(player=>`${player.name} ${player.club}`.toLocaleLowerCase('tr').includes(poolQuery.toLocaleLowerCase('tr'))).slice(0,8).map(player=>{const key=`${player.slot}:${player.id}`,selected=settings.customPlayerIds?.includes(key);return <button className={selected?'active':''} key={key} onClick={()=>setSettings(value=>({...value,customPlayerIds:selected?value.customPlayerIds?.filter(id=>id!==key):[...(value.customPlayerIds||[]),key]}))}><b>{selected?'✓ ':'+ '}{player.name}</b><span>{player.club} · {player.slot}</span></button>})}</div>}</div>}
               </>
             )}
             {error && (
@@ -606,7 +629,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
   const selected = selectedManager === null ? null : game?.managers[selectedManager] || null;
 
   return (
-    <main className={`online-room ${game && myManager && room.status === 'auction' ? 'has-mobile-bar' : ''}`}>
+    <main className={`online-room ${game && myManager && room.status === 'auction' ? 'has-mobile-bar' : ''} ${presentation?'presentation-mode':''}`}>
       <header className="room-header">
         <div>
           <button className="brand-button" onClick={onLocal}>
@@ -628,6 +651,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
         <button className="tool-btn leave-room" onClick={()=>void leave()}>
           Odadan çık
         </button>
+        {game&&room.status==='auction'&&<button className="tool-btn tv-mode" onClick={togglePresentation}>{presentation?'TV modundan çık':'▣ TV modu'}</button>}
       </header>
       {game && myManager && room.status === 'auction' && (
         <nav className="manager-view-tabs" aria-label="Menajer ekranı">
@@ -661,10 +685,10 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
                       {member.id === memberId ? ' · Siz' : ''}
                     </b>
                     <small>
-                      {member.role === 'manager' ? 'Menajer' : 'Seyirci'} · {member.approved ? 'Onaylandı' : 'Onay bekliyor'}
+                      {member.isBot?'Ücretsiz kural tabanlı AI':member.role === 'manager' ? 'Menajer' : 'Seyirci'} · {member.approved ? 'Onaylandı' : 'Onay bekliyor'}
                     </small>
                   </div>
-                  {isHost && !member.approved ? (
+                  {isHost&&member.isBot?<button className="danger-action" disabled={busy} onClick={()=>action('removeBot',{memberId:member.id})}>Kaldır</button>:isHost && !member.approved ? (
                     <button disabled={busy} onClick={() => action('approve', {memberId: member.id})}>
                       Onayla
                     </button>
@@ -675,9 +699,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
               ))}
             </div>
             {isHost ? (
-              <button className="start" disabled={busy || managers.length < 2} onClick={() => action('start')}>
-                Oyunu başlat <span>→</span>
-              </button>
+              <div className="lobby-actions"><button disabled={busy||managers.length>=8} onClick={()=>action('addBot',{style:'balanced'})}>+ AI menajer ekle</button><button className="start" disabled={busy || managers.length < 2} onClick={() => action('start')}>Oyunu başlat <span>→</span></button></div>
             ) : (
               !approved && <div className="waiting">Oda sahibinin onayı bekleniyor…</div>
             )}
@@ -698,9 +720,10 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
           </aside>
         </section>
       ) : room.status === 'results' && game ? (
-        <OnlineResults managers={game.managers} audit={game.audit||[]} />
+        <OnlineResults managers={game.managers} audit={game.audit||[]} season={room.season} onRematch={isHost&&(!room.season||room.season.round<room.season.length)?()=>action('rematch'):undefined} />
       ) : view === 'squad' && myManager ? (
         <div className="my-squad-screen">
+          <div className="formation-picker" aria-label="Takım dizilişi">{FORMATIONS.map(formation=><button className={(myManager.formation||'4-2-3-1')===formation?'active':''} key={formation} onClick={()=>action('formation',{formation})}>{formation}</button>)}</div>
           <SquadPanel manager={myManager} />
         </div>
       ) : game && current ? (
@@ -826,11 +849,13 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
   );
 }
 
-function OnlineResults({managers,audit}: {managers: Manager[];audit:string[]}) {
+function OnlineResults({managers,audit,onRematch,season}: {managers: Manager[];audit:string[];onRematch?:()=>Promise<void>;season?:Room['season']}) {
   const {ranked, insights} = useMemo(() => {
     const ordered = rankManagers(managers);
     return {ranked: ordered, insights: resultInsights(ordered)};
   }, [managers]);
+  const tournament=useMemo(()=>simulateTournament(managers,'online-results'),[managers]);
+  async function shareCard(){const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1350;const ctx=canvas.getContext('2d');if(!ctx)return;ctx.fillStyle='#09100b';ctx.fillRect(0,0,1080,1350);ctx.fillStyle='#c9ff45';ctx.font='900 54px system-ui';ctx.fillText('AÇIK ARTIRMA',70,100);ctx.fillStyle='white';ctx.font='900 76px system-ui';ctx.fillText(`${ranked[0]?.name||'Şampiyon'} kazandı`,70,220);ctx.font='700 36px system-ui';ranked.slice(0,5).forEach((team,index)=>ctx.fillText(`${index+1}. ${team.name.slice(0,22)}  ${team.score.toFixed(2)}`,80,340+index*105));ctx.fillStyle='#a1a1aa';ctx.font='28px system-ui';ctx.fillText('Kadro puanlarına dayalı oyun sonucudur.',70,1240);const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)return;const file=new File([blob],'acik-artirma-sonucu.png',{type:'image/png'});try{if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],title:'Açık Artırma sonucu'});else{const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=file.name;link.click();URL.revokeObjectURL(link.href)}}catch(error){if((error as DOMException).name!=='AbortError')throw error}}
   return (
     <section className="online-results">
       <p className="eyebrow">ODA SONUCU</p>
@@ -867,7 +892,11 @@ function OnlineResults({managers,audit}: {managers: Manager[];audit:string[]}) {
           </article>
         ))}
       </div>
+      {tournament.table.length>2&&<section className="tournament"><p className="eyebrow">MUHTEMEL MİNİ LİG</p><div className="tournament-table"><b>#</b><b>Takım</b><b>O</b><b>AV</b><b>P</b>{tournament.table.map((row,index)=><span key={row.managerId} className="tournament-row"><i>{index+1}</i><strong>{row.name}</strong><i>{row.played}</i><i>{row.goalDifference}</i><b>{row.points}</b></span>)}</div><small>Sonuçlar kadro, hat eşleşmeleri ve teknik direktör uyumundan deterministik olarak üretilen oyun tahminidir.</small></section>}
+      {season&&season.length>1&&<section className="tournament"><p className="eyebrow">SEZON · {season.round}/{season.length}</p><div className="season-list">{Object.values(season.standings).sort((a,b)=>b.points-a.points||b.totalScore-a.totalScore).map((row,index)=><p key={row.name}><b>{index+1}. {row.name}</b><span>{row.points} puan · {row.wins} galibiyet</span></p>)}</div></section>}
       {audit.length>0&&<details className="result-audit"><summary>Oyun kararları ve otomatik atamalar</summary>{audit.map((item,index)=><p key={`${item}-${index}`}>{item}</p>)}</details>}
+      <button className="share-card" onClick={shareCard}>↗ Sonuç kartını paylaş</button>
+      {onRematch&&<button className="start mx-auto mt-4" onClick={onRematch}>Aynı menajerlerle rövanş <span>↻</span></button>}
       <p>Bu sonuç odada 7 gün boyunca saklanır.</p>
     </section>
   );

@@ -1,13 +1,15 @@
 export type Era = 'current' | 'legends';
 export type QualityMode = 'best' | 'all';
 export type RatingTier = 'Süperstar'|'Elit'|'Çok iyi'|'İyi'|'Ortalama'|'Standart';
+export type Formation = '4-2-3-1'|'4-3-3'|'4-1-4-1';
+export type BotStyle = 'balanced'|'aggressive'|'value';
 export type Slot = 'GK'|'RB'|'CB1'|'CB2'|'LB'|'DM'|'CM'|'AM'|'RW'|'LW'|'ST';
 export type BenchSlot='BGK'|'BDEF'|'BMID'|'BFWD';
 export type Footballer = { id:string; name:string; slot:Slot; role:string; rating:number; price:number; nation:string; club?:string; image?:string; clubLogo?:string; benchSlot?:BenchSlot };
 export type CoachSpecialty='attack'|'defense'|'balance'|'development'|'motivation';
 export type Coach={kind:'coach';id:string;name:string;slot:'COACH';role:'Teknik Direktör';rating:number;price:number;nation:string;tactics:number;motivation:number;adaptability:number;development:number;preferredFormation:string;specialty:CoachSpecialty;image?:string};
 export type AuctionLot=Footballer|Coach;
-export type Manager = { id:number; name:string; budget:number; squad:Partial<Record<Slot,Footballer>>; spent:number; bench?:Partial<Record<BenchSlot,Footballer>>; coach?:Coach };
+export type Manager = { id:number; name:string; budget:number; squad:Partial<Record<Slot,Footballer>>; spent:number; bench?:Partial<Record<BenchSlot,Footballer>>; coach?:Coach; formation?:Formation; isBot?:boolean; botStyle?:BotStyle };
 export type PoolSourceEntry = { id:number; name:string; country:string; club:string; rating:number; price:number; value:number; image?:string; clubLogo?:string };
 export type ScoreBreakdown = Manager & {score:number;avg:number;defense:number;midfield:number;attack:number;weakest:number;balance:number;completion:number;budgetEfficiency:number;coachBoost:number;coachFit:number;benchDepth:number};
 export type ForcedAssignment={managerId:number;managerName:string;player:Footballer;fee:number};
@@ -21,6 +23,12 @@ export const BENCH_SLOTS:{key:BenchSlot;label:string;short:string;sourceSlots:Sl
  {key:'BFWD',label:'Yedek Forvet',short:'Y-FV',sourceSlots:['RW','LW','ST']}
 ];
 export const RATING_TIERS:RatingTier[]=['Süperstar','Elit','Çok iyi','İyi','Ortalama','Standart'];
+export const FORMATIONS:Formation[]=['4-2-3-1','4-3-3','4-1-4-1'];
+export const FORMATION_POSITIONS:Record<Formation,Record<Slot,{left:string;top:string}>>={
+ '4-2-3-1':{GK:{left:'50%',top:'89%'},RB:{left:'84%',top:'70%'},CB1:{left:'62%',top:'75%'},CB2:{left:'38%',top:'75%'},LB:{left:'16%',top:'70%'},DM:{left:'36%',top:'55%'},CM:{left:'64%',top:'55%'},AM:{left:'50%',top:'30%'},RW:{left:'82%',top:'30%'},LW:{left:'18%',top:'30%'},ST:{left:'50%',top:'10%'}},
+ '4-3-3':{GK:{left:'50%',top:'89%'},RB:{left:'84%',top:'70%'},CB1:{left:'62%',top:'75%'},CB2:{left:'38%',top:'75%'},LB:{left:'16%',top:'70%'},DM:{left:'50%',top:'58%'},CM:{left:'65%',top:'48%'},AM:{left:'35%',top:'48%'},RW:{left:'82%',top:'24%'},LW:{left:'18%',top:'24%'},ST:{left:'50%',top:'10%'}},
+ '4-1-4-1':{GK:{left:'50%',top:'89%'},RB:{left:'84%',top:'70%'},CB1:{left:'62%',top:'75%'},CB2:{left:'38%',top:'75%'},LB:{left:'16%',top:'70%'},DM:{left:'50%',top:'59%'},CM:{left:'62%',top:'43%'},AM:{left:'38%',top:'43%'},RW:{left:'82%',top:'39%'},LW:{left:'18%',top:'39%'},ST:{left:'50%',top:'11%'}}
+};
 export function ratingLevel(r:number):RatingTier{return r>=93?'Süperstar':r>=90?'Elit':r>=86?'Çok iyi':r>=82?'İyi':r>=77?'Ortalama':'Standart'}
 
 export function hashSeed(text:string){let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
@@ -40,6 +48,8 @@ export function auctionLimit(m:Manager,lot:AuctionLot){if(isCoach(lot))return m.
 export function lotFilled(m:Manager,lot:AuctionLot){return isCoach(lot)?Boolean(m.coach):lot.benchSlot?Boolean(m.bench?.[lot.benchSlot]):Boolean(m.squad[lot.slot])}
 export function canPlaceLotBid(m:Manager,lot:AuctionLot,offer:number,managerIndex:number,passed:number[]=[]){return !lotFilled(m,lot)&&!passed.includes(managerIndex)&&offer>=5&&offer<=auctionLimit(m,lot)}
 export function auctionOpeningPrice(lot:AuctionLot,managers:Manager[]){const limits=managers.filter(m=>!lotFilled(m,lot)).map(m=>auctionLimit(m,lot));return Math.max(5,Math.min(lot.price,Math.max(5,...limits)))}
+export function botMaximumBid(manager:Manager,lot:AuctionLot,seed:string,revealRatings=true){if(lotFilled(manager,lot))return 0;const style=manager.botStyle||'balanced',random=seededRandom(hashSeed(`${seed}-${manager.id}-${lot.id}`));const quality=revealRatings?lot.rating:84;const base=Math.max(5,lot.price*(style==='aggressive'?1.28:style==='value'?0.82:1.05));const qualityBonus=Math.max(0,quality-84)*(style==='aggressive'?4:2.4);return Math.max(5,Math.min(auctionLimit(manager,lot),Math.round((base+qualityBonus)*(0.9+random()*.2)/5)*5))}
+export function chooseBotFormation(manager:Manager):Formation{const r=(slot:Slot)=>manager.squad[slot]?.rating||0;const wing=(r('RW')+r('LW'))/2,mid=(r('DM')+r('CM')+r('AM'))/3;if(mid-wing>2)return'4-1-4-1';if(wing-mid>1)return'4-3-3';return'4-2-3-1'}
 export function auctionPassIsSafe(pool:AuctionLot[],index:number,managers:Manager[]){const lot=pool[index];if(!lot)return false;const key=auctionGroupKey(lot);return pool.slice(index).filter(p=>auctionGroupKey(p)===key).length>managers.filter(m=>!lotFilled(m,lot)).length}
 export function calculateStartingBudget(pool:Footballer[],quality:QualityMode){if(quality==='best')return 1000;const expected=SLOT_KEYS.reduce((sum,slot)=>{const c=pool.filter(x=>x.slot===slot);return sum+c.reduce((n,x)=>n+x.price,0)/Math.max(1,c.length)},0);return Math.min(900,Math.max(300,Math.ceil(expected*1.18/10)*10))}
 
@@ -74,7 +84,7 @@ export function auctionProgressLabel(pool:AuctionLot[],index:number){const lot=p
 export function coachImpact(m:Manager,defense:number,midfield:number,attack:number){
  const c=m.coach;if(!c)return{coachBoost:0,coachFit:0};
  const sector=c.specialty==='attack'?attack:c.specialty==='defense'?defense:c.specialty==='development'?Math.min(defense,midfield,attack):((defense+midfield+attack)/3);
- const formationFit=c.preferredFormation==='4-2-3-1'?100:Math.min(100,72+c.adaptability*.28);
+ const formationFit=c.preferredFormation===(m.formation||'4-2-3-1')?100:Math.min(100,72+c.adaptability*.28);
  const fit=c.tactics*.3+c.motivation*.18+c.adaptability*.18+c.development*.1+formationFit*.14+sector*.1;
  const boost=Math.max(0,Math.min(6,(fit-72)*.18));
  return{coachBoost:Math.round(boost*10)/10,coachFit:Math.round(fit*10)/10};
@@ -87,7 +97,8 @@ export function scoreManager(m:Manager):ScoreBreakdown{
  const weakest=squad.length?Math.min(...squad.map(p=>p.rating)):0,strongest=squad.length?Math.max(...squad.map(p=>p.rating)):0;
  const balance=Math.max(0,100-(strongest-weakest)*2.25),completion=squad.length/11*100,budgetEfficiency=Math.min(100,m.budget/2.5);
  const bench=Object.values(m.bench||{}) as Footballer[],benchAverage=bench.length?bench.reduce((sum,p)=>sum+p.rating,0)/bench.length:0,benchCoverage=bench.length/4,depthBoost=Math.min(1.6,Math.max(0,(benchAverage-70)*.045)*benchCoverage);
- const raw=avg*.46+defense*.13+midfield*.13+attack*.13+weakest*.06+balance*.035+completion*.045+budgetEfficiency*.0015+depthBoost;
+ const formation=m.formation||'4-2-3-1',formationFit=formation==='4-3-3'?Math.max(0,(attack-midfield)*.035):formation==='4-1-4-1'?Math.max(0,(midfield-attack)*.035):Math.max(0,(Math.min(midfield,attack)-82)*.018);
+ const raw=avg*.46+defense*.13+midfield*.13+attack*.13+weakest*.06+balance*.035+completion*.045+budgetEfficiency*.0015+depthBoost+Math.min(.8,formationFit);
  const {coachBoost,coachFit}=coachImpact(m,defense,midfield,attack);
  const one=(n:number)=>Math.round(n*10)/10;
  return {...m,score:Math.round((raw+coachBoost)*100)/100,avg:one(avg),defense:one(defense),midfield:one(midfield),attack:one(attack),weakest:one(weakest),balance:one(balance),completion:one(completion),budgetEfficiency:one(budgetEfficiency),coachBoost,coachFit,benchDepth:one(depthBoost)};
@@ -106,6 +117,10 @@ export function resultInsights(ranked:ScoreBreakdown[]):ResultInsights{
  const scoreLine=`${first.name} ${firstGoals}–${secondGoals} ${second.name}`,summary=`Tahmini maçta ${first.name}, ${first.attack.toFixed(1)} hücum gücüyle ${second.name} savunmasına karşı öne çıkıyor. ${second.name} güçlü ${secondBest[0]} hattıyla denge kurabilir; bu skor kadro puanları ve hat eşleşmelerinden üretilmiş bir oyun tahminidir.`;
  return{winner,runnerUp,match:{scoreLine,summary}};
 }
+export type SimulatedMatch={homeId:number;awayId:number;homeGoals:number;awayGoals:number};
+export type TournamentRow={managerId:number;name:string;played:number;won:number;drawn:number;lost:number;goalsFor:number;goalsAgainst:number;goalDifference:number;points:number};
+export function simulateMatch(home:ScoreBreakdown,away:ScoreBreakdown,seed:string):SimulatedMatch{const random=seededRandom(hashSeed(`match-v1-${seed}-${Math.min(home.id,away.id)}-${Math.max(home.id,away.id)}`)),expected=(attack:number,defense:number,mid:number,opMid:number,coach:number)=>Math.max(.35,Math.min(3.2,1.25+(attack-defense)*.055+(mid-opMid)*.025+coach*.035));const goals=(x:number)=>Math.max(0,Math.min(6,Math.floor(x*.52+random()*1.35+random()*.85)));const low=home.id<=away.id?home:away,high=home.id<=away.id?away:home,lowGoals=goals(expected(low.attack,high.defense,low.midfield,high.midfield,low.coachFit)),highGoals=goals(expected(high.attack,low.defense,high.midfield,low.midfield,high.coachFit));return home.id===low.id?{homeId:home.id,awayId:away.id,homeGoals:lowGoals,awayGoals:highGoals}:{homeId:home.id,awayId:away.id,homeGoals:highGoals,awayGoals:lowGoals}}
+export function simulateTournament(managers:Manager[],seed:string){const ranked=managers.map(scoreManager),matches:SimulatedMatch[]=[];for(let i=0;i<ranked.length;i++)for(let j=i+1;j<ranked.length;j++)matches.push(simulateMatch(ranked[i],ranked[j],seed));const table=ranked.map(team=>{const games=matches.filter(match=>match.homeId===team.id||match.awayId===team.id);let won=0,drawn=0,lost=0,goalsFor=0,goalsAgainst=0;for(const game of games){const home=game.homeId===team.id,gf=home?game.homeGoals:game.awayGoals,ga=home?game.awayGoals:game.homeGoals;goalsFor+=gf;goalsAgainst+=ga;if(gf>ga)won++;else if(gf===ga)drawn++;else lost++}return{managerId:team.id,name:team.name,played:games.length,won,drawn,lost,goalsFor,goalsAgainst,goalDifference:goalsFor-goalsAgainst,points:won*3+drawn} satisfies TournamentRow}).sort((a,b)=>b.points-a.points||b.goalDifference-a.goalDifference||b.goalsFor-a.goalsFor||a.managerId-b.managerId);return{table,matches}}
 export function safeCsvCell(value:unknown){const s=String(value??'');const neutral=/^[=+@\-]/.test(s)?`'${s}`:s;return `"${neutral.replaceAll('"','""')}"`}
 export function validManagerNames(names:string[]){const clean=names.map(n=>n.trim());return clean.every(n=>n.length>0&&n.length<=24)&&new Set(clean.map(n=>n.toLocaleLowerCase('tr'))).size===clean.length}
 
