@@ -42,6 +42,7 @@ type Game = {
   deadline: number | null;
   feed: string[];
   audit?: string[];
+  undo?: string;
 };
 type Room = {
   code: string;
@@ -49,6 +50,7 @@ type Room = {
   settings: Settings;
   members: Member[];
   game?: Game;
+  chat?:Array<{id:string;memberId:string;name:string;text:string;at:number}>;
   season?:{round:number;length:number;standings:Record<string,{name:string;points:number;wins:number;totalScore:number}>};
 };
 type Session = {code: string; token: string; memberToken?: string};
@@ -274,6 +276,7 @@ function ManualControls({game, current, busy, onAction}: {game: Game; current: A
       <button disabled={busy} onClick={() => onAction('manualSkip')}>
         {triggersFallback ? 'Geç · eksikleri otomatik tamamla' : 'Satılmadı · Geç'}
       </button>
+      <button className="undo-action" disabled={busy||!game.undo} onClick={()=>onAction('undo')}>↶ Geri al</button>
     </div>
   );
 }
@@ -299,6 +302,8 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
   const [presentation,setPresentation]=useState(false);
   const [poolCatalog,setPoolCatalog]=useState<Array<PoolSourceEntry&{slot:Slot}>>([]);
   const [poolQuery,setPoolQuery]=useState('');
+  const [chatOpen,setChatOpen]=useState(false);
+  const [chatText,setChatText]=useState('');
 
   const loadRoom = useCallback(async (s: Session) => {
     try {
@@ -441,6 +446,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
     setView('auction');
   }
   async function togglePresentation(){const next=!presentation;setPresentation(next);try{if(next)await document.documentElement.requestFullscreen?.();else if(document.fullscreenElement)await document.exitFullscreen()}catch{}}
+  async function sendChat(){const text=chatText.trim();if(!text)return;setChatText('');await action('chat',{text})}
 
   if (screen === 'entry')
     return (
@@ -748,7 +754,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
             <div className="online-lot-head">
               <span>{isCoach(current) ? 'TEKNİK DİREKTÖR AÇIK ARTIRMASI' : `LOT ${game.index + 1}/${game.pool.length}`}</span>
               <b>{mode === 'manual' ? 'MANUEL YÖNETİM' : game.paused ? 'DURAKLATILDI' : auctionOpen ? 'SERBEST TEKLİF' : game.leader === null ? 'SONRAKİ LOT' : 'TEKLİFLER KAPANDI'}</b>
-              <em>{game.deadline ? `${remaining}s` : '—'}</em>
+              <em className={remaining>0&&remaining<=5?'countdown-critical':''}><i/>{game.deadline ? `${remaining}s` : '—'}</em>
             </div>
             <p className="online-lot-progress">{auctionProgressLabel(game.pool, game.index)}</p>
             {bonusLot && (
@@ -808,30 +814,9 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
                       Pas
                     </button>
                   </div>
-                  {isHost && (
-                    <div className="host-controls">
-                      <span>KURUCU KONTROLLERİ</span>
-                      {auctionOpen ? (
-                        game.leader===null?<button className="danger-action" disabled={busy} onClick={() => {if(confirm(`${current.name} satılmadan geçilsin mi?`))void action('skip')}}>Lotu geç</button>:<button disabled={busy} onClick={() => action('close')}>Teklifleri kapat</button>
-                      ) : (
-                        game.leader !== null && (
-                          <>
-                            <button className="host-primary" disabled={busy} onClick={() => action('sell')}>
-                              Satışı bitir
-                            </button>
-                            <button disabled={busy} onClick={() => action('reopen')}>
-                              Yeniden aç
-                            </button>
-                          </>
-                        )
-                      )}
-                      <button disabled={busy || !auctionOpen} onClick={() => action('pause')}>
-                        {game.paused ? 'Devam ettir' : 'Duraklat'}
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
+              {isHost&&mode==='live'&&<div className="host-controls permanent-host-controls"><span>KURUCU KONTROLLERİ · HER ZAMAN ERİŞİLEBİLİR</span><button className="danger-action" disabled={busy||game.leader!==null} onClick={()=>{if(confirm(`${current.name} satılmadan geçilsin mi?`))void action('skip')}}>Oyuncuyu pas geç</button><button disabled={busy||!auctionOpen||game.leader===null} onClick={()=>action('close')}>Teklifi sonlandır</button><button className="host-primary" disabled={busy||auctionOpen||game.leader===null} onClick={()=>action('sell')}>Satışı tamamla</button><button disabled={busy||auctionOpen||game.leader===null} onClick={()=>action('reopen')}>Yeniden aç</button><button disabled={busy} onClick={()=>action('pause')}>{game.paused?'Devam ettir':'Duraklat'}</button><button className="undo-action" disabled={busy||!game.undo} onClick={()=>action('undo')}>↶ Geri al</button></div>}
             </div>
           </div>
           <aside aria-live="polite" aria-label="Canlı açık artırma akışı">
@@ -845,6 +830,8 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
         </section>
       ) : null}
       {selected && <ManagerDrawer manager={selected} onClose={() => setSelectedManager(null)} />}
+      <button className="chat-fab" onClick={()=>setChatOpen(value=>!value)} aria-expanded={chatOpen}>💬 <span>Sohbet</span>{room.chat?.length? <b>{room.chat.length}</b>:null}</button>
+      {chatOpen&&<aside className="room-chat" aria-label="Oda sohbeti"><header><b>Oda sohbeti</b><button onClick={()=>setChatOpen(false)}>×</button></header><div>{room.chat?.length?room.chat.map(message=><p key={message.id}><b>{message.name}</b><span>{message.text}</span></p>):<small>Henüz mesaj yok. İlk mesajı siz yazın.</small>}</div><form onSubmit={event=>{event.preventDefault();void sendChat()}}><input maxLength={200} value={chatText} onChange={event=>setChatText(event.target.value)} placeholder="Mesaj yaz…" aria-label="Sohbet mesajı"/><button disabled={busy||!chatText.trim()}>Gönder</button></form></aside>}
     </main>
   );
 }
