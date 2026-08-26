@@ -60,7 +60,7 @@ type Session = {code: string; token: string; memberToken?: string};
 const money = (n: number) => `$${n}M`;
 const defaults: Settings = {
   era: 'current',
-  quality: 'best',
+  quality: 'all',
   revealRatings: false,
   selectedTiers: RATING_TIERS,
   auctionMode: 'live',
@@ -284,7 +284,7 @@ function ManualControls({game, current, busy, onAction}: {game: Game; current: A
   );
 }
 
-export function OnlineGame({onLocal}: {onLocal: () => void}) {
+export function OnlineGame() {
   const [screen, setScreen] = useState<'entry' | 'room'>('entry');
   const [tab, setTab] = useState<'create' | 'join'>('create');
   const [name, setName] = useState('');
@@ -457,17 +457,12 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
   async function copyRoomCode(){try{await navigator.clipboard.writeText(room?.code||'');setCopied(true);setTimeout(()=>setCopied(false),1800)}catch{setError('Oda kodu kopyalanamadı.')}}
   async function invite(){if(!room)return;const url=`${location.origin}/?mode=online&room=${room.code}`;try{if(navigator.share)await navigator.share({title:'Kadro İhalesi odasına katıl',text:`${room.code} kodlu odaya katıl`,url});else await navigator.clipboard.writeText(url);setCopied(true);setTimeout(()=>setCopied(false),1800)}catch(error){if((error as DOMException).name!=='AbortError')setError('Davet bağlantısı paylaşılamadı.')}}
   function confirmLeave(goHome=false){if(!confirm('Oyundan ve odadan tamamen çıkmak istediğinize emin misiniz?'))return;void leave().then(()=>{if(goHome)location.assign('/')})}
+  function brandHome(){if(room&&room.status!=='lobby'){if(!confirm('Oyundan çıkıp ana sayfaya dönmek istediğinize emin misiniz?'))return}void leave().then(()=>location.assign('/'))}
 
   if (screen === 'entry')
     return (
       <main className="online-shell">
-        <nav className="online-nav">
-          <button className="mode-back" onClick={onLocal}>
-            ← Tek cihaz
-          </button>
-          <b>KADRO İHALESİ · ÇOK OYUNCULU</b>
-          <span>2–8 kişi</span>
-        </nav>
+        <nav className="online-nav"><button className="brand-lockup brand-home" onClick={()=>location.assign('/')} aria-label="Kadro İhalesi ana sayfasına dön"><img src="/brand-mark.svg" alt=""/><span><b>KADRO İHALESİ</b><small>FUTBOL AÇIK ARTIRMA OYUNU</small></span></button><span className="mode-label">Çok oyunculu</span></nav>
         <section className="online-entry">
           <div>
             <p className="eyebrow">AYNI MASA · HER CİHAZ</p>
@@ -509,32 +504,16 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
               </>
             ) : (
               <>
-                <label className="label mt-5">Oyun biçimi</label>
+                <label className="label mt-5">Futbolcu dönemi</label>
                 <div className="online-settings">
-                  <button className={settings.era === 'current' ? 'active' : ''} onClick={() => setSettings((value) => ({...value, era: 'current'}))}>
-                    Güncel
+                  <button className={settings.era === 'current' ? 'active' : ''} onClick={() => setSettings((value) => ({...value, era: 'current',quality:'all'}))}>
+                    <b>Güncel</b><span>Bugünün aktif futbolcuları</span>
                   </button>
-                  <button className={settings.era === 'legends' ? 'active' : ''} onClick={() => setSettings((value) => ({...value, era: 'legends'}))}>
-                    Son 30 yıl
-                  </button>
-                  <button className={settings.quality === 'best' ? 'active' : ''} onClick={() => setSettings((value) => ({...value, quality: 'best'}))}>
-                    En iyiler
-                  </button>
-                  <button className={settings.quality === 'all' ? 'active' : ''} onClick={() => setSettings((value) => ({...value, quality: 'all'}))}>
-                    Herkes
-                  </button>
-                  <button
-                    className={settings.revealRatings ? 'active' : ''}
-                    onClick={() =>
-                      setSettings((value) => ({
-                        ...value,
-                        revealRatings: !value.revealRatings,
-                      }))
-                    }
-                  >
-                    {settings.revealRatings ? 'Puanlar açık' : 'Puanlar gizli'}
+                  <button className={settings.era === 'legends' ? 'active' : ''} onClick={() => setSettings((value) => ({...value, era: 'legends',quality:'all'}))}>
+                    <b>Son 30 Yıl</b><span>Prime dönem oyuncuları</span>
                   </button>
                 </div>
+                <label className="label mt-5">Oyuncu yetenekleri</label><button className={`ability-choice online-ability ${settings.revealRatings?'active':''}`} onClick={()=>setSettings(value=>({...value,revealRatings:!value.revealRatings}))}><strong>{settings.revealRatings?'Göster':'Gizle'}</strong><span>{settings.revealRatings?'Puan ve seviye açık':'Sürpriz açık artırma'}</span></button>
                 <label className="label mt-5">Havuza dahil edilecek seviyeler</label>
                 <div className="tier-picker online-tier-picker">
                   {RATING_TIERS.map((tier) => (
@@ -648,9 +627,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
     <main className={`online-room ${game && myManager && room.status === 'auction' ? 'has-mobile-bar' : ''} ${presentation?'presentation-mode':''}`}>
       <header className="room-header">
         <div>
-          <button className="brand-button" onClick={()=>confirmLeave(true)}>
-            KADRO İHALESİ
-          </button>
+          <button className="brand-lockup brand-home room-brand" onClick={brandHome} aria-label="Kadro İhalesi ana sayfasına dön"><img src="/brand-mark.svg" alt=""/><span><b>KADRO İHALESİ</b><small>FUTBOL AÇIK ARTIRMA OYUNU</small></span></button>
           <span className={`connection ${online ? 'ok' : ''}`}>{online ? '● Bağlı' : '● Yeniden bağlanıyor'}</span>
         </div>
         {myManager && (
@@ -720,7 +697,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
           <aside className="panel room-rules">
             <p className="eyebrow">ODA KURALLARI</p>
             <h3>
-              {room.settings.era === 'current' ? 'Güncel' : 'Son 30 yıl'} · {room.settings.quality === 'best' ? 'En iyiler' : 'Herkes'}
+              {room.settings.era === 'current' ? 'Güncel' : 'Son 30 yıl'}
             </h3>
             <p>{mode === 'manual' ? 'Manuel kurucu yönetimi' : 'Herkes kendi cihazından teklif verir'}</p>
             <p>Seviyeler: {room.settings.selectedTiers?.join(' · ') || 'Tüm seviyeler'}</p>
