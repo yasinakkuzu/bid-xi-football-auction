@@ -3,9 +3,9 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import {auctionLimit,auctionOpeningPrice,auctionPassIsSafe,calculateStartingBudget,canPlaceLotBid,fillMissingSlot,hashSeed,isCoach,lotFilled,mixedAuctionLots,positionAuctionLots,randomSlotOrder,rankManagers,ratingLevel,RATING_TIERS,resultInsights,safeCsvCell,seededRandom,shuffleSeeded,validManagerNames,type AuctionLot,type Era,type Footballer,type ForcedAssignment,type Manager,type PoolSourceEntry,type QualityMode,type RatingTier,type Slot} from '../lib/game-engine';
 import {COACHES} from '../lib/coaches';
+import {OnlineGame} from './online/page';
 
 type Stage = 'setup' | 'names' | 'auction' | 'results';
 type GameSnapshot = { managers:Manager[];pool:AuctionLot[];index:number;bid:number;leader:number|null;feed:string[];passed:number[];activeTurn:number|null;era:Era;quality:QualityMode;revealRatings:boolean;selectedTiers:RatingTier[];count:number;names:string[] };
@@ -70,7 +70,19 @@ function buildPool(generated:PoolSource,era:Era,count:number,quality:QualityMode
   return[...footballers,...mixedAuctionLots(COACHES,excluded,count+2,random)];
 }
 
-export default function Home() {
+export default function Home(){
+  const [mode,setMode]=useState<'choose'|'local'|'online'>('choose');
+  useEffect(()=>{const id=setTimeout(()=>{const params=new URLSearchParams(location.search);if(params.get('mode')==='online'||params.has('room'))setMode('online');else if(params.get('mode')==='local')setMode('local')},0);return()=>clearTimeout(id)},[]);
+  const showOnline=()=>{history.replaceState(null,'','/?mode=online');setMode('online')};
+  const showLocal=()=>{history.replaceState(null,'','/?mode=local');setMode('local')};
+  return mode==='choose'?<ModeChooser onLocal={showLocal} onOnline={showOnline}/>:mode==='online'?<OnlineGame onLocal={showLocal}/>:<LocalGame onOnline={showOnline}/>;
+}
+
+function ModeChooser({onLocal,onOnline}:{onLocal:()=>void;onOnline:()=>void}){
+  return <main className="mode-home"><nav><div className="flex items-center gap-3"><span className="logo">B</span><div><b>BID XI</b><small>FOOTBALL AUCTION</small></div></div><span>TEK SAYFA · TÜM OYUN MODLARI</span></nav><section><div><p className="eyebrow">KADRONU KUR · MASAYI KAZAN</p><h1>Nasıl oynamak<br/><em>istiyorsun?</em></h1><p>Her iki mod da aynı oyuncu havuzunu, altı seviye filtresini, rastgele pozisyon sırasını, teknik direktör açık artırmasını ve ayrıntılı sonuç analizini kullanır.</p></div><div className="mode-cards"><button onClick={onLocal}><span>01</span><h2>Tek cihaz</h2><p>Aynı ekrandan sırayla teklif verin. Hızlı kurulum ve yerel kayıt.</p><b>Yerel oyunu kur →</b></button><button className="featured" onClick={onOnline}><span>02 · ÖNERİLEN</span><h2>Çok oyunculu</h2><p>Oda oluşturun; herkes telefon veya tabletinden katılsın.</p><b>Oda oluştur veya katıl →</b></button></div></section></main>;
+}
+
+function LocalGame({onOnline}:{onOnline:()=>void}) {
   const [stage,setStage] = useState<Stage>('setup');
   const [count,setCount] = useState(3);
   const [era,setEra] = useState<Era>('current');
@@ -195,10 +207,10 @@ export default function Home() {
   function togglePause(){setPaused(p=>{if(p)setDeadline(Date.now()+timeLeft*1000);else setDeadline(null);return !p})}
   function changeCount(n:number){setCount(n);setNames(old=>Array.from({length:n},(_,i)=>old[i]||DEFAULT_MANAGER_NAMES[i]||`Menajer ${i+1}`))}
 
-  if(stage==='setup') return <Shell><Setup count={count} setCount={changeCount} era={era} setEra={setEra} quality={quality} setQuality={setQuality} revealRatings={revealRatings} setRevealRatings={setRevealRatings} selectedTiers={selectedTiers} setSelectedTiers={setSelectedTiers} onNext={goNames} hasSaved={hasSaved} onResume={resume}/></Shell>;
-  if(stage==='names'&&poolSource) return <Shell><Names source={poolSource} names={names} setNames={setNames} era={era} quality={quality} revealRatings={revealRatings} selectedTiers={selectedTiers} onBack={()=>setStage('setup')} onBegin={begin}/></Shell>;
-  if(stage==='results') return <Shell><Results managers={managers} onReset={reset}/></Shell>;
-  return <Shell compact>
+  if(stage==='setup') return <Shell onOnline={onOnline}><Setup count={count} setCount={changeCount} era={era} setEra={setEra} quality={quality} setQuality={setQuality} revealRatings={revealRatings} setRevealRatings={setRevealRatings} selectedTiers={selectedTiers} setSelectedTiers={setSelectedTiers} onNext={goNames} hasSaved={hasSaved} onResume={resume}/></Shell>;
+  if(stage==='names'&&poolSource) return <Shell onOnline={onOnline}><Names source={poolSource} names={names} setNames={setNames} era={era} quality={quality} revealRatings={revealRatings} selectedTiers={selectedTiers} onBack={()=>setStage('setup')} onBegin={begin}/></Shell>;
+  if(stage==='results') return <Shell onOnline={onOnline}><Results managers={managers} onReset={reset}/></Shell>;
+  return <Shell compact onOnline={onOnline}>
     {saleFlash&&<div className="sale-flash">✓ {saleFlash}</div>}
     <div className="auction-grid mx-auto max-w-7xl py-5">
       <aside className="order-2 lg:order-1">
@@ -238,8 +250,8 @@ function SquadDrawer({manager,onClose}:{manager:Manager;onClose:()=>void}){
   return <div className="drawer-backdrop" onClick={onClose}><aside role="dialog" aria-modal="true" aria-labelledby="squad-title" className="squad-drawer" onClick={e=>e.stopPropagation()}><div className="drawer-head"><div><p className="eyebrow">CANLI KADRO</p><h2 id="squad-title">{manager.name}</h2><span>{Object.keys(manager.squad).length}/11 oyuncu · {money(manager.budget)} kaldı</span></div><button ref={closeRef} onClick={onClose} aria-label="Kadro önizlemesini kapat">×</button></div><ResultFormation squad={manager.squad}/><div className="mini-squad drawer-list">{SLOTS.map(s=><div key={s.key}><span>{s.short}</span><p>{manager.squad[s.key]?.name||'Henüz alınmadı'}</p><b>{manager.squad[s.key]?'✓':'—'}</b></div>)}<div className="coach-row"><span>TD</span><p>{manager.coach?.name||'Henüz alınmadı'}</p><b>{manager.coach?.rating||'—'}</b></div></div>{manager.coach&&<p className="coach-summary">{manager.coach.preferredFormation} · Taktik {manager.coach.tactics} · Motivasyon {manager.coach.motivation} · Uyum {manager.coach.adaptability}</p>}</aside></div>;
 }
 
-function Shell({children,compact=false}:{children:React.ReactNode;compact?:boolean}){
-  return <main className="min-h-screen px-5 py-6 md:px-10 md:py-8"><nav className="mx-auto flex max-w-7xl items-center justify-between"><div className="flex items-center gap-3"><span className="logo">B</span><div><p className="font-bold tracking-tight">BID XI</p><p className="text-[10px] uppercase tracking-[.24em] text-zinc-500">Football auction · v0.5.0</p></div></div><div className="flex items-center gap-2"><Link className="online-link" href="/online">Çevrim içi oda</Link><span className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-zinc-400">{compact?'Açık artırma canlı':'Yerel oyun'}</span></div></nav>{children}</main>
+function Shell({children,compact=false,onOnline}:{children:React.ReactNode;compact?:boolean;onOnline:()=>void}){
+  return <main className="min-h-screen px-5 py-6 md:px-10 md:py-8"><nav className="mx-auto flex max-w-7xl items-center justify-between"><div className="flex items-center gap-3"><span className="logo">B</span><div><p className="font-bold tracking-tight">BID XI</p><p className="text-[10px] uppercase tracking-[.24em] text-zinc-500">Football auction · v0.6.0</p></div></div><div className="flex items-center gap-2"><button className="online-link" onClick={onOnline}>Çok oyunculu</button><span className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-zinc-400">{compact?'Açık artırma canlı':'Tek cihaz'}</span></div></nav>{children}</main>
 }
 
 function Setup({count,setCount,era,setEra,quality,setQuality,revealRatings,setRevealRatings,selectedTiers,setSelectedTiers,onNext,hasSaved,onResume}:{count:number;setCount:(n:number)=>void;era:Era;setEra:(e:Era)=>void;quality:QualityMode;setQuality:(q:QualityMode)=>void;revealRatings:boolean;setRevealRatings:(v:boolean)=>void;selectedTiers:RatingTier[];setSelectedTiers:(v:RatingTier[])=>void;onNext:()=>void;hasSaved:boolean;onResume:()=>void}){
