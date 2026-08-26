@@ -304,6 +304,8 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
   const [poolQuery,setPoolQuery]=useState('');
   const [chatOpen,setChatOpen]=useState(false);
   const [chatText,setChatText]=useState('');
+  const [chatUnread,setChatUnread]=useState(0);
+  const lastChatCountRef=useRef<number|null>(null);
 
   const loadRoom = useCallback(async (s: Session) => {
     try {
@@ -355,6 +357,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
     return () => clearInterval(id);
   }, [screen, room?.status]);
   useEffect(()=>{if(screen!=='entry'||tab!=='create'||settings.poolMode!=='custom')return;let cancelled=false;void json(`/api/pool?era=${settings.era}`).then(data=>{if(cancelled)return;const source=data as unknown as Record<Slot,PoolSourceEntry[]>;setPoolCatalog(SLOT_KEYS.flatMap(slot=>(source[slot]||[]).map(player=>({...player,slot}))))}).catch(()=>setError('Özel oyuncu havuzu yüklenemedi.'));return()=>{cancelled=true}},[screen,tab,settings.poolMode,settings.era]);
+  useEffect(()=>{const count=room?.chat?.length||0;if(lastChatCountRef.current===null){lastChatCountRef.current=count;return}if(count>lastChatCountRef.current&&!chatOpen)setChatUnread(value=>value+count-lastChatCountRef.current!);lastChatCountRef.current=count;if(chatOpen)setChatUnread(0)},[room?.chat?.length,chatOpen]);
 
   const game = room?.game;
   const approvedManagers = room?.members.filter((member) => member.role === 'manager' && member.approved) || [];
@@ -447,6 +450,9 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
   }
   async function togglePresentation(){const next=!presentation;setPresentation(next);try{if(next)await document.documentElement.requestFullscreen?.();else if(document.fullscreenElement)await document.exitFullscreen()}catch{}}
   async function sendChat(){const text=chatText.trim();if(!text)return;setChatText('');await action('chat',{text})}
+  async function copyRoomCode(){try{await navigator.clipboard.writeText(room?.code||'');setCopied(true);setTimeout(()=>setCopied(false),1800)}catch{setError('Oda kodu kopyalanamadı.')}}
+  async function invite(){if(!room)return;const url=`${location.origin}/?mode=online&room=${room.code}`;try{if(navigator.share)await navigator.share({title:'Açık Artırma odasına katıl',text:`${room.code} kodlu odaya katıl`,url});else await navigator.clipboard.writeText(url);setCopied(true);setTimeout(()=>setCopied(false),1800)}catch(error){if((error as DOMException).name!=='AbortError')setError('Davet bağlantısı paylaşılamadı.')}}
+  function confirmLeave(goHome=false){if(!confirm('Oyundan ve odadan tamamen çıkmak istediğinize emin misiniz?'))return;void leave().then(()=>{if(goHome)location.assign('/')})}
 
   if (screen === 'entry')
     return (
@@ -638,7 +644,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
     <main className={`online-room ${game && myManager && room.status === 'auction' ? 'has-mobile-bar' : ''} ${presentation?'presentation-mode':''}`}>
       <header className="room-header">
         <div>
-          <button className="brand-button" onClick={onLocal}>
+          <button className="brand-button" onClick={()=>confirmLeave(true)}>
             BID XI
           </button>
           <span className={`connection ${online ? 'ok' : ''}`}>{online ? '● Bağlı' : '● Yeniden bağlanıyor'}</span>
@@ -650,11 +656,8 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
             <strong>{money(myManager.budget)}</strong>
           </div>
         )}
-        <button className="room-code" onClick={async()=>{try{await navigator.clipboard.writeText(`${location.origin}/?mode=online&room=${room.code}`);setCopied(true);setTimeout(()=>setCopied(false),1800)}catch{setError('Bağlantı kopyalanamadı; oda kodunu elle paylaşın.')}}}>
-          <small>ODA KODU</small>
-          <b>{room.code}</b>
-        </button>
-        <button className="tool-btn leave-room" onClick={()=>void leave()}>
+        <div className="room-share"><button className="room-code" onClick={copyRoomCode} title="Oda kodunu kopyala"><small>ODA KODU · KOPYALA</small><b>{room.code}</b></button><button className="invite-link" onClick={invite}>↗ Link ile davet et</button></div>
+        <button className="tool-btn leave-room" onClick={()=>confirmLeave(false)}>
           Odadan çık
         </button>
         {game&&room.status==='auction'&&<button className="tool-btn tv-mode" onClick={togglePresentation}>{presentation?'TV modundan çık':'▣ TV modu'}</button>}
@@ -705,7 +708,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
               ))}
             </div>
             {isHost ? (
-              <div className="lobby-actions"><div className="ai-level-picker"><span>AI RAKİP SEVİYESİ</span><button disabled={busy||managers.length>=8} onClick={()=>action('addBot',{style:'value'})}><b>Acemi</b><small>Daha erken çekilir</small></button><button disabled={busy||managers.length>=8} onClick={()=>action('addBot',{style:'balanced'})}><b>Ortalama</b><small>Dengeli teklif verir</small></button><button disabled={busy||managers.length>=8} onClick={()=>action('addBot',{style:'aggressive'})}><b>Uzman</b><small>Değerli lotları zorlar</small></button></div><button className="start" disabled={busy || managers.length < 2} onClick={() => action('start')}>Oyunu başlat <span>→</span></button></div>
+              <div className="lobby-actions"><div className="ai-level-picker"><span>AI RAKİP EKLE</span><button disabled={busy||managers.length>=8} onClick={()=>action('addBot',{style:'value'})}><b>Acemi</b><small>Daha erken çekilir</small></button><button disabled={busy||managers.length>=8} onClick={()=>action('addBot',{style:'balanced'})}><b>Ortalama</b><small>Dengeli teklif verir</small></button><button disabled={busy||managers.length>=8} onClick={()=>action('addBot',{style:'aggressive'})}><b>Uzman</b><small>Değerli lotları zorlar</small></button></div><button className="start" disabled={busy || managers.length < 2} onClick={() => action('start')}>Oyunu başlat <span>→</span></button></div>
             ) : (
               !approved && <div className="waiting">Oda sahibinin onayı bekleniyor…</div>
             )}
@@ -830,7 +833,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
         </section>
       ) : null}
       {selected && <ManagerDrawer manager={selected} onClose={() => setSelectedManager(null)} />}
-      <button className="chat-fab" onClick={()=>setChatOpen(value=>!value)} aria-expanded={chatOpen}>💬 <span>Sohbet</span>{room.chat?.length? <b>{room.chat.length}</b>:null}</button>
+      <button className={`chat-fab ${chatUnread>0?'has-unread':''}`} onClick={()=>{setChatOpen(value=>!value);setChatUnread(0)}} aria-expanded={chatOpen}>💬 <span>Sohbet</span>{chatUnread>0?<b>{chatUnread}</b>:null}</button>
       {chatOpen&&<aside className="room-chat" aria-label="Oda sohbeti"><header><b>Oda sohbeti</b><button onClick={()=>setChatOpen(false)}>×</button></header><div>{room.chat?.length?room.chat.map(message=><p key={message.id}><b>{message.name}</b><span>{message.text}</span></p>):<small>Henüz mesaj yok. İlk mesajı siz yazın.</small>}</div><form onSubmit={event=>{event.preventDefault();void sendChat()}}><input maxLength={200} value={chatText} onChange={event=>setChatText(event.target.value)} placeholder="Mesaj yaz…" aria-label="Sohbet mesajı"/><button disabled={busy||!chatText.trim()}>Gönder</button></form></aside>}
     </main>
   );
