@@ -4,6 +4,7 @@
 
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {auctionOpeningPrice, auctionPassIsSafe, auctionProgressLabel, BENCH_SLOTS, FORMATIONS, FORMATION_POSITIONS, isBonusPlayerLot, isCoach, lotFilled, rankManagers, ratingLevel, RATING_TIERS, resultInsights, simulateTournament, SLOT_KEYS, type AuctionLot, type Formation, type Manager, type PoolSourceEntry, type RatingTier, type Slot} from '../../lib/game-engine';
+import {customPoolOptions,type CustomPoolSelection} from '../../lib/club-leagues';
 
 type Member = {
   id: string;
@@ -29,6 +30,7 @@ type Settings = {
   formation?: Formation;
   poolMode?: 'generated'|'custom';
   customPlayerIds?: string[];
+  customPoolSelections?:CustomPoolSelection[];
 };
 type Game = {
   managers: Manager[];
@@ -71,6 +73,7 @@ const defaults: Settings = {
   formation: '4-2-3-1',
   poolMode:'generated',
   customPlayerIds:[],
+  customPoolSelections:[],
 };
 const coordinates:Record<Slot,{left:string;top:string}>={GK:{left:'50%',top:'91%'},RB:{left:'82%',top:'72%'},CB1:{left:'61%',top:'77%'},CB2:{left:'39%',top:'77%'},LB:{left:'18%',top:'72%'},DM:{left:'36%',top:'57%'},CM:{left:'64%',top:'57%'},AM:{left:'50%',top:'32%'},RW:{left:'82%',top:'32%'},LW:{left:'18%',top:'32%'},ST:{left:'50%',top:'13%'}};
 async function json(url: string, options?: RequestInit) {
@@ -306,6 +309,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
   const [chatText,setChatText]=useState('');
   const [chatUnread,setChatUnread]=useState(0);
   const lastChatCountRef=useRef<number|null>(null);
+  const poolOptions=useMemo(()=>customPoolOptions(poolCatalog.map(player=>player.club),poolQuery),[poolCatalog,poolQuery]);
 
   const loadRoom = useCallback(async (s: Session) => {
     try {
@@ -613,8 +617,8 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
                   <label className="check-setting"><input type="checkbox" checked={settings.secondChance} onChange={event=>setSettings(value=>({...value,secondChance:event.target.checked}))}/> Satılmayanlara ikinci şans</label>
                 </div>
                 <label className="label mt-5">Oyuncu havuzu</label>
-                <div className="pool-mode"><button className={settings.poolMode!=='custom'?'active':''} onClick={()=>setSettings(value=>({...value,poolMode:'generated',customPlayerIds:[]}))}>Otomatik havuz</button><button className={settings.poolMode==='custom'?'active':''} onClick={()=>setSettings(value=>({...value,poolMode:'custom'}))}>Favorilerimi ekle</button></div>
-                {settings.poolMode==='custom'&&<div className="custom-pool"><input className="online-input" value={poolQuery} onChange={event=>setPoolQuery(event.target.value)} placeholder="Oyuncu veya kulüp ara"/><small>{settings.customPlayerIds?.length||0} favori seçildi · eksik pozisyonları sistem tamamlar</small>{poolQuery.trim().length>1&&<div>{poolCatalog.filter(player=>`${player.name} ${player.club}`.toLocaleLowerCase('tr').includes(poolQuery.toLocaleLowerCase('tr'))).slice(0,8).map(player=>{const key=`${player.slot}:${player.id}`,selected=settings.customPlayerIds?.includes(key);return <button className={selected?'active':''} key={key} onClick={()=>setSettings(value=>({...value,customPlayerIds:selected?value.customPlayerIds?.filter(id=>id!==key):[...(value.customPlayerIds||[]),key]}))}><b>{selected?'✓ ':'+ '}{player.name}</b><span>{player.club} · {player.slot}</span></button>})}</div>}</div>}
+                <div className="pool-mode"><button className={settings.poolMode!=='custom'?'active':''} onClick={()=>setSettings(value=>({...value,poolMode:'generated',customPlayerIds:[],customPoolSelections:[]}))}>Otomatik havuz</button><button className={settings.poolMode==='custom'?'active':''} onClick={()=>setSettings(value=>({...value,poolMode:'custom'}))}>Özel Havuz Oluştur</button></div>
+                {settings.poolMode==='custom'&&<div className="custom-pool"><input className="online-input" value={poolQuery} onChange={event=>setPoolQuery(event.target.value)} placeholder="Lig veya takım ara"/><small>Birden fazla takım ve lig seçebilirsin. Seçtiğin havuzda eksik kalan pozisyonları sistem tamamlar.</small>{Boolean(settings.customPoolSelections?.length)&&<div className="custom-pool-tags">{settings.customPoolSelections!.map(item=><button key={`${item.type}:${item.name}`} onClick={()=>setSettings(value=>({...value,customPoolSelections:value.customPoolSelections?.filter(selected=>selected.type!==item.type||selected.name!==item.name)}))}><span>{item.type==='club'?'TAKIM':'LİG'}</span>{item.name} ×</button>)}</div>}{poolQuery.trim().length>1&&<div className="custom-pool-results">{poolOptions.length?poolOptions.map(option=>{const selected=settings.customPoolSelections?.some(item=>item.type===option.type&&item.name===option.name);return <button className={selected?'active':''} key={`${option.type}:${option.name}`} onClick={()=>setSettings(value=>({...value,customPoolSelections:selected?value.customPoolSelections?.filter(item=>item.type!==option.type||item.name!==option.name):[...(value.customPoolSelections||[]),option]}))}><span className="pool-result-type">{option.type==='club'?'TAKIM':'LİG'}</span><b>{selected?'✓ ':'+ '}{option.name}</b><span>{option.type==='club'?(option.league||'Lig bilgisi bulunamadı'):'Ligdeki tüm uygun takımlar'}</span></button>}):<p className="pool-empty">Eşleşen takım veya lig bulunamadı.</p>}</div>}</div>}
               </>
             )}
             {error && (
