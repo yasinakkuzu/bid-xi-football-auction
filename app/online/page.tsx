@@ -2,8 +2,8 @@
 /* Remote player photos use their source URLs and retain a visible fallback. */
 /* eslint-disable @next/next/no-img-element */
 
-import {useCallback, useEffect, useMemo, useState} from 'react';
-import {auctionPassIsSafe, auctionProgressLabel, BENCH_SLOTS, isBonusPlayerLot, isCoach, lotFilled, rankManagers, ratingLevel, RATING_TIERS, resultInsights, SLOT_KEYS, type AuctionLot, type Manager, type RatingTier, type Slot} from '../../lib/game-engine';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {auctionOpeningPrice, auctionPassIsSafe, auctionProgressLabel, BENCH_SLOTS, isBonusPlayerLot, isCoach, lotFilled, rankManagers, ratingLevel, RATING_TIERS, resultInsights, SLOT_KEYS, type AuctionLot, type Manager, type RatingTier, type Slot} from '../../lib/game-engine';
 
 type Member = {
   id: string;
@@ -31,6 +31,7 @@ type Game = {
   paused: boolean;
   deadline: number | null;
   feed: string[];
+  audit?: string[];
 };
 type Room = {
   code: string;
@@ -87,6 +88,10 @@ function PlayerImage({player, className}: {player: {name: string; image?: string
       className={className}
       src={player.image}
       alt={`${player.name} fotoğrafı`}
+      width="240"
+      height="300"
+      loading={className.includes('online-player-photo') ? 'eager' : 'lazy'}
+      decoding="async"
       referrerPolicy="no-referrer"
       onError={(event) => {
         event.currentTarget.style.display = 'none';
@@ -210,14 +215,16 @@ function SquadPanel({manager, compact = false}: {manager: Manager; compact?: boo
 }
 
 function ManagerDrawer({manager, onClose}: {manager: Manager; onClose: () => void}) {
+  const closeRef=useRef<HTMLButtonElement>(null);
+  useEffect(()=>{const previous=document.activeElement as HTMLElement|null;closeRef.current?.focus();document.body.style.overflow='hidden';const key=(event:KeyboardEvent)=>{if(event.key==='Escape')onClose()};document.addEventListener('keydown',key);return()=>{document.body.style.overflow='';document.removeEventListener('keydown',key);previous?.focus()}},[onClose]);
   return (
     <div className="drawer-backdrop" onClick={onClose}>
-      <aside className="squad-drawer online-manager-drawer" onClick={(event) => event.stopPropagation()}>
+      <aside role="dialog" aria-modal="true" aria-labelledby="online-manager-title" className="squad-drawer online-manager-drawer" onClick={(event) => event.stopPropagation()}>
         <div className="drawer-head">
           <div>
-            <p className="eyebrow">MENAJER DETAYI</p>
+            <p className="eyebrow">MENAJER DETAYI</p><h2 id="online-manager-title">{manager.name}</h2>
           </div>
-          <button onClick={onClose} aria-label="Kadroyu kapat">
+          <button ref={closeRef} onClick={onClose} aria-label="Kadroyu kapat">
             ×
           </button>
         </div>
@@ -282,10 +289,11 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
   const [now, setNow] = useState(0);
   const [view, setView] = useState<'auction' | 'squad'>('auction');
   const [selectedManager, setSelectedManager] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const loadRoom = useCallback(async (s: Session) => {
     try {
-      const data = await json(`/api/rooms/${s.code}?token=${encodeURIComponent(s.token)}`),
+      const data = await json(`/api/rooms/${s.code}`, {headers: {Authorization: `Bearer ${s.token}`}}),
         next = data.state as Room;
       if (next.game && next.game.activeTurn !== null && next.game.activeTurn < 0) next.game.activeTurn = null;
       setRoom(next);
@@ -322,13 +330,16 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
   }, [loadRoom]);
   useEffect(() => {
     if (!session) return;
-    const id = setInterval(() => void refresh(), 1200);
+    let running = false;
+    const tick = async () => {if (running || document.hidden) return;running = true;try {await refresh()} finally {running = false}};
+    const id = setInterval(() => void tick(), room?.status === 'auction' ? 1500 : 3000);
     return () => clearInterval(id);
-  }, [refresh, session]);
+  }, [refresh, session, room?.status]);
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 250);
+    if (screen !== 'room' || room?.status !== 'auction') return;
+    const id = setInterval(() => {if (!document.hidden) setNow(Date.now())}, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [screen, room?.status]);
 
   const game = room?.game;
   const approvedManagers = room?.members.filter((member) => member.role === 'manager' && member.approved) || [];
@@ -397,8 +408,8 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
     try {
       const data = await json(`/api/rooms/${session.code}/actions`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({token: session.token, type, payload}),
+        headers: {'Content-Type': 'application/json', Authorization: `Bearer ${session.token}`},
+        body: JSON.stringify({type, payload}),
       });
       setRoom(data.state as Room);
       setError('');
@@ -410,7 +421,8 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
     }
   }
 
-  function leave() {
+  async function leave() {
+    if (session && room?.status === 'lobby' && !isHost) try {await action('leave')} catch {return}
     localStorage.removeItem('bidxi-room');
     history.replaceState(null, '', '/?mode=online&fresh=1');
     setSession(null);
@@ -609,20 +621,20 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
             <strong>{money(myManager.budget)}</strong>
           </div>
         )}
-        <button className="room-code" onClick={() => navigator.clipboard.writeText(`${location.origin}/?mode=online&room=${room.code}`)}>
+        <button className="room-code" onClick={async()=>{try{await navigator.clipboard.writeText(`${location.origin}/?mode=online&room=${room.code}`);setCopied(true);setTimeout(()=>setCopied(false),1800)}catch{setError('Bağlantı kopyalanamadı; oda kodunu elle paylaşın.')}}}>
           <small>ODA KODU</small>
           <b>{room.code}</b>
         </button>
-        <button className="tool-btn leave-room" onClick={leave}>
+        <button className="tool-btn leave-room" onClick={()=>void leave()}>
           Odadan çık
         </button>
       </header>
       {game && myManager && room.status === 'auction' && (
         <nav className="manager-view-tabs" aria-label="Menajer ekranı">
-          <button className={view === 'auction' ? 'active' : ''} onClick={() => setView('auction')}>
+          <button aria-pressed={view==='auction'} className={view === 'auction' ? 'active' : ''} onClick={() => setView('auction')}>
             <b>↗</b>Açık artırma gidişatı
           </button>
-          <button className={view === 'squad' ? 'active' : ''} onClick={() => setView('squad')}>
+          <button aria-pressed={view==='squad'} className={view === 'squad' ? 'active' : ''} onClick={() => setView('squad')}>
             <b>▦</b>Kadrom{' '}
             <span>
               {Object.keys(myManager.squad).length}/11
@@ -631,7 +643,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
           </button>
         </nav>
       )}
-      {error && <p className="online-toast">{error}</p>}
+      <div className="sr-only" aria-live="polite">{copied?'Oda bağlantısı kopyalandı.':error}</div>{copied&&<p className="online-toast success">Bağlantı kopyalandı</p>}{error && <p className="online-toast" role="alert">{error}</p>}
 
       {room.status === 'lobby' ? (
         <section className="lobby">
@@ -686,7 +698,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
           </aside>
         </section>
       ) : room.status === 'results' && game ? (
-        <OnlineResults managers={game.managers} />
+        <OnlineResults managers={game.managers} audit={game.audit||[]} />
       ) : view === 'squad' && myManager ? (
         <div className="my-squad-screen">
           <SquadPanel manager={myManager} />
@@ -744,7 +756,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
             <div className="online-bid">
               <div>
                 <small>{game.leader === null ? 'AÇILIŞ' : 'MEVCUT TEKLİF'}</small>
-                <strong>{money(game.leader === null ? current.price : game.bid)}</strong>
+                <strong aria-live="polite">{money(game.leader === null ? auctionOpeningPrice(current,game.managers) : game.bid)}</strong>
                 {game.leader !== null && <span>{game.managers[game.leader].name}</span>}
               </div>
               {mode === 'manual' ? (
@@ -777,9 +789,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
                     <div className="host-controls">
                       <span>KURUCU KONTROLLERİ</span>
                       {auctionOpen ? (
-                        <button disabled={busy} onClick={() => action('close')}>
-                          Teklifleri kapat
-                        </button>
+                        game.leader===null?<button className="danger-action" disabled={busy} onClick={() => {if(confirm(`${current.name} satılmadan geçilsin mi?`))void action('skip')}}>Lotu geç</button>:<button disabled={busy} onClick={() => action('close')}>Teklifleri kapat</button>
                       ) : (
                         game.leader !== null && (
                           <>
@@ -801,7 +811,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
               )}
             </div>
           </div>
-          <aside>
+          <aside aria-live="polite" aria-label="Canlı açık artırma akışı">
             <p className="eyebrow">CANLI AKIŞ</p>
             {game.feed.map((item, index) => (
               <p className="online-feed" key={`${item}-${index}`}>
@@ -816,7 +826,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
   );
 }
 
-function OnlineResults({managers}: {managers: Manager[]}) {
+function OnlineResults({managers,audit}: {managers: Manager[];audit:string[]}) {
   const {ranked, insights} = useMemo(() => {
     const ordered = rankManagers(managers);
     return {ranked: ordered, insights: resultInsights(ordered)};
@@ -848,7 +858,7 @@ function OnlineResults({managers}: {managers: Manager[]}) {
             <strong>{manager.score.toFixed(2)}</strong>
             <p>
               Ortalama {manager.avg} · Kalan {money(manager.budget)} · Kadro {Object.keys(manager.squad).length}/11
-              {manager.bench ? ` · Yedek ${Object.keys(manager.bench).length}/4` : ''}
+              {manager.bench ? ` · Yedek ${Object.keys(manager.bench).length}/4 · Derinlik +${manager.benchDepth}` : ''}
             </p>
             <p>
               Teknik direktör: {manager.coach?.name || 'Yok'}
@@ -857,6 +867,7 @@ function OnlineResults({managers}: {managers: Manager[]}) {
           </article>
         ))}
       </div>
+      {audit.length>0&&<details className="result-audit"><summary>Oyun kararları ve otomatik atamalar</summary>{audit.map((item,index)=><p key={`${item}-${index}`}>{item}</p>)}</details>}
       <p>Bu sonuç odada 7 gün boyunca saklanır.</p>
     </section>
   );

@@ -9,7 +9,7 @@ export type Coach={kind:'coach';id:string;name:string;slot:'COACH';role:'Teknik 
 export type AuctionLot=Footballer|Coach;
 export type Manager = { id:number; name:string; budget:number; squad:Partial<Record<Slot,Footballer>>; spent:number; bench?:Partial<Record<BenchSlot,Footballer>>; coach?:Coach };
 export type PoolSourceEntry = { id:number; name:string; country:string; club:string; rating:number; price:number; value:number; image?:string; clubLogo?:string };
-export type ScoreBreakdown = Manager & {score:number;avg:number;defense:number;midfield:number;attack:number;weakest:number;balance:number;completion:number;budgetEfficiency:number;coachBoost:number;coachFit:number};
+export type ScoreBreakdown = Manager & {score:number;avg:number;defense:number;midfield:number;attack:number;weakest:number;balance:number;completion:number;budgetEfficiency:number;coachBoost:number;coachFit:number;benchDepth:number};
 export type ForcedAssignment={managerId:number;managerName:string;player:Footballer;fee:number};
 export type ResultInsights={winner:string;runnerUp:string;match:{scoreLine:string;summary:string}};
 
@@ -65,6 +65,8 @@ export function fillMissingBenchSlot(managers:Manager[],benchSlot:BenchSlot,cand
  return{managers:next,assignments};
 }
 
+export function fillMissingCoaches(managers:Manager[],coaches:Coach[],seed:string){const random=seededRandom(hashSeed(`${seed}-coach`)),available=shuffleSeeded(coaches,random),assignments:Array<{managerId:number;managerName:string;coach:Coach;fee:number}>=[];let cursor=0;const next=managers.map(manager=>{if(manager.coach)return manager;const source=available[cursor++%Math.max(1,available.length)];const fee=Math.min(5,Math.max(0,manager.budget));const coach:Coach=source?{...source,id:`fallback-${source.id}-${manager.id}`,name:`${source.name} (Geçici)`,rating:68,tactics:66,motivation:70,adaptability:68,development:65,price:5}:{kind:'coach',id:`fallback-coach-${manager.id}`,name:'Geçici Teknik Direktör',slot:'COACH',role:'Teknik Direktör',rating:68,price:5,nation:'—',tactics:66,motivation:70,adaptability:68,development:65,preferredFormation:'4-2-3-1',specialty:'balance'};assignments.push({managerId:manager.id,managerName:manager.name,coach,fee});return{...manager,coach,budget:manager.budget-fee,spent:manager.spent+fee}});return{managers:next,assignments}}
+
 export function auctionGroupKey(lot:AuctionLot){return isCoach(lot)?'COACH':lot.benchSlot||lot.slot}
 export function isBonusPlayerLot(pool:AuctionLot[],index:number,managerCount:number){const lot=pool[index];if(!lot||isCoach(lot))return false;const key=auctionGroupKey(lot),ordinal=pool.slice(0,index+1).filter(item=>auctionGroupKey(item)===key).length;return ordinal>managerCount}
 export function auctionProgressLabel(pool:AuctionLot[],index:number){const lot=pool[index];if(!lot)return'';const key=auctionGroupKey(lot),ordinal=pool.slice(0,index+1).filter(item=>auctionGroupKey(item)===key).length;if(isCoach(lot))return`Teknik direktör için ${ordinal}. aday: ${lot.name}`;const label=lot.benchSlot?BENCH_SLOTS.find(item=>item.key===lot.benchSlot)?.label:lot.role;return`${label||lot.role} pozisyonu için ${ordinal}. oyuncu: ${lot.name}`}
@@ -84,22 +86,23 @@ export function scoreManager(m:Manager):ScoreBreakdown{
  const defense=(r('GK')+r('RB')+r('CB1')+r('CB2')+r('LB'))/5,midfield=(r('DM')+r('CM')+r('AM'))/3,attack=(r('RW')+r('LW')+r('ST'))/3;
  const weakest=squad.length?Math.min(...squad.map(p=>p.rating)):0,strongest=squad.length?Math.max(...squad.map(p=>p.rating)):0;
  const balance=Math.max(0,100-(strongest-weakest)*2.25),completion=squad.length/11*100,budgetEfficiency=Math.min(100,m.budget/2.5);
- const raw=avg*.46+defense*.13+midfield*.13+attack*.13+weakest*.06+balance*.035+completion*.045+budgetEfficiency*.0015;
+ const bench=Object.values(m.bench||{}) as Footballer[],benchAverage=bench.length?bench.reduce((sum,p)=>sum+p.rating,0)/bench.length:0,benchCoverage=bench.length/4,depthBoost=Math.min(1.6,Math.max(0,(benchAverage-70)*.045)*benchCoverage);
+ const raw=avg*.46+defense*.13+midfield*.13+attack*.13+weakest*.06+balance*.035+completion*.045+budgetEfficiency*.0015+depthBoost;
  const {coachBoost,coachFit}=coachImpact(m,defense,midfield,attack);
  const one=(n:number)=>Math.round(n*10)/10;
- return {...m,score:Math.round((raw+coachBoost)*100)/100,avg:one(avg),defense:one(defense),midfield:one(midfield),attack:one(attack),weakest:one(weakest),balance:one(balance),completion:one(completion),budgetEfficiency:one(budgetEfficiency),coachBoost,coachFit};
+ return {...m,score:Math.round((raw+coachBoost)*100)/100,avg:one(avg),defense:one(defense),midfield:one(midfield),attack:one(attack),weakest:one(weakest),balance:one(balance),completion:one(completion),budgetEfficiency:one(budgetEfficiency),coachBoost,coachFit,benchDepth:one(depthBoost)};
 }
 export function rankManagers(ms:Manager[]){return ms.map(scoreManager).sort((a,b)=>b.score-a.score||b.avg-a.avg||b.budget-a.budget)}
 export function resultInsights(ranked:ScoreBreakdown[]):ResultInsights{
  const first=ranked[0],second=ranked[1];if(!first)return{winner:'Sonuç üretilemedi.',runnerUp:'',match:{scoreLine:'—',summary:'Karşılaştırma için en az iki takım gerekir.'}};
  const sector=(team:ScoreBreakdown,mode:'best'|'weak')=>{const sectors=[['savunma',team.defense],['orta saha',team.midfield],['hücum',team.attack]] as const;return [...sectors].sort((a,b)=>mode==='best'?b[1]-a[1]:a[1]-b[1])[0]};
- const firstBest=sector(first,'best'),coachText=first.coach?`${first.coach.name} yönetimindeki ${first.coachBoost.toFixed(1)} puanlık teknik direktör katkısı`:'teknik direktör katkısı olmadan kurduğu kadro dengesi';
+ const firstBest=sector(first,'best'),coachText=first.coach&&first.coachBoost>=.2?`${first.coach.name} yönetimindeki ${first.coachBoost.toFixed(1)} puanlık teknik direktör katkısı`:'kurduğu dengeli ilk 11';
  const winner=`${first.name}, ${first.score.toFixed(2)} takım puanıyla birinci oldu. ${firstBest[0][0].toUpperCase()+firstBest[0].slice(1)} hattındaki ${firstBest[1].toFixed(1)} ortalama ve ${coachText} onu listenin tepesine taşıdı.`;
  if(!second)return{winner,runnerUp:'İkinci takım bulunmuyor.',match:{scoreLine:'—',summary:'Karşılaştırma için en az iki takım gerekir.'}};
  const secondBest=sector(second,'best'),secondWeak=sector(second,'weak'),gap=Math.max(0,first.score-second.score);
  const runnerUp=`${second.name}, ${second.score.toFixed(2)} puanla ikinci sırayı aldı; en güçlü bölgesi ${secondBest[1].toFixed(1)} ortalamalı ${secondBest[0]} hattı oldu. ${secondWeak[0][0].toUpperCase()+secondWeak[0].slice(1)} seviyesinin ${secondWeak[1].toFixed(1)} kalması ve liderle oluşan ${gap.toFixed(2)} puanlık fark birinciliği kaçırmasına neden oldu.`;
  const random=seededRandom(hashSeed(`${first.name}-${second.name}-${first.score}-${second.score}`)),firstEdge=(first.attack-second.defense)*.08+(first.midfield-second.midfield)*.04+gap*.18;
- let firstGoals=Math.max(1,Math.min(5,Math.round(1.45+firstEdge*.12+random()*1.5)));const secondGoals=Math.max(0,Math.min(4,Math.round(1.05-firstEdge*.04+random()*1.25)));if(firstGoals<=secondGoals)firstGoals=Math.min(5,secondGoals+1);
+ const firstGoals=Math.max(0,Math.min(5,Math.round(1.25+firstEdge*.1+random()*1.7))),secondGoals=Math.max(0,Math.min(5,Math.round(1.15-firstEdge*.05+random()*1.6)));
  const scoreLine=`${first.name} ${firstGoals}–${secondGoals} ${second.name}`,summary=`Tahmini maçta ${first.name}, ${first.attack.toFixed(1)} hücum gücüyle ${second.name} savunmasına karşı öne çıkıyor. ${second.name} güçlü ${secondBest[0]} hattıyla denge kurabilir; bu skor kadro puanları ve hat eşleşmelerinden üretilmiş bir oyun tahminidir.`;
  return{winner,runnerUp,match:{scoreLine,summary}};
 }
