@@ -656,7 +656,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
             <strong>{money(myManager.budget)}</strong>
           </div>
         )}
-        <div className="room-share"><button className="room-code" onClick={copyRoomCode} title="Oda kodunu kopyala"><small>ODA KODU · KOPYALA</small><b>{room.code}</b></button><button className="invite-link" onClick={invite}>↗ Link ile davet et</button></div>
+        <div className="room-share"><button className="room-code" onClick={copyRoomCode} title="Oda kodunu kopyala"><small>ODA KODU · KOPYALA</small><b>{room.code}</b></button>{room.status==='lobby'&&<button className="invite-link" onClick={invite}>↗ Link ile davet et</button>}</div>
         <button className="tool-btn leave-room" onClick={()=>confirmLeave(false)}>
           Odadan çık
         </button>
@@ -767,6 +767,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
               </div>
             )}
             <article className={`online-player ${isCoach(current) ? 'coach-lot' : ''} ${bonusLot ? 'bonus-lot-card' : ''}`}>
+              {!isCoach(current)&&<div className="auction-mini-formation" aria-label={`${current.role} mevki konumu`}><i className="mini-halfway"/>{SLOT_KEYS.map(slot=><span key={slot} className={slot===current.slot?'active':''} style={FORMATION_POSITIONS[myManager?.formation||room.settings.formation||'4-2-3-1'][slot]}>{slot===current.slot?slot:''}</span>)}</div>}
               <div className="online-player-visual">
                 <span>{current.name[0]}</span>
                 <PlayerImage player={current} className="online-player-photo" />
@@ -789,7 +790,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
               <div>
                 <small>{game.leader === null ? 'AÇILIŞ' : 'MEVCUT TEKLİF'}</small>
                 <strong aria-live="polite">{money(game.leader === null ? auctionOpeningPrice(current,game.managers) : game.bid)}</strong>
-                {game.leader !== null && <span>{game.managers[game.leader].name}</span>}
+                {game.leader !== null && <span className="current-leader">{game.managers[game.leader].name}</span>}
               </div>
               {mode === 'manual' ? (
                 isHost ? (
