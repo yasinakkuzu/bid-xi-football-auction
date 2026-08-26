@@ -66,6 +66,7 @@ export function fillMissingBenchSlot(managers:Manager[],benchSlot:BenchSlot,cand
 }
 
 export function auctionGroupKey(lot:AuctionLot){return isCoach(lot)?'COACH':lot.benchSlot||lot.slot}
+export function isBonusPlayerLot(pool:AuctionLot[],index:number,managerCount:number){const lot=pool[index];if(!lot||isCoach(lot))return false;const key=auctionGroupKey(lot),ordinal=pool.slice(0,index+1).filter(item=>auctionGroupKey(item)===key).length;return ordinal>managerCount}
 export function auctionProgressLabel(pool:AuctionLot[],index:number){const lot=pool[index];if(!lot)return'';const key=auctionGroupKey(lot),ordinal=pool.slice(0,index+1).filter(item=>auctionGroupKey(item)===key).length;if(isCoach(lot))return`Teknik direktör için ${ordinal}. aday: ${lot.name}`;const label=lot.benchSlot?BENCH_SLOTS.find(item=>item.key===lot.benchSlot)?.label:lot.role;return`${label||lot.role} pozisyonu için ${ordinal}. oyuncu: ${lot.name}`}
 
 export function coachImpact(m:Manager,defense:number,midfield:number,attack:number){

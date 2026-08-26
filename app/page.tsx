@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {auctionGroupKey,auctionLimit,auctionOpeningPrice,auctionPassIsSafe,auctionProgressLabel,BENCH_SLOTS,calculateStartingBudget,canPlaceLotBid,fillMissingBenchSlot,fillMissingSlot,hashSeed,isCoach,lotFilled,mixedAuctionLots,positionAuctionLots,randomSlotOrder,rankManagers,ratingLevel,RATING_TIERS,resultInsights,safeCsvCell,seededRandom,shuffleSeeded,validManagerNames,type AuctionLot,type BenchSlot,type Era,type Footballer,type ForcedAssignment,type Manager,type PoolSourceEntry,type QualityMode,type RatingTier,type Slot} from '../lib/game-engine';
+import {auctionGroupKey,auctionLimit,auctionOpeningPrice,auctionPassIsSafe,auctionProgressLabel,BENCH_SLOTS,calculateStartingBudget,canPlaceLotBid,fillMissingBenchSlot,fillMissingSlot,hashSeed,isBonusPlayerLot,isCoach,lotFilled,mixedAuctionLots,positionAuctionLots,randomSlotOrder,rankManagers,ratingLevel,RATING_TIERS,resultInsights,safeCsvCell,seededRandom,shuffleSeeded,validManagerNames,type AuctionLot,type BenchSlot,type Era,type Footballer,type ForcedAssignment,type Manager,type PoolSourceEntry,type QualityMode,type RatingTier,type Slot} from '../lib/game-engine';
 import {COACHES} from '../lib/coaches';
 import {OnlineGame} from './online/page';
 
@@ -120,6 +120,8 @@ function LocalGame({onOnline}:{onOnline:()=>void}) {
   const current = pool[index];
   const auctionGroups=useMemo(()=>{const seen=new Set<string>();return pool.filter((lot):lot is Footballer=>!isCoach(lot)).flatMap(lot=>{const key=auctionGroupKey(lot);if(seen.has(key))return[];seen.add(key);const bench=lot.benchSlot&&BENCH_SLOTS.find(item=>item.key===lot.benchSlot),starter=SLOTS.find(item=>item.key===lot.slot);return[{key,label:bench?.label||starter?.label||lot.role}]})},[pool]);
   const currentSlotOrder=current&&!isCoach(current)?auctionGroups.findIndex(item=>item.key===auctionGroupKey(current)):-1;
+  const bonusLot=isBonusPlayerLot(pool,index,managers.length);
+  const nextGroupLabel=bonusLot?(auctionGroups[currentSlotOrder+1]?.label||'teknik direktör açık artırması'):'';
 
   useEffect(()=>{const id=setTimeout(()=>setHasSaved(Boolean(localStorage.getItem('bidxi-game'))),0);return()=>clearTimeout(id)},[]);
   useEffect(()=>{performance.mark('bidxi-ready');const record=(kind:string,value:unknown)=>{try{const old=JSON.parse(localStorage.getItem('bidxi-errors')||'[]') as unknown[];localStorage.setItem('bidxi-errors',JSON.stringify([{at:new Date().toISOString(),kind,value:String(value)},...old].slice(0,20)))}catch{}};const error=(e:ErrorEvent)=>record('error',e.message);const rejection=(e:PromiseRejectionEvent)=>record('promise',e.reason);window.addEventListener('error',error);window.addEventListener('unhandledrejection',rejection);return()=>{window.removeEventListener('error',error);window.removeEventListener('unhandledrejection',rejection)}},[]);
@@ -229,7 +231,8 @@ function LocalGame({onOnline}:{onOnline:()=>void}) {
       <section className="order-1 lg:order-2">
         <div className="auction-toolbar mb-4 flex items-center justify-between"><div className="flex gap-2"><span className="pill">{isCoach(current)?'TEKNİK DİREKTÖR':`LOT ${index+1}/${pool.length}`}</span><button className="tool-btn" aria-pressed={paused} onClick={togglePause}>{paused?'▶ Devam':'Ⅱ Duraklat'}</button><button className="tool-btn" aria-pressed={!soundOn} onClick={()=>setSoundOn(s=>!s)}>{soundOn?'♪ Ses':'× Sessiz'}</button>{undoSnapshot&&<button className="tool-btn" onClick={undoSale}>↶ Geri al</button>}</div><span className="text-xs text-zinc-500">{era==='current'?'Güncel':'Son 30 yıl'} · {quality==='best'?'En iyiler':'Herkes'} · {gameId}</span></div>
         <p className="lot-progress-note">{auctionProgressLabel(pool,index)}</p>
-        <div className="player-card">
+        {bonusLot&&<div className="bonus-lot-alert"><b>⚠ BONUS OYUNCU</b><span>Bu pozisyonun son açık artırması. Ardından {nextGroupLabel} başlayacak.</span></div>}
+        <div className={`player-card ${bonusLot?'bonus-lot-card':''}`}>
           <div className="pitch-lines"/><div className="player-top"><span className="position">{isCoach(current)?'TD':current.benchSlot?BENCH_SLOTS.find(group=>group.key===current.benchSlot)?.short:SLOTS.find(s=>s.key===current.slot)?.short}</span><div className="flex items-center gap-3">{(revealRatings||isCoach(current))&&<span className="rating-badge"><b>{current.rating.toFixed(1)}</b><small>{isCoach(current)?'TEKNİK DİREKTÖR':ratingLevel(current.rating)}</small></span>}<span className="nation">{current.nation}</span></div></div>
           {current.image&&<img className="player-photo" src={current.image} alt="" onError={e=>e.currentTarget.remove()}/>} 
           {isCoach(current)?<div className="formation-map coach-profile"><p><b>Taktik</b><span>{current.tactics}</span></p><p><b>Motivasyon</b><span>{current.motivation}</span></p><p><b>Uyum</b><span>{current.adaptability}</span></p><p><b>Gelişim</b><span>{current.development}</span></p><strong>Tercih: {current.preferredFormation}</strong></div>:<FormationMap active={current.slot}/>}
