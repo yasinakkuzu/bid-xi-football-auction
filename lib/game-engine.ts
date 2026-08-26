@@ -2,17 +2,24 @@ export type Era = 'current' | 'legends';
 export type QualityMode = 'best' | 'all';
 export type RatingTier = 'Süperstar'|'Elit'|'Çok iyi'|'İyi'|'Ortalama'|'Standart';
 export type Slot = 'GK'|'RB'|'CB1'|'CB2'|'LB'|'DM'|'CM'|'AM'|'RW'|'LW'|'ST';
-export type Footballer = { id:string; name:string; slot:Slot; role:string; rating:number; price:number; nation:string; club?:string; image?:string; clubLogo?:string };
+export type BenchSlot='BGK'|'BDEF'|'BMID'|'BFWD';
+export type Footballer = { id:string; name:string; slot:Slot; role:string; rating:number; price:number; nation:string; club?:string; image?:string; clubLogo?:string; benchSlot?:BenchSlot };
 export type CoachSpecialty='attack'|'defense'|'balance'|'development'|'motivation';
 export type Coach={kind:'coach';id:string;name:string;slot:'COACH';role:'Teknik Direktör';rating:number;price:number;nation:string;tactics:number;motivation:number;adaptability:number;development:number;preferredFormation:string;specialty:CoachSpecialty;image?:string};
 export type AuctionLot=Footballer|Coach;
-export type Manager = { id:number; name:string; budget:number; squad:Partial<Record<Slot,Footballer>>; spent:number; coach?:Coach };
+export type Manager = { id:number; name:string; budget:number; squad:Partial<Record<Slot,Footballer>>; spent:number; bench?:Partial<Record<BenchSlot,Footballer>>; coach?:Coach };
 export type PoolSourceEntry = { id:number; name:string; country:string; club:string; rating:number; price:number; value:number; image?:string; clubLogo?:string };
 export type ScoreBreakdown = Manager & {score:number;avg:number;defense:number;midfield:number;attack:number;weakest:number;balance:number;completion:number;budgetEfficiency:number;coachBoost:number;coachFit:number};
 export type ForcedAssignment={managerId:number;managerName:string;player:Footballer;fee:number};
 export type ResultInsights={winner:string;runnerUp:string;match:{scoreLine:string;summary:string}};
 
 export const SLOT_KEYS:Slot[]=['GK','RB','CB1','CB2','LB','DM','CM','AM','RW','LW','ST'];
+export const BENCH_SLOTS:{key:BenchSlot;label:string;short:string;sourceSlots:Slot[]}[]=[
+ {key:'BGK',label:'Yedek Kaleci',short:'Y-KL',sourceSlots:['GK']},
+ {key:'BDEF',label:'Yedek Defans',short:'Y-DEF',sourceSlots:['RB','CB1','CB2','LB']},
+ {key:'BMID',label:'Yedek Orta Saha',short:'Y-ORT',sourceSlots:['DM','CM','AM']},
+ {key:'BFWD',label:'Yedek Forvet',short:'Y-FV',sourceSlots:['RW','LW','ST']}
+];
 export const RATING_TIERS:RatingTier[]=['Süperstar','Elit','Çok iyi','İyi','Ortalama','Standart'];
 export function ratingLevel(r:number):RatingTier{return r>=93?'Süperstar':r>=90?'Elit':r>=86?'Çok iyi':r>=82?'İyi':r>=77?'Ortalama':'Standart'}
 
@@ -25,15 +32,15 @@ export function randomSlotOrder<T>(slots:T[],random:()=>number){return shuffleSe
 export function positionAuctionLots<T extends {id:string;rating:number}>(candidates:T[],excluded:Set<string>,needed:number,random:()=>number,clusterChance=.3,spread=2.5){let pool=candidates;if(candidates.length>=needed&&random()<clusterChance){const anchor=candidates[Math.floor(random()*candidates.length)]?.rating,nearby=candidates.filter(candidate=>Math.abs(candidate.rating-anchor)<=spread);if(nearby.length>=needed)pool=nearby}return mixedAuctionLots(pool,excluded,needed,random)}
 export function isCoach(lot:AuctionLot):lot is Coach{return lot.slot==='COACH'}
 
-export function affordableLimit(m:Manager){const playerReserve=Math.max(0,10-Object.keys(m.squad).length)*5,coachReserve=m.coach?0:5;return m.budget-playerReserve-coachReserve}
-export function canPlaceBid(m:Manager,lot:Footballer,offer:number,managerIndex:number,passed:number[]=[]){return !m.squad[lot.slot]&&!passed.includes(managerIndex)&&offer>=5&&offer<=affordableLimit(m)}
+export function affordableLimit(m:Manager){const playerReserve=Math.max(0,10-Object.keys(m.squad).length)*5,benchReserve=m.bench?Math.max(0,4-Object.keys(m.bench).length)*5:0,coachReserve=m.coach?0:5;return m.budget-playerReserve-benchReserve-coachReserve}
+export function canPlaceBid(m:Manager,lot:Footballer,offer:number,managerIndex:number,passed:number[]=[]){return !lotFilled(m,lot)&&!passed.includes(managerIndex)&&offer>=5&&offer<=affordableLimit(m)}
 export function openingPrice(lot:Footballer,managers:Manager[]){const limits=managers.filter(m=>!m.squad[lot.slot]).map(affordableLimit);return Math.max(5,Math.min(lot.price,Math.max(5,...limits)))}
 export function passIsSafe(pool:Footballer[],index:number,managers:Manager[]){const lot=pool[index];if(!lot)return false;return pool.slice(index).filter(p=>p.slot===lot.slot).length>managers.filter(m=>!m.squad[lot.slot]).length}
-export function auctionLimit(m:Manager,lot:AuctionLot){return isCoach(lot)?m.budget:affordableLimit(m)}
-export function lotFilled(m:Manager,lot:AuctionLot){return isCoach(lot)?Boolean(m.coach):Boolean(m.squad[lot.slot])}
+export function auctionLimit(m:Manager,lot:AuctionLot){if(isCoach(lot))return m.budget;if(!lot.benchSlot)return affordableLimit(m);const starterReserve=Math.max(0,11-Object.keys(m.squad).length)*5,benchReserve=Math.max(0,3-Object.keys(m.bench||{}).length)*5,coachReserve=m.coach?0:5;return m.budget-starterReserve-benchReserve-coachReserve}
+export function lotFilled(m:Manager,lot:AuctionLot){return isCoach(lot)?Boolean(m.coach):lot.benchSlot?Boolean(m.bench?.[lot.benchSlot]):Boolean(m.squad[lot.slot])}
 export function canPlaceLotBid(m:Manager,lot:AuctionLot,offer:number,managerIndex:number,passed:number[]=[]){return !lotFilled(m,lot)&&!passed.includes(managerIndex)&&offer>=5&&offer<=auctionLimit(m,lot)}
 export function auctionOpeningPrice(lot:AuctionLot,managers:Manager[]){const limits=managers.filter(m=>!lotFilled(m,lot)).map(m=>auctionLimit(m,lot));return Math.max(5,Math.min(lot.price,Math.max(5,...limits)))}
-export function auctionPassIsSafe(pool:AuctionLot[],index:number,managers:Manager[]){const lot=pool[index];if(!lot)return false;return pool.slice(index).filter(p=>p.slot===lot.slot).length>managers.filter(m=>!lotFilled(m,lot)).length}
+export function auctionPassIsSafe(pool:AuctionLot[],index:number,managers:Manager[]){const lot=pool[index];if(!lot)return false;const key=auctionGroupKey(lot);return pool.slice(index).filter(p=>auctionGroupKey(p)===key).length>managers.filter(m=>!lotFilled(m,lot)).length}
 export function calculateStartingBudget(pool:Footballer[],quality:QualityMode){if(quality==='best')return 1000;const expected=SLOT_KEYS.reduce((sum,slot)=>{const c=pool.filter(x=>x.slot===slot);return sum+c.reduce((n,x)=>n+x.price,0)/Math.max(1,c.length)},0);return Math.min(900,Math.max(300,Math.ceil(expected*1.18/10)*10))}
 
 export function fillMissingSlot(managers:Manager[],slot:Slot,candidates:PoolSourceEntry[],role:string,seed:string,excludedNames:Iterable<string>=[]){
@@ -46,6 +53,20 @@ export function fillMissingSlot(managers:Manager[],slot:Slot,candidates:PoolSour
   used.add(player.name);assignments.push({managerId:manager.id,managerName:manager.name,player,fee});return{...manager,budget:manager.budget-fee,spent:manager.spent+fee,squad:{...manager.squad,[slot]:player}}});
  return{managers:next,assignments};
 }
+
+export function fillMissingBenchSlot(managers:Manager[],benchSlot:BenchSlot,candidates:Array<PoolSourceEntry&{slot?:Slot}>,role:string,seed:string,excludedNames:Iterable<string>=[]){
+ const random=seededRandom(hashSeed(`${seed}-${benchSlot}`)),used=new Set([...excludedNames,...managers.flatMap(m=>[...Object.values(m.squad),...Object.values(m.bench||{})].map(p=>p?.name||''))]);
+ const lowPool=shuffleSeeded([...candidates].sort((a,b)=>a.rating-b.rating||a.value-b.value).slice(0,Math.max(24,managers.length*4)),random);
+ const assignments:ForcedAssignment[]=[];let cursor=0;
+ const next=managers.map(manager=>{if(manager.bench?.[benchSlot])return manager;let source=lowPool.find((candidate,index)=>index>=cursor&&!used.has(candidate.name));if(!source)source=lowPool.find(candidate=>!used.has(candidate.name))||lowPool[cursor%Math.max(1,lowPool.length)];cursor++;
+  const rating=62+Math.floor(random()*6),fee=Math.min(5,Math.max(0,manager.budget)),slot=source?.slot||BENCH_SLOTS.find(item=>item.key===benchSlot)?.sourceSlots[0]||'GK';
+  const player:Footballer={id:`fallback-${source?.id||hashSeed(`${seed}-${manager.id}`)}-${benchSlot}-${manager.id}`,name:source?.name||`Rastgele ${role}`,slot,benchSlot,role:`${role} · Standart altı`,rating,price:5,nation:(source?.country||'Bilinmiyor').slice(0,3).toUpperCase(),club:source?.club||'Serbest oyuncu',image:source?.image,clubLogo:source?.clubLogo};
+  used.add(player.name);assignments.push({managerId:manager.id,managerName:manager.name,player,fee});return{...manager,budget:manager.budget-fee,spent:manager.spent+fee,bench:{...(manager.bench||{}),[benchSlot]:player}}});
+ return{managers:next,assignments};
+}
+
+export function auctionGroupKey(lot:AuctionLot){return isCoach(lot)?'COACH':lot.benchSlot||lot.slot}
+export function auctionProgressLabel(pool:AuctionLot[],index:number){const lot=pool[index];if(!lot)return'';const key=auctionGroupKey(lot),ordinal=pool.slice(0,index+1).filter(item=>auctionGroupKey(item)===key).length;if(isCoach(lot))return`Teknik direktör için ${ordinal}. aday: ${lot.name}`;const label=lot.benchSlot?BENCH_SLOTS.find(item=>item.key===lot.benchSlot)?.label:lot.role;return`${label||lot.role} pozisyonu için ${ordinal}. oyuncu: ${lot.name}`}
 
 export function coachImpact(m:Manager,defense:number,midfield:number,attack:number){
  const c=m.coach;if(!c)return{coachBoost:0,coachFit:0};
