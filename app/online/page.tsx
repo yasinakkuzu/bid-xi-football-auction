@@ -451,7 +451,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
   async function togglePresentation(){const next=!presentation;setPresentation(next);try{if(next)await document.documentElement.requestFullscreen?.();else if(document.fullscreenElement)await document.exitFullscreen()}catch{}}
   async function sendChat(){const text=chatText.trim();if(!text)return;setChatText('');await action('chat',{text})}
   async function copyRoomCode(){try{await navigator.clipboard.writeText(room?.code||'');setCopied(true);setTimeout(()=>setCopied(false),1800)}catch{setError('Oda kodu kopyalanamadı.')}}
-  async function invite(){if(!room)return;const url=`${location.origin}/?mode=online&room=${room.code}`;try{if(navigator.share)await navigator.share({title:'Açık Artırma odasına katıl',text:`${room.code} kodlu odaya katıl`,url});else await navigator.clipboard.writeText(url);setCopied(true);setTimeout(()=>setCopied(false),1800)}catch(error){if((error as DOMException).name!=='AbortError')setError('Davet bağlantısı paylaşılamadı.')}}
+  async function invite(){if(!room)return;const url=`${location.origin}/?mode=online&room=${room.code}`;try{if(navigator.share)await navigator.share({title:'Kadro İhalesi odasına katıl',text:`${room.code} kodlu odaya katıl`,url});else await navigator.clipboard.writeText(url);setCopied(true);setTimeout(()=>setCopied(false),1800)}catch(error){if((error as DOMException).name!=='AbortError')setError('Davet bağlantısı paylaşılamadı.')}}
   function confirmLeave(goHome=false){if(!confirm('Oyundan ve odadan tamamen çıkmak istediğinize emin misiniz?'))return;void leave().then(()=>{if(goHome)location.assign('/')})}
 
   if (screen === 'entry')
@@ -461,7 +461,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
           <button className="mode-back" onClick={onLocal}>
             ← Tek cihaz
           </button>
-          <b>BID XI · ÇOK OYUNCULU</b>
+          <b>KADRO İHALESİ · ÇOK OYUNCULU</b>
           <span>2–8 kişi</span>
         </nav>
         <section className="online-entry">
@@ -645,7 +645,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
       <header className="room-header">
         <div>
           <button className="brand-button" onClick={()=>confirmLeave(true)}>
-            BID XI
+            KADRO İHALESİ
           </button>
           <span className={`connection ${online ? 'ok' : ''}`}>{online ? '● Bağlı' : '● Yeniden bağlanıyor'}</span>
         </div>
@@ -846,7 +846,7 @@ function OnlineResults({managers,audit,onRematch,season}: {managers: Manager[];a
     return {ranked: ordered, insights: resultInsights(ordered)};
   }, [managers]);
   const tournament=useMemo(()=>simulateTournament(managers,'online-results'),[managers]);
-  async function shareCard(){const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1350;const ctx=canvas.getContext('2d');if(!ctx)return;ctx.fillStyle='#09100b';ctx.fillRect(0,0,1080,1350);ctx.fillStyle='#c9ff45';ctx.font='900 54px system-ui';ctx.fillText('AÇIK ARTIRMA',70,100);ctx.fillStyle='white';ctx.font='900 76px system-ui';ctx.fillText(`${ranked[0]?.name||'Şampiyon'} kazandı`,70,220);ctx.font='700 36px system-ui';ranked.slice(0,5).forEach((team,index)=>ctx.fillText(`${index+1}. ${team.name.slice(0,22)}  ${team.score.toFixed(2)}`,80,340+index*105));ctx.fillStyle='#a1a1aa';ctx.font='28px system-ui';ctx.fillText('Kadro puanlarına dayalı oyun sonucudur.',70,1240);const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)return;const file=new File([blob],'acik-artirma-sonucu.png',{type:'image/png'});try{if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],title:'Açık Artırma sonucu'});else{const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=file.name;link.click();URL.revokeObjectURL(link.href)}}catch(error){if((error as DOMException).name!=='AbortError')throw error}}
+  async function shareCard(){const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1350;const ctx=canvas.getContext('2d');if(!ctx)return;ctx.fillStyle='#09100b';ctx.fillRect(0,0,1080,1350);ctx.fillStyle='#c9ff45';ctx.font='900 54px system-ui';ctx.fillText('KADRO İHALESİ',70,100);ctx.fillStyle='white';ctx.font='900 76px system-ui';ctx.fillText(`${ranked[0]?.name||'Şampiyon'} kazandı`,70,220);ctx.font='700 36px system-ui';ranked.slice(0,5).forEach((team,index)=>ctx.fillText(`${index+1}. ${team.name.slice(0,22)}  ${team.score.toFixed(2)}`,80,340+index*105));ctx.fillStyle='#a1a1aa';ctx.font='28px system-ui';ctx.fillText('Kadro puanlarına dayalı oyun sonucudur.',70,1240);const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)return;const file=new File([blob],'kadro-ihalesi-sonucu.png',{type:'image/png'});try{if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],title:'Kadro İhalesi sonucu'});else{const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=file.name;link.click();URL.revokeObjectURL(link.href)}}catch(error){if((error as DOMException).name!=='AbortError')throw error}}
   return (
     <section className="online-results">
       <p className="eyebrow">ODA SONUCU</p>
@@ -899,5 +899,5 @@ export default function OnlineRedirect() {
     params.set('mode', 'online');
     location.replace(`/?${params.toString()}`);
   }, []);
-  return <main className="online-loading">Tek sayfalık BID XI deneyimine yönlendiriliyor…</main>;
+  return <main className="online-loading">Kadro İhalesi deneyimine yönlendiriliyor…</main>;
 }

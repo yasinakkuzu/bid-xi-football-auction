@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Kadro İhalesi logosu">
+  <defs><linearGradient id="g" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse"><stop stop-color="#d8ff71"/><stop offset="1" stop-color="#a9ed24"/></linearGradient></defs>
+  <rect x="2" y="2" width="60" height="60" rx="18" fill="#0b110d" stroke="#c9ff45" stroke-width="2"/>
+  <path d="M17 15v34M18 32h10l14-17M28 32l15 17" fill="none" stroke="url(#g)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="48" cy="15" r="4" fill="#fff"/>
+</svg>

@@ -1,4 +1,4 @@
-# BID XI — Futbol Açık Artırması
+# Kadro İhalesi — Futbol Açık Artırma Oyunu
 
 4-2-3-1 kadro düzeninde, yerel veya çevrim içi odalarla oynanabilen çok oyunculu futbol açık artırma oyunu.
 
