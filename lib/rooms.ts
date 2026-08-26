@@ -1,6 +1,6 @@
 import {env} from 'cloudflare:workers';
 import {ROOM_SCHEMA} from '../db/schema';
-import {auctionGroupKey,auctionOpeningPrice,BENCH_SLOTS,botMaximumBid,calculateStartingBudget,canPlaceLotBid,chooseBotFormation,fillMissingBenchSlot,fillMissingCoaches,fillMissingSlot,FORMATIONS,hashSeed,isCoach,lotFilled,mixedAuctionLots,positionAuctionLots,randomSlotOrder,rankManagers,ratingLevel,RATING_TIERS,seededRandom,type AuctionLot,type BenchSlot,type BotStyle,type Era,type Footballer,type Formation,type Manager,type PoolSourceEntry,type QualityMode,type RatingTier,type Slot} from './game-engine';
+import {auctionGroupKey,auctionOpeningPrice,BENCH_SLOTS,botMaximumBid,calculateStartingBudget,canPlaceLotBid,chooseBotFormation,fillMissingBenchSlot,fillMissingCoaches,fillMissingSlot,FORMATIONS,hashSeed,isCoach,lotFilled,mixedAuctionLots,positionAuctionLots,randomSlotOrder,rankManagers,ratingLevel,RATING_TIERS,seededRandom,shuffleSeeded,type AuctionLot,type BenchSlot,type BotStyle,type Era,type Footballer,type Formation,type Manager,type PoolSourceEntry,type QualityMode,type RatingTier,type Slot} from './game-engine';
 import {COACHES} from './coaches';
 import generated from '../app/data/auction-pool.generated.json';
 
