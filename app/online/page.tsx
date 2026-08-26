@@ -4,7 +4,7 @@
 
 import Link from 'next/link';
 import {useCallback,useEffect,useMemo,useState} from 'react';
-import {auctionPassIsSafe,isCoach,rankManagers,ratingLevel,RATING_TIERS,SLOT_KEYS,type AuctionLot,type Manager,type RatingTier,type Slot} from '../../lib/game-engine';
+import {auctionPassIsSafe,isCoach,rankManagers,ratingLevel,RATING_TIERS,resultInsights,SLOT_KEYS,type AuctionLot,type Manager,type RatingTier,type Slot} from '../../lib/game-engine';
 
 type Member={id:string;name:string;role:'manager'|'spectator';approved:boolean};
 type AuctionMode='live'|'manual';
@@ -132,4 +132,7 @@ export default function Online(){
     {selected&&<ManagerDrawer manager={selected} onClose={()=>setSelectedManager(null)}/>}</main>;
 }
 
-function OnlineResults({managers}:{managers:Manager[]}){const ranked=useMemo(()=>rankManagers(managers),[managers]);return <section className="online-results"><p className="eyebrow">ODA SONUCU</p><h1>{ranked[0]?.name} kazandı</h1><div>{ranked.map((manager,index)=><article key={manager.id}><span>#{index+1}</span><h2>{manager.name}</h2><strong>{manager.score.toFixed(2)}</strong><p>Ortalama {manager.avg} · Kalan {money(manager.budget)} · Kadro {Object.keys(manager.squad).length}/11</p><p>Teknik direktör: {manager.coach?.name||'Yok'}{manager.coach?` · +${manager.coachBoost} takım puanı · %${manager.coachFit} uyum`:''}</p></article>)}</div><p>Bu sonuç odada 7 gün boyunca saklanır.</p></section>}
+function OnlineResults({managers}:{managers:Manager[]}){
+  const {ranked,insights}=useMemo(()=>{const ordered=rankManagers(managers);return{ranked:ordered,insights:resultInsights(ordered)}},[managers]);
+  return <section className="online-results"><p className="eyebrow">ODA SONUCU</p><h1>{ranked[0]?.name} kazandı</h1>{ranked[1]&&<section className="result-analysis online-result-analysis"><div><p className="eyebrow">SIRALAMA ANALİZİ</p><h2>Neden birinci ve ikinci oldular?</h2><p>{insights.winner}</p><p>{insights.runnerUp}</p></div><aside><span>MUHTEMEL MAÇ</span><strong>{insights.match.scoreLine}</strong><p>{insights.match.summary}</p></aside></section>}<div>{ranked.map((manager,index)=><article key={manager.id}><span>#{index+1}</span><h2>{manager.name}</h2><strong>{manager.score.toFixed(2)}</strong><p>Ortalama {manager.avg} · Kalan {money(manager.budget)} · Kadro {Object.keys(manager.squad).length}/11</p><p>Teknik direktör: {manager.coach?.name||'Yok'}{manager.coach?` · +${manager.coachBoost} takım puanı · %${manager.coachFit} uyum`:''}</p></article>)}</div><p>Bu sonuç odada 7 gün boyunca saklanır.</p></section>
+}

@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import {auctionLimit,auctionOpeningPrice,auctionPassIsSafe,calculateStartingBudget,canPlaceLotBid,fillMissingSlot,hashSeed,isCoach,lotFilled,preferFresh,rankManagers,ratingLevel,RATING_TIERS,safeCsvCell,seededRandom,shuffleSeeded,validManagerNames,type AuctionLot,type Era,type Footballer,type ForcedAssignment,type Manager,type PoolSourceEntry,type QualityMode,type RatingTier,type Slot} from '../lib/game-engine';
+import {auctionLimit,auctionOpeningPrice,auctionPassIsSafe,calculateStartingBudget,canPlaceLotBid,fillMissingSlot,hashSeed,isCoach,lotFilled,mixedAuctionLots,positionAuctionLots,randomSlotOrder,rankManagers,ratingLevel,RATING_TIERS,resultInsights,safeCsvCell,seededRandom,shuffleSeeded,validManagerNames,type AuctionLot,type Era,type Footballer,type ForcedAssignment,type Manager,type PoolSourceEntry,type QualityMode,type RatingTier,type Slot} from '../lib/game-engine';
 import {COACHES} from '../lib/coaches';
 
 type Stage = 'setup' | 'names' | 'auction' | 'results';
@@ -56,18 +56,18 @@ const FORMATION_POSITIONS: Record<Slot,{left:string;top:string}> = {
 const money = (n:number) => `$${n}M`;
 function buildPool(generated:PoolSource,era:Era,count:number,quality:QualityMode,selectedTiers:RatingTier[],gameId:string,excluded:Set<string>):AuctionLot[] {
   const random=seededRandom(hashSeed(gameId));
-  const footballers=SLOTS.flatMap((s,slotIndex) => {
+  const footballers=randomSlotOrder(SLOTS,random).flatMap((s,slotIndex) => {
     const candidates=(generated[era]?.[s.key]||[]).filter(p=>selectedTiers.includes(ratingLevel(p.rating) as RatingTier));
     if(candidates.length){
       const needed=count+1;
       const mapped=candidates.map(p=>({id:`tm-${p.id}-${s.key}`,name:p.name,slot:s.key,role:s.label,rating:p.rating,price:p.price,nation:p.country.slice(0,3).toUpperCase(),club:p.club,image:p.image,clubLogo:p.clubLogo} satisfies Footballer));
       const window=quality==='best'?mapped.slice(0,Math.max(96,needed*10)):mapped;
-      return preferFresh(window,excluded,needed,random).sort((a,b)=>b.rating-a.rating);
+      return positionAuctionLots(window,excluded,needed,random,s.key==='ST'?.72:.3,s.key==='ST'?3:2.5);
     }
     const fallback=shuffleSeeded(POOLS[era][s.key],random).map((name,i)=>({id:`${era}-${s.key}-${name}`,name,slot:s.key,role:s.label,rating:Math.max(78,(era==='legends'?96:93)-i-((slotIndex+i)%3)),price:Math.max(20,(era==='legends'?100:85)-i*8+(slotIndex%4)*3),nation:NATIONS[(slotIndex+i)%NATIONS.length]} satisfies Footballer));
-    return preferFresh(fallback,excluded,count+1,random);
+    return positionAuctionLots(fallback,excluded,count+1,random,s.key==='ST'?.72:.3,s.key==='ST'?3:2.5);
   });
-  return[...footballers,...preferFresh(COACHES,excluded,count+2,random).sort((a,b)=>b.rating-a.rating)];
+  return[...footballers,...mixedAuctionLots(COACHES,excluded,count+2,random)];
 }
 
 export default function Home() {
@@ -99,6 +99,8 @@ export default function Home() {
   const audioRef=useRef<AudioContext|null>(null);
   const timeoutActionRef=useRef<()=>void>(()=>{});
   const current = pool[index];
+  const auctionSlots=useMemo(()=>{const seen=new Set<Slot>();return pool.filter((lot):lot is Footballer=>!isCoach(lot)).flatMap(lot=>{if(seen.has(lot.slot))return[];seen.add(lot.slot);const info=SLOTS.find(item=>item.key===lot.slot);return info?[info]:[]})},[pool]);
+  const currentSlotOrder=current&&!isCoach(current)?auctionSlots.findIndex(item=>item.key===current.slot):-1;
 
   useEffect(()=>{const id=setTimeout(()=>setHasSaved(Boolean(localStorage.getItem('bidxi-game'))),0);return()=>clearTimeout(id)},[]);
   useEffect(()=>{performance.mark('bidxi-ready');const record=(kind:string,value:unknown)=>{try{const old=JSON.parse(localStorage.getItem('bidxi-errors')||'[]') as unknown[];localStorage.setItem('bidxi-errors',JSON.stringify([{at:new Date().toISOString(),kind,value:String(value)},...old].slice(0,20)))}catch{}};const error=(e:ErrorEvent)=>record('error',e.message);const rejection=(e:PromiseRejectionEvent)=>record('promise',e.reason);window.addEventListener('error',error);window.addEventListener('unhandledrejection',rejection);return()=>{window.removeEventListener('error',error);window.removeEventListener('unhandledrejection',rejection)}},[]);
@@ -217,7 +219,7 @@ export default function Home() {
           <div className="turn-controls"><div className="turn-label"><span>{paused?'DURAKLATILDI':activeTurn===null?'TEKLİFLER BİTTİ':`SIRA: ${managers[activeTurn].name}`}</span><b>{activeTurn===null?'—':`${timeLeft}s`}</b></div><div className="flex flex-wrap gap-2">{leader===null?<button disabled={activeTurn===null||paused||!canBid(managers[activeTurn],openingPrice)} onClick={()=>placeBid(0)} className="increment primary">{money(openingPrice)} teklif ver</button>:[5,10,25].map(n=><button key={n} disabled={activeTurn===null||paused||!canBid(managers[activeTurn],bid+n)} onClick={()=>placeBid(n)} className="increment">+{n}M</button>)}<button disabled={activeTurn===null||paused} onClick={passTurn} className="pass">Pas</button><button disabled={leader===null||activeTurn!==null||paused} onClick={sell} className="sell">Satışı Bitir</button></div>{leader===null&&<p className="pass-hint">{isCoach(current)?'Teknik direktör adayını pas geçebilirsin.':passIsSafe?`Bu pozisyonda ${remainingForSlot} normal aday kaldı.`:'Bu son normal aday da geçilirse eksik pozisyona 5M karşılığında standart altı oyuncu atanır.'}</p>}</div>
         </div>
       </section>
-      <aside className="order-3"><p className="eyebrow">4-2-3-1 PLANI</p><h2 className="mb-5 mt-2 text-xl font-bold">Açık artırma sırası</h2><div className="slot-list">{SLOTS.map((s,i)=><div key={s.key} className={`${!isCoach(current)&&i===SLOTS.findIndex(x=>x.key===current.slot)?'now':''} ${isCoach(current)||i<SLOTS.findIndex(x=>x.key===current.slot)?'done':''}`}><span>{i+1}</span><p>{s.label}</p></div>)}<div className={isCoach(current)?'now':''}><span>12</span><p>Teknik direktör</p></div></div>{feed.length>0&&<div className="feed">{feed.map((f,i)=><p key={i}>{f}</p>)}</div>}</aside>
+      <aside className="order-3"><p className="eyebrow">4-2-3-1 PLANI</p><h2 className="mb-5 mt-2 text-xl font-bold">Karışık açık artırma sırası</h2><div className="slot-list">{auctionSlots.map((s,i)=><div key={s.key} className={`${!isCoach(current)&&i===currentSlotOrder?'now':''} ${isCoach(current)||i<currentSlotOrder?'done':''}`}><span>{i+1}</span><p>{s.label}</p></div>)}<div className={isCoach(current)?'now':''}><span>12</span><p>Teknik direktör</p></div></div>{feed.length>0&&<div className="feed">{feed.map((f,i)=><p key={i}>{f}</p>)}</div>}</aside>
     </div>
     {selectedManager!==null&&<SquadDrawer manager={managers[selectedManager]} onClose={()=>setSelectedManager(null)}/>} 
   </Shell>;
@@ -255,7 +257,7 @@ function Names({source,names,setNames,era,quality,revealRatings,selectedTiers,on
     <button className="back" onClick={onBack}>← Geri</button>
     <div className="panel rounded-[28px] p-6 sm:p-10">
       <p className="eyebrow">MASA KURULUMU · 02</p><h1 className="mt-3 text-4xl font-black">Menajerler kim?</h1>
-      <p className="mt-3 text-zinc-400">Başlangıç bütçesi seçilen havuz oluşturulduğunda hesaplanır. Sıra aşağıdaki listeye göre ilerler.</p>
+      <p className="mt-3 text-zinc-400">Başlangıç bütçesi seçilen havuz oluşturulduğunda hesaplanır. Pozisyon sırası her yeni oyunda rastgele belirlenir.</p>
       <div className="my-8 grid gap-3 sm:grid-cols-2">{names.map((n,i)=><label key={i} className="name-field"><span>{i+1}</span><input maxLength={24} aria-invalid={!n.trim()||names.some((x,j)=>j!==i&&x.trim().toLocaleLowerCase('tr')===n.trim().toLocaleLowerCase('tr'))} aria-label={`${i+1}. menajer`} value={n} onChange={e=>setNames(names.map((x,j)=>j===i?e.target.value:x))}/></label>)}</div>
       {!namesValid&&<p className="form-error" role="alert">Adlar boş veya aynı olamaz; en fazla 24 karakter kullanın.</p>}
       <details className="pool-browser"><summary>Havuzu incele ve filtrele</summary><div className="pool-search"><input placeholder="Futbolcu, kulüp veya ülke ara" value={query} onChange={e=>setQuery(e.target.value)}/><select value={slot} onChange={e=>setSlot(e.target.value as Slot|'all')}><option value="all">Tüm pozisyonlar</option>{SLOTS.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}</select></div>{matches.length>0&&<div className="search-results">{matches.map(p=><div key={p.id}>{p.image?<img src={p.image} alt="" onError={e=>e.currentTarget.remove()}/>:<span className="image-fallback">?</span>}<span><b>{p.name}</b><small>{p.club||'Kulüp bilinmiyor'} · {p.country||'Ülke bilinmiyor'}</small></span><em>{SLOTS.find(s=>s.key===p.slot)?.short}</em></div>)}</div>}<p>Arama yalnızca havuzu incelemek içindir; seçilen görünürlük kuralı açık artırmada uygulanır.</p></details>
@@ -268,11 +270,13 @@ function Names({source,names,setNames,era,quality,revealRatings,selectedTiers,on
 function Results({managers,onReset}:{managers:Manager[];onReset:()=>void}){
   const [formationViews,setFormationViews] = useState<Record<number,boolean>>({});
   const ranked = useMemo(()=>rankManagers(managers),[managers]);
+  const insights = useMemo(()=>resultInsights(ranked),[ranked]);
   function exportCsv(){const lines=['Sıra,Menajer,Puan,Pozisyon,Futbolcu veya TD,Puan,Kalan Bütçe'];ranked.forEach((m,i)=>{SLOTS.forEach(s=>lines.push([i+1,safeCsvCell(m.name),m.score.toFixed(2),s.short,safeCsvCell(m.squad[s.key]?.name||''),m.squad[s.key]?.rating||'',m.budget].join(',')));lines.push([i+1,safeCsvCell(m.name),m.score.toFixed(2),'TD',safeCsvCell(m.coach?.name||''),m.coach?.rating||'',m.budget].join(','))});const url=URL.createObjectURL(new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='bid-xi-sonuclari.csv';a.click();URL.revokeObjectURL(url)}
-  async function share(){const text=`BID XI sonucu: ${ranked.map((m,i)=>`${i+1}. ${m.name} (${m.score.toFixed(2)})`).join(' · ')}`;try{if(navigator.share)await navigator.share({title:'BID XI Sonuçları',text});else await navigator.clipboard.writeText(text)}catch(error){if((error as DOMException).name!=='AbortError')window.alert('Sonuç paylaşılamadı. Tarayıcı izinlerini kontrol edin.')}}
+  async function share(){const text=`BID XI sonucu: ${ranked.map((m,i)=>`${i+1}. ${m.name} (${m.score.toFixed(2)})`).join(' · ')} · Maç tahmini: ${insights.match.scoreLine}`;try{if(navigator.share)await navigator.share({title:'BID XI Sonuçları',text});else await navigator.clipboard.writeText(text)}catch(error){if((error as DOMException).name!=='AbortError')window.alert('Sonuç paylaşılamadı. Tarayıcı izinlerini kontrol edin.')}}
   return <section className="mx-auto max-w-6xl py-12">
     <div className="text-center"><p className="eyebrow">İHALE TAMAMLANDI</p><h1 className="mt-3 text-5xl font-black">Gecenin şampiyonu</h1><p className="mt-3 text-zinc-400">Kadro gücü, denge, bütçe verimliliği ve teknik direktör uyumuna göre.</p></div>
     {ranked[0]&&<div className="winner"><span className="crown">♛</span><p>1. SIRA</p><h2>{ranked[0].name}</h2><strong>{ranked[0].score.toFixed(2)}</strong><small>TAKIM PUANI</small></div>}
+    {ranked[1]&&<section className="result-analysis"><div><p className="eyebrow">SIRALAMA ANALİZİ</p><h2>Neden birinci ve ikinci oldular?</h2><p>{insights.winner}</p><p>{insights.runnerUp}</p></div><aside><span>MUHTEMEL MAÇ</span><strong>{insights.match.scoreLine}</strong><p>{insights.match.summary}</p></aside></section>}
     <div className="result-grid">{ranked.map((m,i)=><article key={m.id} className="result-card"><div className="flex items-center justify-between"><span className="rank">#{i+1}</span><div className="flex items-center gap-3"><button aria-pressed={Boolean(formationViews[m.id])} className="view-toggle" onClick={()=>setFormationViews(v=>({...v,[m.id]:!v[m.id]}))}>{formationViews[m.id]?'☰ Liste':'⌄ Diziliş'}</button><span className="score">{m.score.toFixed(2)}</span></div></div><h3>{m.name}</h3><div className="stats"><span>Ort. <b>{m.avg}</b></span><span>DEF <b>{m.defense}</b></span><span>ORT <b>{m.midfield}</b></span><span>HÜC <b>{m.attack}</b></span><span>Kalan <b>{money(m.budget)}</b></span></div><div className="result-coach"><span>TD</span><p><b>{m.coach?.name||'Teknik direktör yok'}</b>{m.coach&&<small>{m.coach.preferredFormation} · +{m.coachBoost} takım puanı · %{m.coachFit} uyum</small>}</p></div><details className="score-details"><summary>Puan hesabı</summary><p>En zayıf halka <b>{m.weakest}</b> · Denge <b>{m.balance}</b> · Tamamlama <b>%{m.completion}</b> · Bütçe verimi <b>{m.budgetEfficiency}</b> (puan etkisi en fazla 0,15) · TD katkısı <b>+{m.coachBoost}</b></p></details>{formationViews[m.id]?<ResultFormation squad={m.squad}/>:<div className="mini-squad">{SLOTS.map(s=><div key={s.key}><span>{s.short}</span><p>{m.squad[s.key]?.name||'Boş'}</p><b>{m.squad[s.key]?.rating||'—'}</b></div>)}</div>}</article>)}</div>
     <div className="result-actions"><button onClick={exportCsv}>↓ CSV indir</button><button onClick={share}>↗ Sonucu paylaş</button></div><button onClick={onReset} className="start mx-auto mt-4 w-full max-w-md">Yeni oyun kur <span>↻</span></button>
   </section>;

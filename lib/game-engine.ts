@@ -10,6 +10,7 @@ export type Manager = { id:number; name:string; budget:number; squad:Partial<Rec
 export type PoolSourceEntry = { id:number; name:string; country:string; club:string; rating:number; price:number; value:number; image?:string; clubLogo?:string };
 export type ScoreBreakdown = Manager & {score:number;avg:number;defense:number;midfield:number;attack:number;weakest:number;balance:number;completion:number;budgetEfficiency:number;coachBoost:number;coachFit:number};
 export type ForcedAssignment={managerId:number;managerName:string;player:Footballer;fee:number};
+export type ResultInsights={winner:string;runnerUp:string;match:{scoreLine:string;summary:string}};
 
 export const SLOT_KEYS:Slot[]=['GK','RB','CB1','CB2','LB','DM','CM','AM','RW','LW','ST'];
 export const RATING_TIERS:RatingTier[]=['Süperstar','Elit','Çok iyi','İyi','Ortalama','Standart'];
@@ -19,6 +20,9 @@ export function hashSeed(text:string){let h=2166136261;for(let i=0;i<text.length
 export function seededRandom(seed:number){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 export function shuffleSeeded<T>(input:T[],random:()=>number){const out=[...input];for(let i=out.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[out[i],out[j]]=[out[j],out[i]]}return out}
 export function preferFresh<T extends {id:string}>(candidates:T[],excluded:Set<string>,needed:number,random:()=>number){const fresh=shuffleSeeded(candidates.filter(x=>!excluded.has(x.id)),random),repeats=shuffleSeeded(candidates.filter(x=>excluded.has(x.id)),random);return [...fresh,...repeats].slice(0,needed)}
+export function mixedAuctionLots<T extends {id:string}>(candidates:T[],excluded:Set<string>,needed:number,random:()=>number){return shuffleSeeded(preferFresh(candidates,excluded,needed,random),random)}
+export function randomSlotOrder<T>(slots:T[],random:()=>number){return shuffleSeeded(slots,random)}
+export function positionAuctionLots<T extends {id:string;rating:number}>(candidates:T[],excluded:Set<string>,needed:number,random:()=>number,clusterChance=.3,spread=2.5){let pool=candidates;if(candidates.length>=needed&&random()<clusterChance){const anchor=candidates[Math.floor(random()*candidates.length)]?.rating,nearby=candidates.filter(candidate=>Math.abs(candidate.rating-anchor)<=spread);if(nearby.length>=needed)pool=nearby}return mixedAuctionLots(pool,excluded,needed,random)}
 export function isCoach(lot:AuctionLot):lot is Coach{return lot.slot==='COACH'}
 
 export function affordableLimit(m:Manager){const playerReserve=Math.max(0,10-Object.keys(m.squad).length)*5,coachReserve=m.coach?0:5;return m.budget-playerReserve-coachReserve}
@@ -64,6 +68,19 @@ export function scoreManager(m:Manager):ScoreBreakdown{
  return {...m,score:Math.round((raw+coachBoost)*100)/100,avg:one(avg),defense:one(defense),midfield:one(midfield),attack:one(attack),weakest:one(weakest),balance:one(balance),completion:one(completion),budgetEfficiency:one(budgetEfficiency),coachBoost,coachFit};
 }
 export function rankManagers(ms:Manager[]){return ms.map(scoreManager).sort((a,b)=>b.score-a.score||b.avg-a.avg||b.budget-a.budget)}
+export function resultInsights(ranked:ScoreBreakdown[]):ResultInsights{
+ const first=ranked[0],second=ranked[1];if(!first)return{winner:'Sonuç üretilemedi.',runnerUp:'',match:{scoreLine:'—',summary:'Karşılaştırma için en az iki takım gerekir.'}};
+ const sector=(team:ScoreBreakdown,mode:'best'|'weak')=>{const sectors=[['savunma',team.defense],['orta saha',team.midfield],['hücum',team.attack]] as const;return [...sectors].sort((a,b)=>mode==='best'?b[1]-a[1]:a[1]-b[1])[0]};
+ const firstBest=sector(first,'best'),coachText=first.coach?`${first.coach.name} yönetimindeki ${first.coachBoost.toFixed(1)} puanlık teknik direktör katkısı`:'teknik direktör katkısı olmadan kurduğu kadro dengesi';
+ const winner=`${first.name}, ${first.score.toFixed(2)} takım puanıyla birinci oldu. ${firstBest[0][0].toUpperCase()+firstBest[0].slice(1)} hattındaki ${firstBest[1].toFixed(1)} ortalama ve ${coachText} onu listenin tepesine taşıdı.`;
+ if(!second)return{winner,runnerUp:'İkinci takım bulunmuyor.',match:{scoreLine:'—',summary:'Karşılaştırma için en az iki takım gerekir.'}};
+ const secondBest=sector(second,'best'),secondWeak=sector(second,'weak'),gap=Math.max(0,first.score-second.score);
+ const runnerUp=`${second.name}, ${second.score.toFixed(2)} puanla ikinci sırayı aldı; en güçlü bölgesi ${secondBest[1].toFixed(1)} ortalamalı ${secondBest[0]} hattı oldu. ${secondWeak[0][0].toUpperCase()+secondWeak[0].slice(1)} seviyesinin ${secondWeak[1].toFixed(1)} kalması ve liderle oluşan ${gap.toFixed(2)} puanlık fark birinciliği kaçırmasına neden oldu.`;
+ const random=seededRandom(hashSeed(`${first.name}-${second.name}-${first.score}-${second.score}`)),firstEdge=(first.attack-second.defense)*.08+(first.midfield-second.midfield)*.04+gap*.18;
+ let firstGoals=Math.max(1,Math.min(5,Math.round(1.45+firstEdge*.12+random()*1.5)));const secondGoals=Math.max(0,Math.min(4,Math.round(1.05-firstEdge*.04+random()*1.25)));if(firstGoals<=secondGoals)firstGoals=Math.min(5,secondGoals+1);
+ const scoreLine=`${first.name} ${firstGoals}–${secondGoals} ${second.name}`,summary=`Tahmini maçta ${first.name}, ${first.attack.toFixed(1)} hücum gücüyle ${second.name} savunmasına karşı öne çıkıyor. ${second.name} güçlü ${secondBest[0]} hattıyla denge kurabilir; bu skor kadro puanları ve hat eşleşmelerinden üretilmiş bir oyun tahminidir.`;
+ return{winner,runnerUp,match:{scoreLine,summary}};
+}
 export function safeCsvCell(value:unknown){const s=String(value??'');const neutral=/^[=+@\-]/.test(s)?`'${s}`:s;return `"${neutral.replaceAll('"','""')}"`}
 export function validManagerNames(names:string[]){const clean=names.map(n=>n.trim());return clean.every(n=>n.length>0&&n.length<=24)&&new Set(clean.map(n=>n.toLocaleLowerCase('tr'))).size===clean.length}
 
