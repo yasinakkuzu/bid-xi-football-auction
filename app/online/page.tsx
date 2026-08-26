@@ -691,7 +691,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
                       {member.id === memberId ? ' · Siz' : ''}
                     </b>
                     <small>
-                      {member.isBot?'Ücretsiz kural tabanlı AI':member.role === 'manager' ? 'Menajer' : 'Seyirci'} · {member.approved ? 'Onaylandı' : 'Onay bekliyor'}
+                      {member.isBot?`AI menajer · ${member.botStyle==='value'?'Acemi':member.botStyle==='aggressive'?'Uzman':'Ortalama'}`:member.role === 'manager' ? 'Menajer' : 'Seyirci'} · {member.approved ? 'Onaylandı' : 'Onay bekliyor'}
                     </small>
                   </div>
                   {isHost&&member.isBot?<button className="danger-action" disabled={busy} onClick={()=>action('removeBot',{memberId:member.id})}>Kaldır</button>:isHost && !member.approved ? (
@@ -705,7 +705,7 @@ export function OnlineGame({onLocal}: {onLocal: () => void}) {
               ))}
             </div>
             {isHost ? (
-              <div className="lobby-actions"><button disabled={busy||managers.length>=8} onClick={()=>action('addBot',{style:'balanced'})}>+ AI menajer ekle</button><button className="start" disabled={busy || managers.length < 2} onClick={() => action('start')}>Oyunu başlat <span>→</span></button></div>
+              <div className="lobby-actions"><div className="ai-level-picker"><span>AI RAKİP SEVİYESİ</span><button disabled={busy||managers.length>=8} onClick={()=>action('addBot',{style:'value'})}><b>Acemi</b><small>Daha erken çekilir</small></button><button disabled={busy||managers.length>=8} onClick={()=>action('addBot',{style:'balanced'})}><b>Ortalama</b><small>Dengeli teklif verir</small></button><button disabled={busy||managers.length>=8} onClick={()=>action('addBot',{style:'aggressive'})}><b>Uzman</b><small>Değerli lotları zorlar</small></button></div><button className="start" disabled={busy || managers.length < 2} onClick={() => action('start')}>Oyunu başlat <span>→</span></button></div>
             ) : (
               !approved && <div className="waiting">Oda sahibinin onayı bekleniyor…</div>
             )}
