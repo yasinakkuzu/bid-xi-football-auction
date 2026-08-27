@@ -45,6 +45,7 @@ type Game = {
   feed: string[];
   audit?: string[];
   undo?: string;
+  bonusReveal?:{name:string;rating:number;role:string;image?:string};
 };
 type Room = {
   code: string;
@@ -740,7 +741,7 @@ export function OnlineGame() {
               <b>{mode === 'manual' ? 'MANUEL YÖNETİM' : game.paused ? 'DURAKLATILDI' : auctionOpen ? 'SERBEST TEKLİF' : game.leader === null ? 'SONRAKİ LOT' : 'TEKLİFLER KAPANDI'}</b>
               <em className={remaining>0&&remaining<=5?'countdown-critical':''}><i/>{game.deadline ? `${remaining}s` : '—'}</em>
             </div>
-            <p className="online-lot-progress">{auctionProgressLabel(game.pool, game.index)}</p>
+            {game.bonusReveal&&<div className="missed-bonus-card">{game.bonusReveal.image?<img src={game.bonusReveal.image} alt=""/>:<span>?</span>}<div><b>KAÇAN BONUS</b><p>Eğer bonus açılsaydı <strong>{game.bonusReveal.name}</strong> oyuncusu gelecekti.</p><small>{game.bonusReveal.role} · Puanı: <strong>{game.bonusReveal.rating.toFixed(1)}</strong></small></div></div>}<p className="online-lot-progress">{auctionProgressLabel(game.pool, game.index)}</p>
             {bonusLot && (
               <div className="bonus-lot-alert">
                 <b>⚠ BONUS OYUNCU</b>

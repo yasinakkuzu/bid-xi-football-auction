@@ -8,7 +8,8 @@ import {COACHES} from '../lib/coaches';
 import {OnlineGame} from './online/page';
 
 type Stage = 'setup' | 'names' | 'auction' | 'results';
-type GameSnapshot = { managers:Manager[];pool:AuctionLot[];index:number;bid:number;leader:number|null;feed:string[];passed:number[];activeTurn:number|null;era:Era;quality:QualityMode;revealRatings:boolean;selectedTiers:RatingTier[];includeBench:boolean;count:number;names:string[] };
+type BonusReveal={name:string;rating:number;role:string;image?:string};
+type GameSnapshot = { managers:Manager[];pool:AuctionLot[];index:number;bid:number;leader:number|null;feed:string[];passed:number[];activeTurn:number|null;era:Era;quality:QualityMode;revealRatings:boolean;selectedTiers:RatingTier[];includeBench:boolean;count:number;names:string[];bonusReveal?:BonusReveal };
 type PoolSource = Partial<Record<Era,Record<Slot,PoolSourceEntry[]>>>;
 type SavedGame = GameSnapshot&{version:2;gameId:string;paused:boolean;soundOn:boolean;remainingMs:number;undoSnapshot:GameSnapshot|null};
 
@@ -115,6 +116,7 @@ function LocalGame({onHome}:{onHome:()=>void}) {
   const [hasSaved,setHasSaved] = useState(false);
   const [soundOn,setSoundOn] = useState(true);
   const [saleFlash,setSaleFlash] = useState('');
+  const [bonusReveal,setBonusReveal]=useState<BonusReveal|undefined>();
   const [poolSource,setPoolSource] = useState<PoolSource|null>(null);
   const [poolLoading,setPoolLoading] = useState(false);
   const [poolError,setPoolError] = useState('');
@@ -132,9 +134,9 @@ function LocalGame({onHome}:{onHome:()=>void}) {
   useEffect(()=>{performance.mark('bidxi-ready');const record=(kind:string,value:unknown)=>{try{const old=JSON.parse(localStorage.getItem('bidxi-errors')||'[]') as unknown[];localStorage.setItem('bidxi-errors',JSON.stringify([{at:new Date().toISOString(),kind,value:String(value)},...old].slice(0,20)))}catch{}};const error=(e:ErrorEvent)=>record('error',e.message);const rejection=(e:PromiseRejectionEvent)=>record('promise',e.reason);window.addEventListener('error',error);window.addEventListener('unhandledrejection',rejection);return()=>{window.removeEventListener('error',error);window.removeEventListener('unhandledrejection',rejection)}},[]);
   useEffect(()=>{
     if(stage!=='auction'||!current) return;
-    const snapshot:SavedGame={version:2,gameId,managers,pool,index,bid,leader,feed,passed,activeTurn,era,quality,revealRatings,selectedTiers,includeBench,count,names,paused,soundOn,remainingMs:deadline?Math.max(0,deadline-Date.now()):20000,undoSnapshot};
+    const snapshot:SavedGame={version:2,gameId,managers,pool,index,bid,leader,feed,passed,activeTurn,era,quality,revealRatings,selectedTiers,includeBench,count,names,paused,soundOn,remainingMs:deadline?Math.max(0,deadline-Date.now()):20000,undoSnapshot,bonusReveal};
     localStorage.setItem('bidxi-game',JSON.stringify(snapshot));
-  },[stage,managers,pool,index,bid,leader,feed,passed,activeTurn,era,quality,revealRatings,selectedTiers,includeBench,count,names,current,paused,soundOn,deadline,gameId,undoSnapshot]);
+  },[stage,managers,pool,index,bid,leader,feed,passed,activeTurn,era,quality,revealRatings,selectedTiers,includeBench,count,names,current,paused,soundOn,deadline,gameId,undoSnapshot,bonusReveal]);
   useEffect(()=>{
     if(stage!=='auction'||paused||activeTurn===null||deadline===null) return;
     const tick=()=>{const remaining=Math.max(0,deadline-Date.now());setTimeLeft(Math.ceil(remaining/1000));if(remaining===0){setDeadline(null);timeoutActionRef.current()}};
@@ -196,10 +198,10 @@ function LocalGame({onHome}:{onHome:()=>void}) {
     if(nextIndex>=pool.length){finishGame(updated);return}
     const nextPlayer=pool[nextIndex];
     if(updated.every(m=>lotFilled(m,nextPlayer))){setIndex(nextIndex);setTimeout(()=>skipFilledLots(nextIndex,updated),0);return}
-    const nextOpening=auctionOpeningPrice(nextPlayer,updated);setIndex(nextIndex);setBid(0);setLeader(null);setPassed([]);resetClock();setActiveTurn(updated.find(m=>canPlaceLotBid(m,nextPlayer,nextOpening,m.id))?.id??null);
+    setBonusReveal(undefined);const nextOpening=auctionOpeningPrice(nextPlayer,updated);setIndex(nextIndex);setBid(0);setLeader(null);setPassed([]);resetClock();setActiveTurn(updated.find(m=>canPlaceLotBid(m,nextPlayer,nextOpening,m.id))?.id??null);
   }
   function skipFilledLots(from:number,ms=managers){
-    let next=from;while(next<pool.length&&ms.every(m=>lotFilled(m,pool[next])))next++;
+    let next=from;const skipped:Footballer[]=[];while(next<pool.length&&ms.every(m=>lotFilled(m,pool[next]))){if(!isCoach(pool[next])&&isBonusPlayerLot(pool,next,ms.length))skipped.push(pool[next] as Footballer);next++}const missed=skipped.at(-1);setBonusReveal(missed?{name:missed.name,rating:missed.rating,role:missed.role,image:missed.image}:undefined);
     if(next>=pool.length){finishGame(ms);return}
     const nextPlayer=pool[next],nextOpening=auctionOpeningPrice(nextPlayer,ms);setIndex(next);setBid(0);setLeader(null);setPassed([]);resetClock();setActiveTurn(ms.find(m=>canPlaceLotBid(m,nextPlayer,nextOpening,m.id))?.id??null);
   }
@@ -209,16 +211,16 @@ function LocalGame({onHome}:{onHome:()=>void}) {
     setUndoSnapshot({managers,pool,index,bid,leader,feed,passed,activeTurn,era,quality,revealRatings,selectedTiers,includeBench,count,names});
     let updated=managers.map(m=>m.id===leader?(isCoach(current)?{...m,budget:m.budget-bid,spent:m.spent+bid,coach:current}:current.benchSlot?{...m,budget:m.budget-bid,spent:m.spent+bid,bench:{...(m.bench||{}),[current.benchSlot]:current}}:{...m,budget:m.budget-bid,spent:m.spent+bid,squad:{...m.squad,[current.slot]:current}}):m);
     const message=`${current.name}, ${winner.name} takımına ${money(bid)} karşılığında katıldı.`;tone('sold');setSaleFlash(`${current.name} → ${winner.name}`);setTimeout(()=>setSaleFlash(''),1100);
-    let nextIndex=index+1;while(nextIndex<pool.length&&updated.every(m=>lotFilled(m,pool[nextIndex])))nextIndex++;const completion=completeLeavingSlot(updated,current,nextIndex);updated=completion.managers;setManagers(updated);setFeed(f=>[...fallbackFeed(completion.assignments),message,...f].slice(0,8));
+    let nextIndex=index+1;const skipped:Footballer[]=[];while(nextIndex<pool.length&&updated.every(m=>lotFilled(m,pool[nextIndex]))){if(!isCoach(pool[nextIndex])&&isBonusPlayerLot(pool,nextIndex,updated.length))skipped.push(pool[nextIndex] as Footballer);nextIndex++}const missed=skipped.at(-1);setBonusReveal(missed?{name:missed.name,rating:missed.rating,role:missed.role,image:missed.image}:undefined);const completion=completeLeavingSlot(updated,current,nextIndex);updated=completion.managers;setManagers(updated);setFeed(f=>[...fallbackFeed(completion.assignments),message,...f].slice(0,8));
     if(nextIndex>=pool.length){finishGame(updated);return}
     const nextPlayer=pool[nextIndex];
     const nextLimits=updated.filter(m=>!lotFilled(m,nextPlayer)).map(m=>auctionLimit(m,nextPlayer));
     const nextOpening=Math.max(5,Math.min(nextPlayer.price,Math.max(5,...nextLimits)));
     setIndex(nextIndex);setBid(0);setLeader(null);setPassed([]);resetClock();setActiveTurn(updated.find(m=>canPlaceLotBid(m,nextPlayer,nextOpening,m.id))?.id??null);
   }
-  function undoSale(){if(!undoSnapshot)return;const s=undoSnapshot;setManagers(s.managers);setPool(s.pool);setIndex(s.index);setBid(s.bid);setLeader(s.leader);setFeed(s.feed);setPassed(s.passed);setActiveTurn(s.activeTurn);setEra(s.era);setQuality(s.quality||'best');setRevealRatings(s.revealRatings||false);setSelectedTiers(s.selectedTiers||RATING_TIERS);setIncludeBench(Boolean(s.includeBench));setCount(s.count);setNames(s.names);setUndoSnapshot(null);setStage('auction')}
-  async function resume(){const raw=localStorage.getItem('bidxi-game');if(!raw)return;try{const s=JSON.parse(raw) as SavedGame;if(s.version!==2||!Array.isArray(s.managers)||!Array.isArray(s.pool)||s.index<0||s.index>=s.pool.length)throw new Error('Geçersiz kayıt');if(!poolSource?.[s.era]){const response=await fetch(`/api/pool?era=${s.era}`);if(!response.ok)throw new Error('Havuz yüklenemedi');const loaded=await response.json() as Record<Slot,PoolSourceEntry[]>;setPoolSource(old=>({...old,[s.era]:loaded}))}setManagers(s.managers);setPool(s.pool);setIndex(s.index);setBid(s.bid);setLeader(s.leader);setFeed(s.feed);setPassed(s.passed||[]);setActiveTurn(s.activeTurn);setEra(s.era);setQuality(s.quality);setRevealRatings(s.revealRatings);setSelectedTiers(s.selectedTiers);setIncludeBench(Boolean(s.includeBench));setCount(s.count);setNames(s.names);setGameId(s.gameId);setPaused(s.paused);setSoundOn(s.soundOn);setUndoSnapshot(s.undoSnapshot);setTimeLeft(Math.max(1,Math.ceil(s.remainingMs/1000)));setDeadline(s.paused?null:Date.now()+s.remainingMs);setStage('auction')}catch{localStorage.removeItem('bidxi-game');setHasSaved(false)}}
-  function reset(){if(managers.length&&typeof window!=='undefined'&&!window.confirm('Mevcut oyun silinecek. Yeni oyun kurulsun mu?'))return;localStorage.removeItem('bidxi-game');setHasSaved(false);setStage('setup');setManagers([]);setPool([]);setIndex(0);setBid(0);setLeader(null);setDeadline(null);setSelectedManager(null)}
+  function undoSale(){if(!undoSnapshot)return;const s=undoSnapshot;setManagers(s.managers);setPool(s.pool);setIndex(s.index);setBid(s.bid);setLeader(s.leader);setFeed(s.feed);setPassed(s.passed);setActiveTurn(s.activeTurn);setEra(s.era);setQuality(s.quality||'best');setRevealRatings(s.revealRatings||false);setSelectedTiers(s.selectedTiers||RATING_TIERS);setIncludeBench(Boolean(s.includeBench));setCount(s.count);setNames(s.names);setBonusReveal(s.bonusReveal);setUndoSnapshot(null);setStage('auction')}
+  async function resume(){const raw=localStorage.getItem('bidxi-game');if(!raw)return;try{const s=JSON.parse(raw) as SavedGame;if(s.version!==2||!Array.isArray(s.managers)||!Array.isArray(s.pool)||s.index<0||s.index>=s.pool.length)throw new Error('Geçersiz kayıt');if(!poolSource?.[s.era]){const response=await fetch(`/api/pool?era=${s.era}`);if(!response.ok)throw new Error('Havuz yüklenemedi');const loaded=await response.json() as Record<Slot,PoolSourceEntry[]>;setPoolSource(old=>({...old,[s.era]:loaded}))}setManagers(s.managers);setPool(s.pool);setIndex(s.index);setBid(s.bid);setLeader(s.leader);setFeed(s.feed);setPassed(s.passed||[]);setActiveTurn(s.activeTurn);setEra(s.era);setQuality(s.quality);setRevealRatings(s.revealRatings);setSelectedTiers(s.selectedTiers);setIncludeBench(Boolean(s.includeBench));setCount(s.count);setNames(s.names);setBonusReveal(s.bonusReveal);setGameId(s.gameId);setPaused(s.paused);setSoundOn(s.soundOn);setUndoSnapshot(s.undoSnapshot);setTimeLeft(Math.max(1,Math.ceil(s.remainingMs/1000)));setDeadline(s.paused?null:Date.now()+s.remainingMs);setStage('auction')}catch{localStorage.removeItem('bidxi-game');setHasSaved(false)}}
+  function reset(){if(managers.length&&typeof window!=='undefined'&&!window.confirm('Mevcut oyun silinecek. Yeni oyun kurulsun mu?'))return;localStorage.removeItem('bidxi-game');setHasSaved(false);setStage('setup');setManagers([]);setPool([]);setIndex(0);setBid(0);setLeader(null);setDeadline(null);setBonusReveal(undefined);setSelectedManager(null)}
   function togglePause(){setPaused(p=>{if(p)setDeadline(Date.now()+timeLeft*1000);else setDeadline(null);return !p})}
   function changeCount(n:number){setCount(n);setNames(old=>Array.from({length:n},(_,i)=>old[i]||DEFAULT_MANAGER_NAMES[i]||`Menajer ${i+1}`))}
   function goHome(){if((stage==='auction'||stage==='results')&&!window.confirm('Oyundan çıkıp ana sayfaya dönmek istediğinize emin misiniz?'))return;if(stage==='auction'||stage==='results'){localStorage.removeItem('bidxi-game');setHasSaved(false)}onHome()}
@@ -236,7 +238,7 @@ function LocalGame({onHome}:{onHome:()=>void}) {
       </aside>
       <section className="order-1 lg:order-2">
         <div className="auction-toolbar mb-4 flex items-center justify-between"><div className="flex gap-2"><span className="pill">{isCoach(current)?'TEKNİK DİREKTÖR':`LOT ${index+1}/${pool.length}`}</span><button className="tool-btn" aria-pressed={paused} onClick={togglePause}>{paused?'▶ Devam':'Ⅱ Duraklat'}</button><button className="tool-btn" aria-pressed={!soundOn} onClick={()=>setSoundOn(s=>!s)}>{soundOn?'♪ Ses':'× Sessiz'}</button>{undoSnapshot&&<button className="tool-btn" onClick={undoSale}>↶ Geri al</button>}</div><span className="text-xs text-zinc-500">{era==='current'?'Güncel':'Son 30 yıl'} · {gameId}</span></div>
-        <p className="lot-progress-note">{auctionProgressLabel(pool,index)}</p>
+        {bonusReveal&&<div className="missed-bonus-card">{bonusReveal.image?<img src={bonusReveal.image} alt=""/>:<span>?</span>}<div><b>KAÇAN BONUS</b><p>Eğer bonus açılsaydı <strong>{bonusReveal.name}</strong> oyuncusu gelecekti.</p><small>{bonusReveal.role} · Puanı: <strong>{bonusReveal.rating.toFixed(1)}</strong></small></div></div>}<p className="lot-progress-note">{auctionProgressLabel(pool,index)}</p>
         {bonusLot&&<div className="bonus-lot-alert"><b>⚠ BONUS OYUNCU</b><span>Bu pozisyonun son açık artırması. Ardından {nextGroupLabel} başlayacak.</span></div>}
         <div className={`player-card ${bonusLot?'bonus-lot-card':''}`}>
           <div className="pitch-lines"/><div className="player-top"><span className="position">{isCoach(current)?'TD':current.benchSlot?BENCH_SLOTS.find(group=>group.key===current.benchSlot)?.short:SLOTS.find(s=>s.key===current.slot)?.short}</span><div className="flex items-center gap-3">{(revealRatings||isCoach(current))&&<span className="rating-badge"><b>{current.rating.toFixed(1)}</b><small>{isCoach(current)?'TEKNİK DİREKTÖR':ratingLevel(current.rating)}</small></span>}<span className="nation">{current.nation}</span></div></div>
