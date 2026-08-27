@@ -46,6 +46,7 @@ type Game = {
   audit?: string[];
   undo?: string;
   bonusReveal?:{name:string;rating:number;role:string;image?:string};
+  autoAssignments?:Array<{managerName:string;player:Footballer;fee:number}>;
 };
 type Room = {
   code: string;
@@ -741,7 +742,7 @@ export function OnlineGame() {
               <b>{mode === 'manual' ? 'MANUEL YÖNETİM' : game.paused ? 'DURAKLATILDI' : auctionOpen ? 'SERBEST TEKLİF' : game.leader === null ? 'SONRAKİ LOT' : 'TEKLİFLER KAPANDI'}</b>
               <em className={remaining>0&&remaining<=5?'countdown-critical':''}><i/>{game.deadline ? `${remaining}s` : '—'}</em>
             </div>
-            {game.bonusReveal&&<div className="missed-bonus-card">{game.bonusReveal.image?<img src={game.bonusReveal.image} alt=""/>:<span>?</span>}<div><b>KAÇAN BONUS</b><p>Eğer bonus açılsaydı <strong>{game.bonusReveal.name}</strong> oyuncusu gelecekti.</p><small>{game.bonusReveal.role} · Puanı: <strong>{game.bonusReveal.rating.toFixed(1)}</strong></small></div></div>}<p className="online-lot-progress">{auctionProgressLabel(game.pool, game.index)}</p>
+            {game.bonusReveal&&<div className="missed-bonus-card">{game.bonusReveal.image?<img src={game.bonusReveal.image} alt=""/>:<span>?</span>}<div><b>KAÇAN BONUS</b><p>Eğer bonus açılsaydı <strong>{game.bonusReveal.name}</strong> oyuncusu gelecekti.</p><small>{game.bonusReveal.role} · Puanı: <strong>{game.bonusReveal.rating.toFixed(1)}</strong></small></div></div>}{game.autoAssignments?.map(item=><div className="auto-assignment-card" key={`${item.managerName}-${item.player.id}`}><span>✓</span><div><b>EKSİK POZİSYON TAMAMLANDI</b><p><strong>{item.managerName}</strong> kadrosuna <strong>{item.player.name}</strong> otomatik atandı.</p><small>{item.player.role} · {money(item.fee)} bütçeden düşüldü</small></div></div>)}<p className="online-lot-progress">{auctionProgressLabel(game.pool, game.index)}</p>
             {bonusLot && (
               <div className="bonus-lot-alert">
                 <b>⚠ BONUS OYUNCU</b>
