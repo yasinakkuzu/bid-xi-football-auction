@@ -140,7 +140,7 @@ function SquadPanel({manager, compact = false}: {manager: Manager; compact?: boo
                 <>
                   <PlayerImage player={player} className="squad-player-photo" />
                   <b>{player.name}</b>
-                  <small>{slot}</small>
+                  <small>{slot} · {player.rating.toFixed(1)} puan</small>
                 </>
               ) : (
                 <>
@@ -229,7 +229,9 @@ function SquadPanel({manager, compact = false}: {manager: Manager; compact?: boo
 
 function ManagerDrawer({manager, onClose}: {manager: Manager; onClose: () => void}) {
   const closeRef=useRef<HTMLButtonElement>(null);
-  useEffect(()=>{const previous=document.activeElement as HTMLElement|null;closeRef.current?.focus();document.body.style.overflow='hidden';const key=(event:KeyboardEvent)=>{if(event.key==='Escape')onClose()};document.addEventListener('keydown',key);return()=>{document.body.style.overflow='';document.removeEventListener('keydown',key);previous?.focus()}},[onClose]);
+  const onCloseRef=useRef(onClose);
+  useEffect(()=>{onCloseRef.current=onClose},[onClose]);
+  useEffect(()=>{const previous=document.activeElement as HTMLElement|null,oldOverflow=document.body.style.overflow;closeRef.current?.focus();document.body.style.overflow='hidden';const key=(event:KeyboardEvent)=>{if(event.key==='Escape')onCloseRef.current()};document.addEventListener('keydown',key);return()=>{document.body.style.overflow=oldOverflow;document.removeEventListener('keydown',key);previous?.focus()}},[]);
   return (
     <div className="drawer-backdrop" onClick={onClose}>
       <aside role="dialog" aria-modal="true" aria-labelledby="online-manager-title" className="squad-drawer online-manager-drawer" onClick={(event) => event.stopPropagation()}>
@@ -310,7 +312,9 @@ export function OnlineGame() {
   const [chatOpen,setChatOpen]=useState(false);
   const [chatText,setChatText]=useState('');
   const [chatUnread,setChatUnread]=useState(0);
-  const lastChatCountRef=useRef<number|null>(null);
+  const [customBid,setCustomBid]=useState('');
+  const seenChatIdsRef=useRef<Set<string>>(new Set());
+  const chatInitializedRef=useRef(false);
   const poolOptions=useMemo(()=>customPoolOptions(poolCatalog.map(player=>player.club),poolQuery),[poolCatalog,poolQuery]);
 
   const loadRoom = useCallback(async (s: Session) => {
@@ -363,7 +367,8 @@ export function OnlineGame() {
     return () => clearInterval(id);
   }, [screen, room?.status]);
   useEffect(()=>{if(screen!=='entry'||tab!=='create'||settings.poolMode!=='custom')return;let cancelled=false;void json(`/api/pool?era=${settings.era}`).then(data=>{if(cancelled)return;const source=data as unknown as Record<Slot,PoolSourceEntry[]>;setPoolCatalog(SLOT_KEYS.flatMap(slot=>(source[slot]||[]).map(player=>({...player,slot}))))}).catch(()=>setError('Özel oyuncu havuzu yüklenemedi.'));return()=>{cancelled=true}},[screen,tab,settings.poolMode,settings.era]);
-  useEffect(()=>{const count=room?.chat?.length||0;if(lastChatCountRef.current===null){lastChatCountRef.current=count;return}if(count>lastChatCountRef.current&&!chatOpen)setChatUnread(value=>value+count-lastChatCountRef.current!);lastChatCountRef.current=count;if(chatOpen)setChatUnread(0)},[room?.chat?.length,chatOpen]);
+  useEffect(()=>{chatInitializedRef.current=false;seenChatIdsRef.current.clear();const id=setTimeout(()=>setChatUnread(0),0);return()=>clearTimeout(id)},[session?.code]);
+  useEffect(()=>{const messages=room?.chat||[];if(!chatInitializedRef.current){seenChatIdsRef.current=new Set(messages.map(message=>message.id));chatInitializedRef.current=true;return}const incoming=messages.filter(message=>!seenChatIdsRef.current.has(message.id)&&message.memberId!==memberId);messages.forEach(message=>seenChatIdsRef.current.add(message.id));const id=setTimeout(()=>{if(chatOpen)setChatUnread(0);else if(incoming.length)setChatUnread(value=>value+incoming.length)},0);return()=>clearTimeout(id)},[room?.chat,chatOpen,memberId]);
 
   const game = room?.game;
   const approvedManagers = room?.members.filter((member) => member.role === 'manager' && member.approved) || [];
@@ -750,7 +755,7 @@ export function OnlineGame() {
               </div>
             )}
             <article className={`online-player ${isCoach(current) ? 'coach-lot' : ''} ${bonusLot ? 'bonus-lot-card' : ''}`}>
-              {!isCoach(current)&&<div className="auction-mini-formation" aria-label={`${current.role} mevki konumu, yatay saha görünümü`}><i className="mini-halfway"/>{SLOT_KEYS.map(slot=>{const point=FORMATION_POSITIONS[myManager?.formation||room.settings.formation||'4-2-3-1'][slot];return <span key={slot} className={slot===current.slot?'active':''} style={{left:point.top,top:point.left}}>{slot===current.slot?slot:''}</span>})}</div>}
+              {!isCoach(current)&&<div className="auction-mini-formation" aria-label={`${current.role} mevki konumu, yatay saha görünümü`}><i className="mini-halfway"/>{SLOT_KEYS.map(slot=>{const point=FORMATION_POSITIONS[myManager?.formation||room.settings.formation||'4-2-3-1'][slot];return <span key={slot} className={slot===current.slot?'active':''} style={{left:`${100-Number.parseFloat(point.top)}%`,top:point.left}}>{slot===current.slot?slot:''}</span>})}</div>}
               <div className="online-player-visual">
                 <span>{current.name[0]}</span>
                 <PlayerImage player={current} className="online-player-photo" />
@@ -801,6 +806,11 @@ export function OnlineGame() {
                       Pas
                     </button>
                   </div>
+                  <form className="custom-bid-form" onSubmit={event=>{event.preventDefault();const amount=Math.round(Number(customBid));if(Number.isFinite(amount)&&amount>0)void action('bid',{amount}).then(()=>setCustomBid(''))}}>
+                    <label htmlFor="custom-bid">Elle teklif ($M)</label>
+                    <input id="custom-bid" inputMode="numeric" min={game.leader===null?auctionOpeningPrice(current,game.managers):game.bid+1} max={myManager?.budget} step="1" type="number" value={customBid} onChange={event=>setCustomBid(event.target.value)} placeholder={String(game.leader===null?auctionOpeningPrice(current,game.managers):game.bid+1)} disabled={!canParticipate||busy}/>
+                    <button disabled={!canParticipate||busy||!customBid}>Teklif ver</button>
+                  </form>
                 </div>
               )}
               {isHost&&mode==='live'&&<div className="host-controls permanent-host-controls"><span>KURUCU KONTROLLERİ · HER ZAMAN ERİŞİLEBİLİR</span><button className="danger-action" disabled={busy||game.leader!==null} onClick={()=>{if(confirm(`${current.name} satılmadan geçilsin mi?`))void action('skip')}}>Oyuncuyu pas geç</button><button disabled={busy||!auctionOpen||game.leader===null} onClick={()=>action('close')}>Teklifi sonlandır</button><button className="host-primary" disabled={busy||auctionOpen||game.leader===null} onClick={()=>action('sell')}>Satışı tamamla</button><button disabled={busy||auctionOpen||game.leader===null} onClick={()=>action('reopen')}>Yeniden aç</button><button disabled={busy} onClick={()=>action('pause')}>{game.paused?'Devam ettir':'Duraklat'}</button><button className="undo-action" disabled={busy||!game.undo} onClick={()=>action('undo')}>↶ Geri al</button></div>}
