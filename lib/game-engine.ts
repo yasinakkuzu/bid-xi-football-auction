@@ -11,7 +11,7 @@ export type Coach={kind:'coach';id:string;name:string;slot:'COACH';role:'Teknik 
 export type AuctionLot=Footballer|Coach;
 export type Manager = { id:number; name:string; budget:number; squad:Partial<Record<Slot,Footballer>>; spent:number; bench?:Partial<Record<BenchSlot,Footballer>>; coach?:Coach; formation?:Formation; isBot?:boolean; botStyle?:BotStyle };
 export type PoolSourceEntry = { id:number; name:string; country:string; club:string; rating:number; price:number; value:number; image?:string; clubLogo?:string };
-export type ScoreBreakdown = Manager & {score:number;avg:number;defense:number;midfield:number;attack:number;weakest:number;balance:number;completion:number;budgetEfficiency:number;coachBoost:number;coachFit:number;benchDepth:number};
+export type ScoreBreakdown = Manager & {score:number;avg:number;defense:number;midfield:number;attack:number;weakest:number;balance:number;completion:number;budgetEfficiency:number;starterImpact:number;coachBoost:number;coachFit:number;benchDepth:number};
 export type ForcedAssignment={managerId:number;managerName:string;player:Footballer;fee:number};
 export type ResultInsights={winner:string;runnerUp:string;match:{scoreLine:string;summary:string}};
 
@@ -30,6 +30,7 @@ export const FORMATION_POSITIONS:Record<Formation,Record<Slot,{left:string;top:s
  '4-1-4-1':{GK:{left:'50%',top:'89%'},RB:{left:'84%',top:'70%'},CB1:{left:'62%',top:'75%'},CB2:{left:'38%',top:'75%'},LB:{left:'16%',top:'70%'},DM:{left:'50%',top:'59%'},CM:{left:'62%',top:'43%'},AM:{left:'38%',top:'43%'},RW:{left:'82%',top:'39%'},LW:{left:'18%',top:'39%'},ST:{left:'50%',top:'11%'}}
 };
 export function ratingLevel(r:number):RatingTier{return r>=93?'Süperstar':r>=90?'Elit':r>=86?'Çok iyi':r>=82?'İyi':r>=77?'Ortalama':'Standart'}
+export function fallbackTierForSelection(selected:RatingTier[]=RATING_TIERS):RatingTier{const indexes=selected.map(tier=>RATING_TIERS.indexOf(tier)).filter(index=>index>=0),lowest=indexes.length?Math.max(...indexes):RATING_TIERS.length-1;return RATING_TIERS[Math.min(RATING_TIERS.length-1,lowest+1)]}
 
 export function hashSeed(text:string){let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
 export function seededRandom(seed:number){let a=seed>>>0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -53,29 +54,33 @@ export function chooseBotFormation(manager:Manager):Formation{const r=(slot:Slot
 export function auctionPassIsSafe(pool:AuctionLot[],index:number,managers:Manager[]){const lot=pool[index];if(!lot)return false;const key=auctionGroupKey(lot);return pool.slice(index).filter(p=>auctionGroupKey(p)===key).length>managers.filter(m=>!lotFilled(m,lot)).length}
 export function calculateStartingBudget(pool:readonly AuctionLot[],quality:QualityMode){void pool;void quality;return 1000}
 
-export function fillMissingSlot(managers:Manager[],slot:Slot,candidates:PoolSourceEntry[],role:string,seed:string,excludedNames:Iterable<string>=[]){
+export function fillMissingSlot(managers:Manager[],slot:Slot,candidates:PoolSourceEntry[],role:string,seed:string,excludedNames:Iterable<string>=[],selectedTiers:RatingTier[]=RATING_TIERS){
  const random=seededRandom(hashSeed(`${seed}-${slot}`)),used=new Set([...excludedNames,...managers.flatMap(m=>Object.values(m.squad).map(p=>p?.name||''))]);
- const lowPool=shuffleSeeded([...candidates].sort((a,b)=>a.rating-b.rating||a.value-b.value).slice(0,Math.max(24,managers.length*4)),random);
+ const targetTier=fallbackTierForSelection(selectedTiers),tierPool=candidates.filter(candidate=>ratingLevel(candidate.rating)===targetTier),sourcePool=tierPool.length?tierPool:candidates;
+ const lowPool=shuffleSeeded([...sourcePool].sort((a,b)=>a.rating-b.rating||a.value-b.value).slice(0,Math.max(24,managers.length*4)),random);
  const assignments:ForcedAssignment[]=[];let cursor=0;
  const next=managers.map(manager=>{if(manager.squad[slot])return manager;let source=lowPool.find((candidate,index)=>index>=cursor&&!used.has(candidate.name));if(!source)source=lowPool.find(candidate=>!used.has(candidate.name))||lowPool[cursor%Math.max(1,lowPool.length)];cursor++;
-  const rating=62+Math.floor(random()*6),fee=Math.min(5,Math.max(0,manager.budget));
-  const player:Footballer={id:`fallback-${source?.id||hashSeed(`${seed}-${manager.id}`)}-${slot}-${manager.id}`,name:source?.name||`Rastgele ${role}`,slot,role:`${role} · Standart altı`,rating,price:5,nation:(source?.country||'Bilinmiyor').slice(0,3).toUpperCase(),club:source?.club||'Serbest oyuncu',image:source?.image,clubLogo:source?.clubLogo};
+  const rating=source?.rating??(targetTier==='Çok iyi'?87:targetTier==='İyi'?83:targetTier==='Ortalama'?79:targetTier==='Elit'?91:targetTier==='Süperstar'?94:74),fee=Math.min(5,Math.max(0,manager.budget));
+  const player:Footballer={id:`fallback-${source?.id||hashSeed(`${seed}-${manager.id}`)}-${slot}-${manager.id}`,name:source?.name||`Rastgele ${role}`,slot,role:`${role} · Otomatik ${targetTier}`,rating,price:5,nation:(source?.country||'Bilinmiyor').slice(0,3).toUpperCase(),club:source?.club||'Serbest oyuncu',image:source?.image,clubLogo:source?.clubLogo};
   used.add(player.name);assignments.push({managerId:manager.id,managerName:manager.name,player,fee});return{...manager,budget:manager.budget-fee,spent:manager.spent+fee,squad:{...manager.squad,[slot]:player}}});
  return{managers:next,assignments};
 }
 
-export function fillMissingBenchSlot(managers:Manager[],benchSlot:BenchSlot,candidates:Array<PoolSourceEntry&{slot?:Slot}>,role:string,seed:string,excludedNames:Iterable<string>=[]){
+export function fillMissingBenchSlot(managers:Manager[],benchSlot:BenchSlot,candidates:Array<PoolSourceEntry&{slot?:Slot}>,role:string,seed:string,excludedNames:Iterable<string>=[],selectedTiers:RatingTier[]=RATING_TIERS){
  const random=seededRandom(hashSeed(`${seed}-${benchSlot}`)),used=new Set([...excludedNames,...managers.flatMap(m=>[...Object.values(m.squad),...Object.values(m.bench||{})].map(p=>p?.name||''))]);
- const lowPool=shuffleSeeded([...candidates].sort((a,b)=>a.rating-b.rating||a.value-b.value).slice(0,Math.max(24,managers.length*4)),random);
+ const targetTier=fallbackTierForSelection(selectedTiers),tierPool=candidates.filter(candidate=>ratingLevel(candidate.rating)===targetTier),sourcePool=tierPool.length?tierPool:candidates;
+ const lowPool=shuffleSeeded([...sourcePool].sort((a,b)=>a.rating-b.rating||a.value-b.value).slice(0,Math.max(24,managers.length*4)),random);
  const assignments:ForcedAssignment[]=[];let cursor=0;
  const next=managers.map(manager=>{if(manager.bench?.[benchSlot])return manager;let source=lowPool.find((candidate,index)=>index>=cursor&&!used.has(candidate.name));if(!source)source=lowPool.find(candidate=>!used.has(candidate.name))||lowPool[cursor%Math.max(1,lowPool.length)];cursor++;
-  const rating=62+Math.floor(random()*6),fee=Math.min(5,Math.max(0,manager.budget)),slot=source?.slot||BENCH_SLOTS.find(item=>item.key===benchSlot)?.sourceSlots[0]||'GK';
-  const player:Footballer={id:`fallback-${source?.id||hashSeed(`${seed}-${manager.id}`)}-${benchSlot}-${manager.id}`,name:source?.name||`Rastgele ${role}`,slot,benchSlot,role:`${role} · Standart altı`,rating,price:5,nation:(source?.country||'Bilinmiyor').slice(0,3).toUpperCase(),club:source?.club||'Serbest oyuncu',image:source?.image,clubLogo:source?.clubLogo};
+  const rating=source?.rating??(targetTier==='Çok iyi'?87:targetTier==='İyi'?83:targetTier==='Ortalama'?79:targetTier==='Elit'?91:targetTier==='Süperstar'?94:74),fee=Math.min(5,Math.max(0,manager.budget)),slot=source?.slot||BENCH_SLOTS.find(item=>item.key===benchSlot)?.sourceSlots[0]||'GK';
+  const player:Footballer={id:`fallback-${source?.id||hashSeed(`${seed}-${manager.id}`)}-${benchSlot}-${manager.id}`,name:source?.name||`Rastgele ${role}`,slot,benchSlot,role:`${role} · Otomatik ${targetTier}`,rating,price:5,nation:(source?.country||'Bilinmiyor').slice(0,3).toUpperCase(),club:source?.club||'Serbest oyuncu',image:source?.image,clubLogo:source?.clubLogo};
   used.add(player.name);assignments.push({managerId:manager.id,managerName:manager.name,player,fee});return{...manager,budget:manager.budget-fee,spent:manager.spent+fee,bench:{...(manager.bench||{}),[benchSlot]:player}}});
  return{managers:next,assignments};
 }
 
 export function fillMissingCoaches(managers:Manager[],coaches:Coach[],seed:string){const random=seededRandom(hashSeed(`${seed}-coach`)),available=shuffleSeeded(coaches,random),assignments:Array<{managerId:number;managerName:string;coach:Coach;fee:number}>=[];let cursor=0;const next=managers.map(manager=>{if(manager.coach)return manager;const source=available[cursor++%Math.max(1,available.length)];const fee=Math.min(5,Math.max(0,manager.budget));const coach:Coach=source?{...source,id:`fallback-${source.id}-${manager.id}`,name:`${source.name} (Geçici)`,rating:68,tactics:66,motivation:70,adaptability:68,development:65,price:5}:{kind:'coach',id:`fallback-coach-${manager.id}`,name:'Geçici Teknik Direktör',slot:'COACH',role:'Teknik Direktör',rating:68,price:5,nation:'—',tactics:66,motivation:70,adaptability:68,development:65,preferredFormation:'4-2-3-1',specialty:'balance'};assignments.push({managerId:manager.id,managerName:manager.name,coach,fee});return{...manager,coach,budget:manager.budget-fee,spent:manager.spent+fee}});return{managers:next,assignments}}
+
+export function optimizeStartingEleven(manager:Manager):Manager{if(!manager.bench)return manager;const squad={...manager.squad},bench={...manager.bench};for(const group of BENCH_SLOTS){const reserve=bench[group.key];if(!reserve)continue;const target=group.sourceSlots.filter(slot=>squad[slot]).sort((a,b)=>(squad[a]?.rating||0)-(squad[b]?.rating||0))[0],starter=target?squad[target]:undefined;if(!target||!starter||reserve.rating<=starter.rating)continue;const promoted:Footballer={...reserve,slot:target,role:starter.role};delete promoted.benchSlot;squad[target]=promoted;bench[group.key]={...starter,benchSlot:group.key,role:group.label}}return{...manager,squad,bench}}
 
 export function auctionGroupKey(lot:AuctionLot){return isCoach(lot)?'COACH':lot.benchSlot||lot.slot}
 export function isBonusPlayerLot(pool:AuctionLot[],index:number,managerCount:number){const lot=pool[index];if(!lot||isCoach(lot))return false;const key=auctionGroupKey(lot),ordinal=pool.slice(0,index+1).filter(item=>auctionGroupKey(item)===key).length;return ordinal>managerCount}
@@ -91,27 +96,27 @@ export function coachImpact(m:Manager,defense:number,midfield:number,attack:numb
 }
 
 export function scoreManager(m:Manager):ScoreBreakdown{
- const squad=Object.values(m.squad) as Footballer[];const r=(s:Slot)=>m.squad[s]?.rating||0;
+ const optimized=optimizeStartingEleven(m),squad=Object.values(optimized.squad) as Footballer[];const r=(s:Slot)=>optimized.squad[s]?.rating||0;
  const avg=squad.length?squad.reduce((a,p)=>a+p.rating,0)/squad.length:0;
  const defense=(r('GK')+r('RB')+r('CB1')+r('CB2')+r('LB'))/5,midfield=(r('DM')+r('CM')+r('AM'))/3,attack=(r('RW')+r('LW')+r('ST'))/3;
  const weakest=squad.length?Math.min(...squad.map(p=>p.rating)):0,strongest=squad.length?Math.max(...squad.map(p=>p.rating)):0;
  const balance=Math.max(0,100-(strongest-weakest)*2.25),completion=squad.length/11*100,budgetEfficiency=Math.min(100,m.budget/2.5);
- const bench=Object.values(m.bench||{}) as Footballer[],benchAverage=bench.length?bench.reduce((sum,p)=>sum+p.rating,0)/bench.length:0,benchCoverage=bench.length/4,depthBoost=Math.min(1.6,Math.max(0,(benchAverage-70)*.045)*benchCoverage);
- const formation=m.formation||'4-2-3-1',formationFit=formation==='4-3-3'?Math.max(0,(attack-midfield)*.035):formation==='4-1-4-1'?Math.max(0,(midfield-attack)*.035):Math.max(0,(Math.min(midfield,attack)-82)*.018);
- const raw=avg*.46+defense*.13+midfield*.13+attack*.13+weakest*.06+balance*.035+completion*.045+budgetEfficiency*.0015+depthBoost+Math.min(.8,formationFit);
- const {coachBoost,coachFit}=coachImpact(m,defense,midfield,attack);
+ const bench=Object.values(optimized.bench||{}) as Footballer[],benchAverage=bench.length?bench.reduce((sum,p)=>sum+p.rating,0)/bench.length:0,benchCoverage=bench.length/4,depthBoost=Math.min(1.6,Math.max(0,(benchAverage-70)*.045)*benchCoverage);
+ const formation=optimized.formation||'4-2-3-1',formationFit=formation==='4-3-3'?Math.max(0,(attack-midfield)*.035):formation==='4-1-4-1'?Math.max(0,(midfield-attack)*.035):Math.max(0,(Math.min(midfield,attack)-82)*.018);
+ const starterImpact=avg*.46+defense*.13+midfield*.13+attack*.13+weakest*.06+balance*.035+completion*.045+Math.min(.8,formationFit),raw=starterImpact+budgetEfficiency*.0015+depthBoost;
+ const {coachBoost,coachFit}=coachImpact(optimized,defense,midfield,attack);
  const one=(n:number)=>Math.round(n*10)/10;
- return {...m,score:Math.round((raw+coachBoost)*100)/100,avg:one(avg),defense:one(defense),midfield:one(midfield),attack:one(attack),weakest:one(weakest),balance:one(balance),completion:one(completion),budgetEfficiency:one(budgetEfficiency),coachBoost,coachFit,benchDepth:one(depthBoost)};
+ return {...optimized,score:Math.round((raw+coachBoost)*100)/100,avg:one(avg),defense:one(defense),midfield:one(midfield),attack:one(attack),weakest:one(weakest),balance:one(balance),completion:one(completion),budgetEfficiency:one(budgetEfficiency),starterImpact:one(starterImpact),coachBoost,coachFit,benchDepth:one(depthBoost)};
 }
 export function rankManagers(ms:Manager[]){return ms.map(scoreManager).sort((a,b)=>b.score-a.score||b.avg-a.avg||b.budget-a.budget)}
 export function resultInsights(ranked:ScoreBreakdown[]):ResultInsights{
  const first=ranked[0],second=ranked[1];if(!first)return{winner:'Sonuç üretilemedi.',runnerUp:'',match:{scoreLine:'—',summary:'Karşılaştırma için en az iki takım gerekir.'}};
  const sector=(team:ScoreBreakdown,mode:'best'|'weak')=>{const sectors=[['savunma',team.defense],['orta saha',team.midfield],['hücum',team.attack]] as const;return [...sectors].sort((a,b)=>mode==='best'?b[1]-a[1]:a[1]-b[1])[0]};
  const firstBest=sector(first,'best'),coachText=first.coach&&first.coachBoost>=.2?`${first.coach.name} yönetimindeki ${first.coachBoost.toFixed(1)} puanlık teknik direktör katkısı`:'kurduğu dengeli ilk 11';
- const winner=`${first.name}, ${first.score.toFixed(2)} takım puanıyla birinci oldu. ${firstBest[0][0].toUpperCase()+firstBest[0].slice(1)} hattındaki ${firstBest[1].toFixed(1)} ortalama ve ${coachText} onu listenin tepesine taşıdı.`;
+ const winner=`${first.name}, ${first.score.toFixed(2)} takım puanıyla birinci oldu. İlk 11 etkisi ${first.starterImpact.toFixed(1)}, yedek etkisi +${first.benchDepth.toFixed(1)} ve teknik direktör etkisi +${first.coachBoost.toFixed(1)} olarak hesaplandı. ${firstBest[0][0].toUpperCase()+firstBest[0].slice(1)} hattındaki ${firstBest[1].toFixed(1)} ortalama ve ${coachText} onu listenin tepesine taşıdı.`;
  if(!second)return{winner,runnerUp:'İkinci takım bulunmuyor.',match:{scoreLine:'—',summary:'Karşılaştırma için en az iki takım gerekir.'}};
  const secondBest=sector(second,'best'),secondWeak=sector(second,'weak'),gap=Math.max(0,first.score-second.score);
- const runnerUp=`${second.name}, ${second.score.toFixed(2)} puanla ikinci sırayı aldı; en güçlü bölgesi ${secondBest[1].toFixed(1)} ortalamalı ${secondBest[0]} hattı oldu. ${secondWeak[0][0].toUpperCase()+secondWeak[0].slice(1)} seviyesinin ${secondWeak[1].toFixed(1)} kalması ve liderle oluşan ${gap.toFixed(2)} puanlık fark birinciliği kaçırmasına neden oldu.`;
+ const runnerUp=`${second.name}, ${second.score.toFixed(2)} puanla ikinci sırayı aldı; ilk 11 etkisi ${second.starterImpact.toFixed(1)}, yedek etkisi +${second.benchDepth.toFixed(1)} ve teknik direktör etkisi +${second.coachBoost.toFixed(1)} oldu. En güçlü bölgesi ${secondBest[1].toFixed(1)} ortalamalı ${secondBest[0]} hattıydı; ${secondWeak[0]} seviyesi ve liderle oluşan ${gap.toFixed(2)} puanlık fark birinciliği kaçırmasına neden oldu.`;
  const random=seededRandom(hashSeed(`${first.name}-${second.name}-${first.score}-${second.score}`)),firstEdge=(first.attack-second.defense)*.08+(first.midfield-second.midfield)*.04+gap*.18;
  const firstGoals=Math.max(0,Math.min(5,Math.round(1.25+firstEdge*.1+random()*1.7))),secondGoals=Math.max(0,Math.min(5,Math.round(1.15-firstEdge*.05+random()*1.6)));
  const scoreLine=`${first.name} ${firstGoals}–${secondGoals} ${second.name}`,summary=`Tahmini maçta ${first.name}, ${first.attack.toFixed(1)} hücum gücüyle ${second.name} savunmasına karşı öne çıkıyor. ${second.name} güçlü ${secondBest[0]} hattıyla denge kurabilir; bu skor kadro puanları ve hat eşleşmelerinden üretilmiş bir oyun tahminidir.`;

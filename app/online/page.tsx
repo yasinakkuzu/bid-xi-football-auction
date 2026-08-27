@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {auctionOpeningPrice, auctionPassIsSafe, auctionProgressLabel, BENCH_SLOTS, FORMATIONS, FORMATION_POSITIONS, isBonusPlayerLot, isCoach, lotFilled, rankManagers, ratingLevel, RATING_TIERS, resultInsights, simulateTournament, SLOT_KEYS, type AuctionLot, type Formation, type Manager, type PoolSourceEntry, type RatingTier, type Slot} from '../../lib/game-engine';
+import {auctionOpeningPrice, auctionPassIsSafe, auctionProgressLabel, BENCH_SLOTS, canPlaceLotBid, FORMATIONS, FORMATION_POSITIONS, isBonusPlayerLot, isCoach, lotFilled, rankManagers, ratingLevel, RATING_TIERS, resultInsights, simulateTournament, SLOT_KEYS, type AuctionLot, type Formation, type Manager, type PoolSourceEntry, type RatingTier, type Slot} from '../../lib/game-engine';
 import {customPoolOptions,type CustomPoolSelection} from '../../lib/club-leagues';
 
 type Member = {
@@ -433,11 +433,13 @@ export function OnlineGame() {
 
   async function action(type: string, payload: Record<string, unknown> = {}) {
     if (!session) return;
+    let outgoingPayload=payload;
+    if(type==='bid'||type==='pass'){const lotId=room?.game?.pool[room.game.index]?.id;if(!lotId)return;outgoingPayload={...payload,lotId}}
     setBusy(true);
     const send=()=>json(`/api/rooms/${session.code}/actions`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json', Authorization: `Bearer ${session.token}`},
-      body: JSON.stringify({type, payload}),
+      body: JSON.stringify({type, payload:outgoingPayload}),
     });
     try {
       let data:Record<string,unknown>;
@@ -729,8 +731,8 @@ export function OnlineGame() {
         <section className="online-auction">
           <aside>
             <p className="eyebrow">MENAJERLER · KADRO İÇİN TIKLA</p>
-            {game.managers.map((manager, index) => (
-              <button className={`online-manager-card ${game.leader === index ? 'leader' : ''}`} key={manager.id} onClick={() => setSelectedManager(index)}>
+            {game.managers.map((manager, index) => {const filled=lotFilled(manager,current),passed=game.passed.includes(index),leader=game.leader===index,nextOffer=game.leader===null?auctionOpeningPrice(current,game.managers):game.bid+1,eligible=!filled&&!passed&&!leader&&canPlaceLotBid(manager,current,nextOffer,index,game.passed),stateClass=filled?'filled':passed?'passed':leader?'leader':eligible?'eligible':'ineligible',status=filled?'✓ POZİSYON DOLU':passed?'× PAS GEÇTİ':leader?'★ LİDER':eligible?'● TEKLİF VEREBİLİR':'— UYGUN DEĞİL';return (
+              <button className={`online-manager-card ${stateClass}`} key={manager.id} onClick={() => setSelectedManager(index)} aria-label={`${manager.name}: ${status}`}>
                 <span className="avatar">{manager.name[0]}</span>
                 <span>
                   <b>{manager.name}</b>
@@ -738,10 +740,11 @@ export function OnlineGame() {
                     {Object.keys(manager.squad).length}/11 {manager.bench ? `· ${Object.keys(manager.bench).length}/4 yedek ` : ''}· {manager.coach ? 'TD ✓ · ' : ''}
                     {money(manager.budget)}
                   </small>
+                  <small className="manager-lot-status">{status}</small>
                 </span>
-                <em>→</em>
+                <em>{filled?'✓':passed?'×':leader?'★':eligible?'●':'—'}</em>
               </button>
-            ))}
+            )})}
           </aside>
           <div>
             <div className="online-lot-head">
@@ -749,7 +752,7 @@ export function OnlineGame() {
               <b>{mode === 'manual' ? 'MANUEL YÖNETİM' : game.paused ? 'DURAKLATILDI' : auctionOpen ? 'SERBEST TEKLİF' : game.leader === null ? 'SONRAKİ LOT' : 'TEKLİFLER KAPANDI'}</b>
               <em className={remaining>0&&remaining<=5?'countdown-critical':''}><i/>{game.deadline ? `${remaining}s` : '—'}</em>
             </div>
-            {game.bonusReveal&&<div className="missed-bonus-card">{game.bonusReveal.image?<img src={game.bonusReveal.image} alt=""/>:<span>?</span>}<div><b>KAÇAN BONUS</b><p>Eğer bonus açılsaydı <strong>{game.bonusReveal.name}</strong> oyuncusu gelecekti.</p><small>{game.bonusReveal.role} · Puanı: <strong>{game.bonusReveal.rating.toFixed(1)}</strong></small></div></div>}{game.autoAssignments?.map(item=><div className="auto-assignment-card" key={`${item.managerName}-${item.player.id}`}><span>✓</span><div><b>EKSİK POZİSYON TAMAMLANDI</b><p><strong>{item.managerName}</strong> kadrosuna <strong>{item.player.name}</strong> otomatik atandı.</p><small>{item.player.role} · {money(item.fee)} bütçeden düşüldü</small></div></div>)}<p className="online-lot-progress">{auctionProgressLabel(game.pool, game.index)}</p>
+            {game.bonusReveal&&<div className="missed-bonus-card">{game.bonusReveal.image?<img src={game.bonusReveal.image} alt=""/>:<span>?</span>}<div><b>KAÇAN BONUS</b><p>Eğer bonus açılsaydı <strong>{game.bonusReveal.name}</strong> oyuncusu gelecekti.</p><small>{game.bonusReveal.role} · Puanı: <strong>{game.bonusReveal.rating.toFixed(1)}</strong></small></div></div>}{game.autoAssignments?.map(item=><div className="auto-assignment-card" key={`${item.managerName}-${item.player.id}`}><span>✓</span><div><b>EKSİK POZİSYON TAMAMLANDI</b><p><strong>{item.managerName}</strong> kadrosuna <strong>{item.player.name}</strong> otomatik atandı.</p><small>{ratingLevel(item.player.rating)} · {item.player.rating.toFixed(1)} puan · {money(item.fee)} bütçeden düşüldü</small></div></div>)}<p className="online-lot-progress">{auctionProgressLabel(game.pool, game.index)}</p>
             {bonusLot && (
               <div className="bonus-lot-alert">
                 <b>⚠ BONUS OYUNCU</b>
@@ -841,7 +844,7 @@ function OnlineResults({managers,audit,onRematch,season}: {managers: Manager[];a
     return {ranked: ordered, insights: resultInsights(ordered)};
   }, [managers]);
   const tournament=useMemo(()=>simulateTournament(managers,'online-results'),[managers]);
-  async function shareCard(){const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1350;const ctx=canvas.getContext('2d');if(!ctx)return;ctx.fillStyle='#09100b';ctx.fillRect(0,0,1080,1350);ctx.fillStyle='#c9ff45';ctx.font='900 54px system-ui';ctx.fillText('KADRO İHALESİ',70,100);ctx.fillStyle='white';ctx.font='900 76px system-ui';ctx.fillText(`${ranked[0]?.name||'Şampiyon'} kazandı`,70,220);ctx.font='700 36px system-ui';ranked.slice(0,5).forEach((team,index)=>ctx.fillText(`${index+1}. ${team.name.slice(0,22)}  ${team.score.toFixed(2)}`,80,340+index*105));ctx.fillStyle='#a1a1aa';ctx.font='28px system-ui';ctx.fillText('Kadro puanlarına dayalı oyun sonucudur.',70,1240);const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)return;const file=new File([blob],'kadro-ihalesi-sonucu.png',{type:'image/png'});try{if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],title:'Kadro İhalesi sonucu'});else{const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=file.name;link.click();URL.revokeObjectURL(link.href)}}catch(error){if((error as DOMException).name!=='AbortError')throw error}}
+  async function shareCard(){const winner=ranked[0];if(!winner)return;const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1920;const ctx=canvas.getContext('2d');if(!ctx)return;const gradient=ctx.createLinearGradient(0,0,1080,1920);gradient.addColorStop(0,'#182518');gradient.addColorStop(.45,'#09100b');gradient.addColorStop(1,'#050806');ctx.fillStyle=gradient;ctx.fillRect(0,0,1080,1920);ctx.strokeStyle='rgba(201,255,69,.16)';ctx.lineWidth=1;for(let x=0;x<=1080;x+=72){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,1920);ctx.stroke()}for(let y=0;y<=1920;y+=72){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(1080,y);ctx.stroke()}ctx.fillStyle='#c9ff45';ctx.font='900 28px system-ui';ctx.letterSpacing='6px';ctx.fillText('İHALE TAMAMLANDI',70,90);ctx.letterSpacing='0px';ctx.fillStyle='#fff';ctx.font='950 76px system-ui';ctx.fillText('Gecenin şampiyonu',70,185);ctx.fillStyle='#c9ff45';ctx.font='950 92px system-ui';ctx.fillText(winner.name.slice(0,20),70,290);ctx.fillStyle='#fff';ctx.font='900 46px system-ui';ctx.fillText(`${winner.score.toFixed(2)} TAKIM PUANI`,72,365);ctx.fillStyle='rgba(255,255,255,.08)';ctx.fillRect(58,415,964,300);ctx.fillStyle='#a1a1aa';ctx.font='800 24px system-ui';ctx.fillText('SONUÇ SIRALAMASI',88,465);ranked.slice(0,5).forEach((team,index)=>{const y=525+index*47;ctx.fillStyle=index===0?'#c9ff45':'#f4f4f5';ctx.font=index===0?'900 30px system-ui':'750 27px system-ui';ctx.fillText(`${index+1}. ${team.name.slice(0,23)}`,88,y);ctx.textAlign='right';ctx.fillText(team.score.toFixed(2),980,y);ctx.textAlign='left'});ctx.fillStyle='#c9ff45';ctx.fillRect(0,760,1080,150);ctx.fillStyle='#09100b';ctx.beginPath();ctx.arc(95,835,48,0,Math.PI*2);ctx.fill();ctx.fillStyle='#c9ff45';ctx.font='950 64px system-ui';ctx.textAlign='center';ctx.fillText('K',95,858);ctx.textAlign='left';ctx.fillStyle='#09100b';ctx.font='950 42px system-ui';ctx.fillText('KADRO İHALESİ',165,825);ctx.font='750 24px system-ui';ctx.fillText('kadro-ihalesi.yasinakkuzu.chatgpt.site',165,865);ctx.fillStyle='#fff';ctx.font='900 36px system-ui';ctx.fillText(`ŞAMPİYON İLK 11 · ${winner.formation||'4-2-3-1'}`,70,980);const pitch={x:70,y:1030,w:940,h:770};ctx.fillStyle='#102512';ctx.fillRect(pitch.x,pitch.y,pitch.w,pitch.h);ctx.strokeStyle='rgba(255,255,255,.32)';ctx.lineWidth=3;ctx.strokeRect(pitch.x+18,pitch.y+18,pitch.w-36,pitch.h-36);ctx.beginPath();ctx.moveTo(pitch.x+18,pitch.y+pitch.h/2);ctx.lineTo(pitch.x+pitch.w-18,pitch.y+pitch.h/2);ctx.stroke();ctx.beginPath();ctx.arc(pitch.x+pitch.w/2,pitch.y+pitch.h/2,72,0,Math.PI*2);ctx.stroke();const formation=FORMATION_POSITIONS[winner.formation||'4-2-3-1'];SLOT_KEYS.forEach(slot=>{const player=winner.squad[slot],point=formation[slot],x=pitch.x+Number.parseFloat(point.left)/100*pitch.w,y=pitch.y+Number.parseFloat(point.top)/100*pitch.h;ctx.fillStyle='#c9ff45';ctx.beginPath();ctx.arc(x,y,29,0,Math.PI*2);ctx.fill();ctx.fillStyle='#09100b';ctx.font='950 18px system-ui';ctx.textAlign='center';ctx.fillText(player?player.rating.toFixed(0):slot,x,y+6);ctx.fillStyle='#fff';ctx.font='800 18px system-ui';ctx.fillText((player?.name||slot).slice(0,16),x,y+53);ctx.fillStyle='#c9ff45';ctx.font='800 14px system-ui';ctx.fillText(slot,x,y+72)});ctx.textAlign='left';ctx.fillStyle='#a1a1aa';ctx.font='700 20px system-ui';ctx.fillText(`İlk 11 ${winner.starterImpact.toFixed(1)} · Yedek +${winner.benchDepth.toFixed(1)} · Teknik direktör +${winner.coachBoost.toFixed(1)}`,70,1860);const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)return;const file=new File([blob],'kadro-ihalesi-sonucu.png',{type:'image/png'});try{if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],title:'Kadro İhalesi sonucu'});else{const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=file.name;link.click();URL.revokeObjectURL(link.href)}}catch(error){if((error as DOMException).name!=='AbortError')throw error}}
   return (
     <section className="online-results">
       <p className="eyebrow">ODA SONUCU</p>
@@ -875,6 +878,7 @@ function OnlineResults({managers,audit,onRematch,season}: {managers: Manager[];a
               Teknik direktör: {manager.coach?.name || 'Yok'}
               {manager.coach ? ` · +${manager.coachBoost} takım puanı · %${manager.coachFit} uyum` : ''}
             </p>
+            <p className="result-impact"><b>İlk 11 etkisi {manager.starterImpact}</b><span>Yedek etkisi +{manager.benchDepth}</span><span>Teknik direktör etkisi +{manager.coachBoost}</span></p>
           </article>
         ))}
       </div>
