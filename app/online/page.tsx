@@ -434,12 +434,14 @@ export function OnlineGame() {
   async function action(type: string, payload: Record<string, unknown> = {}) {
     if (!session) return;
     setBusy(true);
+    const send=()=>json(`/api/rooms/${session.code}/actions`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', Authorization: `Bearer ${session.token}`},
+      body: JSON.stringify({type, payload}),
+    });
     try {
-      const data = await json(`/api/rooms/${session.code}/actions`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', Authorization: `Bearer ${session.token}`},
-        body: JSON.stringify({type, payload}),
-      });
+      let data:Record<string,unknown>;
+      try{data=await send()}catch(caught){if(type!=='pass'||!(caught as Error).message.includes('Durum değişti'))throw caught;await new Promise(resolve=>setTimeout(resolve,120));data=await send()}
       setRoom(data.state as Room);
       setError('');
     } catch (caught) {
