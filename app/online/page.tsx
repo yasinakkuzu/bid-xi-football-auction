@@ -57,9 +57,33 @@ type Room = {
   chat?:Array<{id:string;memberId:string;name:string;text:string;at:number}>;
   season?:{round:number;length:number;standings:Record<string,{name:string;points:number;wins:number;totalScore:number}>};
 };
-type Session = {code: string; token: string; memberToken?: string};
+type Session = {code: string; token: string; memberToken?: string; name?: string};
 
 const money = (n: number) => `$${n}M`;
+const roomSessionKey = (roomCode: string) => `bidxi-room:${roomCode.toUpperCase()}`;
+function readSavedSession(roomCode?: string, managerName?: string) {
+  const requestedCode = roomCode?.trim().toUpperCase();
+  const keys = requestedCode ? [roomSessionKey(requestedCode), 'bidxi-room'] : ['bidxi-room'];
+  for (const key of keys) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+    try {
+      const saved = JSON.parse(raw) as Session;
+      if (!saved.code || !saved.token || (requestedCode && saved.code.toUpperCase() !== requestedCode)) continue;
+      if (managerName && saved.name && saved.name.toLocaleLowerCase('tr') !== managerName.trim().toLocaleLowerCase('tr')) continue;
+      return saved;
+    } catch {}
+  }
+  return null;
+}
+function saveSession(session: Session) {
+  localStorage.setItem('bidxi-room', JSON.stringify(session));
+  localStorage.setItem(roomSessionKey(session.code), JSON.stringify(session));
+}
+function removeSession(session: Session) {
+  localStorage.removeItem('bidxi-room');
+  localStorage.removeItem(roomSessionKey(session.code));
+}
 const defaults: Settings = {
   era: 'current',
   quality: 'all',
@@ -343,14 +367,13 @@ export function OnlineGame() {
         setTab('join');
       }
       if (params.has('fresh')) return;
-      const raw = localStorage.getItem('bidxi-room');
-      if (raw)
-        try {
-          const saved = JSON.parse(raw) as Session;
-          setSession(saved);
-          setScreen('room');
-          void loadRoom(saved);
-        } catch {}
+      const saved = readSavedSession(shared || undefined);
+      if (saved) {
+        if (saved.name) setName(saved.name);
+        setSession(saved);
+        setScreen('room');
+        void loadRoom(saved);
+      }
     }, 0);
     return () => clearTimeout(id);
   }, [loadRoom]);
@@ -399,6 +422,15 @@ export function OnlineGame() {
     setBusy(true);
     setError('');
     try {
+      const recovered = tab === 'join' ? readSavedSession(code, name) : null;
+      if (recovered) {
+        saveSession(recovered);
+        history.replaceState(null, '', `/?mode=online&room=${recovered.code}`);
+        setSession(recovered);
+        setScreen('room');
+        await loadRoom(recovered);
+        return;
+      }
       const data =
         tab === 'create'
           ? await json('/api/rooms', {
@@ -417,9 +449,10 @@ export function OnlineGame() {
               code: String(data.code),
               token: String(data.hostToken),
               memberToken: String(data.memberToken),
+              name: name.trim(),
             }
-          : {code: String(data.code), token: String(data.memberToken)};
-      localStorage.setItem('bidxi-room', JSON.stringify(nextSession));
+          : {code: String(data.code), token: String(data.memberToken), name: name.trim()};
+      saveSession(nextSession);
       history.replaceState(null, '', `/?mode=online&room=${nextSession.code}`);
       setSession(nextSession);
       setScreen('room');
@@ -456,7 +489,7 @@ export function OnlineGame() {
 
   async function leave() {
     if (session && room?.status === 'lobby' && !isHost) try {await action('leave')} catch {return}
-    localStorage.removeItem('bidxi-room');
+    if (session) removeSession(session);
     history.replaceState(null, '', '/?mode=online&fresh=1');
     setSession(null);
     setRoom(null);
@@ -619,6 +652,7 @@ export function OnlineGame() {
             <button className="start mt-6 w-full" disabled={busy} onClick={enter}>
               {busy ? 'Bağlanıyor…' : tab === 'create' ? 'Odayı oluştur' : 'Odaya katıl'} <span>→</span>
             </button>
+            {tab === 'join' && <p className="session-note">Bu cihazdaki menajer oturumun korunur; sayfayı kapatsan da aynı odaya kaldığın yerden dönersin.</p>}
           </div>
         </section>
       </main>
@@ -780,10 +814,10 @@ export function OnlineGame() {
               </div>
             </article>
             <div className="online-bid">
-              <div>
+              <div className="bid-summary">
                 <small>{game.leader === null ? 'AÇILIŞ' : 'MEVCUT TEKLİF'}</small>
                 <strong aria-live="polite">{money(game.leader === null ? auctionOpeningPrice(current,game.managers) : game.bid)}</strong>
-                {game.leader !== null && <span className="current-leader">{game.managers[game.leader].name}</span>}
+                {game.leader !== null && <span className="current-leader" title={game.managers[game.leader].name}>{game.managers[game.leader].name}</span>}
               </div>
               {mode === 'manual' ? (
                 isHost ? (
