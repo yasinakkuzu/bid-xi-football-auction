@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {auctionOpeningPrice, auctionPassIsSafe, auctionProgressLabel, BENCH_SLOTS, canPlaceLotBid, FORMATIONS, FORMATION_POSITIONS, isBonusPlayerLot, isCoach, lotFilled, rankManagers, ratingLevel, RATING_TIERS, resultInsights, simulateTournament, SLOT_KEYS, type AuctionLot, type Formation, type Manager, type PoolSourceEntry, type RatingTier, type Slot} from '../../lib/game-engine';
+import {auctionOpeningPrice, auctionPassIsSafe, BENCH_SLOTS, canPlaceLotBid, FORMATIONS, FORMATION_POSITIONS, isBonusPlayerLot, isCoach, lotFilled, rankManagers, ratingLevel, RATING_TIERS, resultInsights, simulateTournament, SLOT_KEYS, type AuctionLot, type Formation, type Manager, type PoolSourceEntry, type RatingTier, type Slot} from '../../lib/game-engine';
 import {customPoolOptions,type CustomPoolSelection} from '../../lib/club-leagues';
 
 type Member = {
@@ -31,6 +31,8 @@ type Settings = {
   poolMode?: 'generated'|'custom';
   customPlayerIds?: string[];
   customPoolSelections?:CustomPoolSelection[];
+  managerCountHint?: 2|3|4|5|6|7|8;
+  leaderboardOptIn?: boolean;
 };
 type Game = {
   managers: Manager[];
@@ -47,6 +49,8 @@ type Game = {
   undo?: string;
   bonusReveal?:{name:string;rating:number;role:string;image?:string};
   autoAssignments?:Array<{managerName:string;player:Footballer;fee:number}>;
+  pausedRemainingMs?:number;
+  publicMeta?:{currentIsBonus:boolean;currentPassIsSafe:boolean;groupOrdinal:number;totalLots:number;canUndo:boolean};
 };
 type Room = {
   code: string;
@@ -101,6 +105,8 @@ const defaults: Settings = {
   poolMode:'generated',
   customPlayerIds:[],
   customPoolSelections:[],
+  managerCountHint: 4,
+  leaderboardOptIn: false,
 };
 const coordinates:Record<Slot,{left:string;top:string}>={GK:{left:'50%',top:'91%'},RB:{left:'82%',top:'72%'},CB1:{left:'61%',top:'77%'},CB2:{left:'39%',top:'77%'},LB:{left:'18%',top:'72%'},DM:{left:'36%',top:'57%'},CM:{left:'64%',top:'57%'},AM:{left:'50%',top:'32%'},RW:{left:'82%',top:'32%'},LW:{left:'18%',top:'32%'},ST:{left:'50%',top:'13%'}};
 async function json(url: string, options?: RequestInit) {
@@ -120,7 +126,8 @@ async function json(url: string, options?: RequestInit) {
 }
 
 function PlayerImage({player, className}: {player: {name: string; image?: string}; className: string}) {
-  if (!player.image) return <span className={`${className} player-image-placeholder`}>{player.name[0]}</span>;
+  const [failedUrl,setFailedUrl]=useState<string|undefined>();
+  if (!player.image||failedUrl===player.image) return <span className={`${className} player-image-placeholder`} role="img" aria-label={`${player.name} için fotoğraf bulunamadı`}>{player.name[0]?.toUpperCase()||'?'}</span>;
   return (
     <img
       className={className}
@@ -131,9 +138,7 @@ function PlayerImage({player, className}: {player: {name: string; image?: string
       loading={className.includes('online-player-photo') ? 'eager' : 'lazy'}
       decoding="async"
       referrerPolicy="no-referrer"
-      onError={(event) => {
-        event.currentTarget.style.display = 'none';
-      }}
+      onError={() => setFailedUrl(player.image)}
     />
   );
 }
@@ -252,14 +257,15 @@ function SquadPanel({manager, compact = false}: {manager: Manager; compact?: boo
   );
 }
 
-function ManagerDrawer({manager, onClose}: {manager: Manager; onClose: () => void}) {
+function ManagerDrawer({manager, onClose, footer}: {manager: Manager; onClose: () => void; footer?:React.ReactNode}) {
   const closeRef=useRef<HTMLButtonElement>(null);
+  const dialogRef=useRef<HTMLElement>(null);
   const onCloseRef=useRef(onClose);
   useEffect(()=>{onCloseRef.current=onClose},[onClose]);
-  useEffect(()=>{const previous=document.activeElement as HTMLElement|null,oldOverflow=document.body.style.overflow;closeRef.current?.focus();document.body.style.overflow='hidden';const key=(event:KeyboardEvent)=>{if(event.key==='Escape')onCloseRef.current()};document.addEventListener('keydown',key);return()=>{document.body.style.overflow=oldOverflow;document.removeEventListener('keydown',key);previous?.focus()}},[]);
+  useEffect(()=>{const previous=document.activeElement as HTMLElement|null,oldOverflow=document.body.style.overflow;closeRef.current?.focus();document.body.style.overflow='hidden';const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();onCloseRef.current();return}if(event.key!=='Tab'||!dialogRef.current)return;const focusable=[...dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')];if(!focusable.length)return;const first=focusable[0],last=focusable[focusable.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}};document.addEventListener('keydown',key);return()=>{document.body.style.overflow=oldOverflow;document.removeEventListener('keydown',key);previous?.focus()}},[]);
   return (
     <div className="drawer-backdrop" onClick={onClose}>
-      <aside role="dialog" aria-modal="true" aria-labelledby="online-manager-title" className="squad-drawer online-manager-drawer" onClick={(event) => event.stopPropagation()}>
+      <aside ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="online-manager-title" className="squad-drawer online-manager-drawer" onClick={(event) => event.stopPropagation()}>
         <div className="drawer-head">
           <div>
             <p className="eyebrow">MENAJER DETAYI</p><h2 id="online-manager-title">{manager.name}</h2>
@@ -269,6 +275,7 @@ function ManagerDrawer({manager, onClose}: {manager: Manager; onClose: () => voi
           </button>
         </div>
         <SquadPanel manager={manager} compact />
+        {footer}
       </aside>
     </div>
   );
@@ -277,7 +284,7 @@ function ManagerDrawer({manager, onClose}: {manager: Manager; onClose: () => voi
 function ManualControls({game, current, busy, onAction}: {game: Game; current: AuctionLot; busy: boolean; onAction: (type: string, payload?: Record<string, unknown>) => Promise<void>}) {
   const eligible = (manager: Manager) => !lotFilled(manager, current);
   const first = game.managers.findIndex(eligible);
-  const triggersFallback = !isCoach(current) && !auctionPassIsSafe(game.pool, game.index, game.managers);
+  const triggersFallback = !isCoach(current) && !(game.publicMeta?.currentPassIsSafe ?? auctionPassIsSafe(game.pool, game.index, game.managers));
   const [managerIndex, setManagerIndex] = useState(first >= 0 ? String(first) : '');
   const [amount, setAmount] = useState(String(current.price));
   return (
@@ -313,6 +320,8 @@ function ManualControls({game, current, busy, onAction}: {game: Game; current: A
   );
 }
 
+/* The request lock intentionally uses a ref so two taps in the same render frame cannot dispatch twice. */
+/* eslint-disable react-hooks/refs */
 export function OnlineGame() {
   const [screen, setScreen] = useState<'entry' | 'room'>('entry');
   const [tab, setTab] = useState<'create' | 'join'>('create');
@@ -340,6 +349,10 @@ export function OnlineGame() {
   const [customBid,setCustomBid]=useState('');
   const seenChatIdsRef=useRef<Set<string>>(new Set());
   const chatInitializedRef=useRef(false);
+  const inFlightActionRef=useRef(false);
+  const chatDialogRef=useRef<HTMLElement>(null);
+  const chatInputRef=useRef<HTMLInputElement>(null);
+  const chatTriggerRef=useRef<HTMLButtonElement>(null);
   const poolOptions=useMemo(()=>customPoolOptions(poolCatalog.map(player=>player.club),poolQuery),[poolCatalog,poolQuery]);
 
   const loadRoom = useCallback(async (s: Session) => {
@@ -393,6 +406,7 @@ export function OnlineGame() {
   useEffect(()=>{if(screen!=='entry'||tab!=='create'||settings.poolMode!=='custom')return;let cancelled=false;void json(`/api/pool?era=${settings.era}`).then(data=>{if(cancelled)return;const source=data as unknown as Record<Slot,PoolSourceEntry[]>;setPoolCatalog(SLOT_KEYS.flatMap(slot=>(source[slot]||[]).map(player=>({...player,slot}))))}).catch(()=>setError('Özel oyuncu havuzu yüklenemedi.'));return()=>{cancelled=true}},[screen,tab,settings.poolMode,settings.era]);
   useEffect(()=>{chatInitializedRef.current=false;seenChatIdsRef.current.clear();const id=setTimeout(()=>setChatUnread(0),0);return()=>clearTimeout(id)},[session?.code]);
   useEffect(()=>{const messages=room?.chat||[];if(!chatInitializedRef.current){seenChatIdsRef.current=new Set(messages.map(message=>message.id));chatInitializedRef.current=true;return}const incoming=messages.filter(message=>!seenChatIdsRef.current.has(message.id)&&message.memberId!==memberId);messages.forEach(message=>seenChatIdsRef.current.add(message.id));const id=setTimeout(()=>{if(chatOpen)setChatUnread(0);else if(incoming.length)setChatUnread(value=>value+incoming.length)},0);return()=>clearTimeout(id)},[room?.chat,chatOpen,memberId]);
+  useEffect(()=>{if(!chatOpen)return;const oldOverflow=document.body.style.overflow,trigger=chatTriggerRef.current;document.body.style.overflow='hidden';chatInputRef.current?.focus();const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();setChatOpen(false);return}if(event.key!=='Tab'||!chatDialogRef.current)return;const focusable=[...chatDialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),[tabindex]:not([tabindex="-1"])')];if(!focusable.length)return;const first=focusable[0],last=focusable[focusable.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}};document.addEventListener('keydown',key);return()=>{document.body.style.overflow=oldOverflow;document.removeEventListener('keydown',key);trigger?.focus()}},[chatOpen]);
 
   const game = room?.game;
   const approvedManagers = room?.members.filter((member) => member.role === 'manager' && member.approved) || [];
@@ -400,9 +414,8 @@ export function OnlineGame() {
   const myManager = myManagerIndex >= 0 ? game?.managers[myManagerIndex] : undefined;
   const current = game?.pool[game.index];
   const mode: AuctionMode = room?.settings.auctionMode || 'live';
-  const bonusLot = Boolean(game && isBonusPlayerLot(game.pool, game.index, game.managers.length));
-  const nextLot = bonusLot && game ? game.pool[game.index + 1] : undefined;
-  const nextGroupLabel = nextLot ? (isCoach(nextLot) ? 'teknik direktör açık artırması' : nextLot.benchSlot ? BENCH_SLOTS.find((item) => item.key === nextLot.benchSlot)?.label || nextLot.role : nextLot.role) : '';
+  const bonusLot = Boolean(game && (game.publicMeta?.currentIsBonus ?? isBonusPlayerLot(game.pool, game.index, game.managers.length)));
+  const nextGroupLabel = 'bir sonraki pozisyon grubu';
 
   function toggleTier(tier: RatingTier) {
     setSettings((value) => {
@@ -457,6 +470,10 @@ export function OnlineGame() {
       history.replaceState(null, '', `/?mode=online&room=${nextSession.code}`);
       setSession(nextSession);
       setScreen('room');
+      if(role==='manager'||tab==='create'){
+        const preferenceId=crypto.randomUUID();
+        await json(`/api/rooms/${nextSession.code}/actions`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${nextSession.token}`,'Idempotency-Key':preferenceId},body:JSON.stringify({type:'leaderboardPreference',payload:{optedIn:Boolean(settings.leaderboardOptIn),alias:name.trim()},requestId:preferenceId})});
+      }
       await loadRoom(nextSession);
     } catch (caught) {
       setError((caught as Error).message);
@@ -466,14 +483,18 @@ export function OnlineGame() {
   }
 
   async function action(type: string, payload: Record<string, unknown> = {}) {
-    if (!session) return;
+    if (!session||inFlightActionRef.current) return;
+    inFlightActionRef.current=true;
+    const actionId=typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;
     let outgoingPayload=payload;
-    if(type==='bid'||type==='pass'){const lotId=room?.game?.pool[room.game.index]?.id;if(!lotId)return;outgoingPayload={...payload,lotId}}
+    const lotScopedActions=['bid','pass','sell','close','skip','reopen','manualSell','manualSkip'];
+    if(lotScopedActions.includes(type)){const lotId=room?.game?.pool[room.game.index]?.id;if(!lotId){inFlightActionRef.current=false;return}outgoingPayload={...payload,lotId,actionId}}
+    else outgoingPayload={...payload,actionId};
     setBusy(true);
     const send=()=>json(`/api/rooms/${session.code}/actions`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json', Authorization: `Bearer ${session.token}`},
-      body: JSON.stringify({type, payload:outgoingPayload}),
+      headers: {'Content-Type': 'application/json', Authorization: `Bearer ${session.token}`, 'Idempotency-Key':actionId},
+      body: JSON.stringify({type, payload:outgoingPayload, requestId:actionId}),
     });
     try {
       let data:Record<string,unknown>;
@@ -484,6 +505,7 @@ export function OnlineGame() {
       setError((caught as Error).message);
       await refresh();
     } finally {
+      inFlightActionRef.current=false;
       setBusy(false);
     }
   }
@@ -503,6 +525,12 @@ export function OnlineGame() {
   async function invite(){if(!room)return;const url=`${location.origin}/?mode=online&room=${room.code}`;try{if(navigator.share)await navigator.share({title:'Kadro İhalesi odasına katıl',text:`${room.code} kodlu odaya katıl`,url});else await navigator.clipboard.writeText(url);setCopied(true);setTimeout(()=>setCopied(false),1800)}catch(error){if((error as DOMException).name!=='AbortError')setError('Davet bağlantısı paylaşılamadı.')}}
   function confirmLeave(goHome=false){if(!confirm('Oyundan ve odadan tamamen çıkmak istediğinize emin misiniz?'))return;void leave().then(()=>{if(goHome)location.assign('/')})}
   function brandHome(){if(room&&room.status!=='lobby'){if(!confirm('Oyundan çıkıp ana sayfaya dönmek istediğinize emin misiniz?'))return}void leave().then(()=>location.assign('/'))}
+
+  const managerEstimate=settings.managerCountHint||4;
+  const estimatedLots=(11+(settings.includeBench?4:0)+1)*(managerEstimate+1);
+  const estimatedMinutes=Math.max(8,Math.round(estimatedLots*((settings.timerSeconds||20)+7)/60));
+  const pace=estimatedMinutes<=25?'Hızlı':estimatedMinutes<=50?'Standart':'Uzun';
+  const scenarioHelp:Record<NonNullable<Settings['scenarioId']>,string>={classic:'Tüm seçili seviyeleri dengeli dağıtır.', 'hidden-gems':'Puanlar gizlenir; değerli düşük maliyetli adayların payı artar.', 'stars-and-scrubs':'Üst ve alt seviyeleri aynı havuzda daha belirgin karıştırır; her lot yıldız değildir.', 'budget-crunch':'Daha dar bütçe, erken harcama ve kadro tamamlama riskini artırır.', 'speed-auction':'Daha kısa sayaçla hızlı karar ve seri lot geçişi sağlar.'};
 
   if (screen === 'entry')
     return (
@@ -524,45 +552,46 @@ export function OnlineGame() {
             </div>
           </div>
           <div className="panel online-panel">
-            <div className="online-tabs">
-              <button className={tab === 'create' ? 'active' : ''} onClick={() => setTab('create')}>
+            <div className="online-tabs" role="tablist" aria-label="Oda işlemi">
+              <button role="tab" aria-selected={tab==='create'} className={tab === 'create' ? 'active' : ''} onClick={() => setTab('create')}>
                 Oda oluştur
               </button>
-              <button className={tab === 'join' ? 'active' : ''} onClick={() => setTab('join')}>
+              <button role="tab" aria-selected={tab==='join'} className={tab === 'join' ? 'active' : ''} onClick={() => setTab('join')}>
                 Odaya katıl
               </button>
             </div>
-            <label className="label">Görünen adınız</label>
-            <input className="online-input" maxLength={24} value={name} onChange={(event) => setName(event.target.value)} placeholder="Menajer adı" />
+            <label className="label" htmlFor="online-name">Görünen adınız</label>
+            <input id="online-name" className="online-input" maxLength={24} value={name} onChange={(event) => setName(event.target.value)} placeholder="Menajer adı" />
             {tab === 'join' ? (
               <>
-                <label className="label mt-5">Oda kodu</label>
-                <input className="online-input room-code-input" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="ABC234" />
-                <div className="role-choice">
-                  <button className={role === 'manager' ? 'active' : ''} onClick={() => setRole('manager')}>
+                <label className="label mt-5" htmlFor="join-code">Oda kodu</label>
+                <input id="join-code" className="online-input room-code-input" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="ABC234" />
+                <div className="role-choice" role="radiogroup" aria-label="Katılım rolü">
+                  <button role="radio" aria-checked={role==='manager'} className={role === 'manager' ? 'active' : ''} onClick={() => setRole('manager')}>
                     Menajer
                   </button>
-                  <button className={role === 'spectator' ? 'active' : ''} onClick={() => setRole('spectator')}>
+                  <button role="radio" aria-checked={role==='spectator'} className={role === 'spectator' ? 'active' : ''} onClick={() => setRole('spectator')}>
                     Seyirci
                   </button>
                 </div>
+                {role==='manager'&&<label className="leaderboard-opt-in"><input type="checkbox" checked={Boolean(settings.leaderboardOptIn)} onChange={event=>setSettings(value=>({...value,leaderboardOptIn:event.target.checked}))}/><span><b>Başarı tablosuna katıl</b><small>Oyun tamamlanınca adın, puanın, tarihin ve kadron herkese açık ilk 10 listesinde gösterilebilir.</small></span></label>}
               </>
             ) : (
               <>
-                <label className="label mt-5">Futbolcu dönemi</label>
-                <div className="online-settings">
-                  <button className={settings.era === 'current' ? 'active' : ''} onClick={() => setSettings((value) => ({...value, era: 'current',quality:'all'}))}>
+                <span id="era-label" className="label mt-5">Futbolcu dönemi</span>
+                <div className="online-settings" role="radiogroup" aria-labelledby="era-label">
+                  <button role="radio" aria-checked={settings.era==='current'} className={settings.era === 'current' ? 'active' : ''} onClick={() => setSettings((value) => ({...value, era: 'current',quality:'all'}))}>
                     <b>Güncel</b><span>Bugünün aktif futbolcuları</span>
                   </button>
-                  <button className={settings.era === 'legends' ? 'active' : ''} onClick={() => setSettings((value) => ({...value, era: 'legends',quality:'all'}))}>
+                  <button role="radio" aria-checked={settings.era==='legends'} className={settings.era === 'legends' ? 'active' : ''} onClick={() => setSettings((value) => ({...value, era: 'legends',quality:'all'}))}>
                     <b>Son 30 Yıl</b><span>Prime dönem oyuncuları</span>
                   </button>
                 </div>
-                <label className="label mt-5">Oyuncu yetenekleri</label><button className={`ability-choice online-ability ${settings.revealRatings?'active':''}`} onClick={()=>setSettings(value=>({...value,revealRatings:!value.revealRatings}))}><strong>{settings.revealRatings?'Göster':'Gizle'}</strong><span>{settings.revealRatings?'Puan ve seviye açık':'Sürpriz açık artırma'}</span></button>
+                <span className="label mt-5">Oyuncu yetenekleri</span><button aria-pressed={settings.revealRatings} className={`ability-choice online-ability ${settings.revealRatings?'active':''}`} onClick={()=>setSettings(value=>({...value,revealRatings:!value.revealRatings}))}><strong>{settings.revealRatings?'Göster':'Gizle'}</strong><span>{settings.revealRatings?'Puan ve seviye açık':'Sürpriz açık artırma'}</span></button>
                 <label className="label mt-5">Havuza dahil edilecek seviyeler</label>
                 <div className="tier-picker online-tier-picker">
                   {RATING_TIERS.map((tier) => (
-                    <button key={tier} onClick={() => toggleTier(tier)} className={settings.selectedTiers.includes(tier) ? 'active' : ''}>
+                    <button aria-pressed={settings.selectedTiers.includes(tier)} key={tier} onClick={() => toggleTier(tier)} className={settings.selectedTiers.includes(tier) ? 'active' : ''}>
                       <span>{settings.selectedTiers.includes(tier) ? '✓' : '+'}</span>
                       {tier}
                     </button>
@@ -582,9 +611,9 @@ export function OnlineGame() {
                   <span>{settings.selectedTiers.length}/6 seviye seçili</span>
                 </div>
                 <label className="label mt-5">Açık artırma kontrolü</label>
-                <div className="auction-mode-picker">
+                <div className="auction-mode-picker" role="radiogroup" aria-label="Açık artırma kontrolü">
                   <button
-                    className={(settings.auctionMode || 'live') === 'live' ? 'active' : ''}
+                    role="radio" aria-checked={(settings.auctionMode||'live')==='live'} className={(settings.auctionMode || 'live') === 'live' ? 'active' : ''}
                     onClick={() =>
                       setSettings((value) => ({
                         ...value,
@@ -596,7 +625,7 @@ export function OnlineGame() {
                     <span>Her menajer kendi cihazından teklif verir.</span>
                   </button>
                   <button
-                    className={settings.auctionMode === 'manual' ? 'active' : ''}
+                    role="radio" aria-checked={settings.auctionMode==='manual'} className={settings.auctionMode === 'manual' ? 'active' : ''}
                     onClick={() =>
                       setSettings((value) => ({
                         ...value,
@@ -609,9 +638,9 @@ export function OnlineGame() {
                   </button>
                 </div>
                 <label className="label mt-5">Yedek oyuncular</label>
-                <div className="reserve-picker">
+                <div className="reserve-picker" role="radiogroup" aria-label="Yedek oyuncu seçimi">
                   <button
-                    className={!settings.includeBench ? 'active' : ''}
+                    role="radio" aria-checked={!settings.includeBench} className={!settings.includeBench ? 'active' : ''}
                     onClick={() =>
                       setSettings((value) => ({
                         ...value,
@@ -622,7 +651,7 @@ export function OnlineGame() {
                     <b>Yedek olmasın</b>
                     <span>11 oyuncu + teknik direktör</span>
                   </button>
-                  <button className={settings.includeBench ? 'active' : ''} onClick={() => setSettings((value) => ({...value, includeBench: true}))}>
+                  <button role="radio" aria-checked={Boolean(settings.includeBench)} className={settings.includeBench ? 'active' : ''} onClick={() => setSettings((value) => ({...value, includeBench: true}))}>
                     <b>4 yedek olsun</b>
                     <span>
                       1 KL · 1 DEF · 1 ORT · 1 FV
@@ -633,16 +662,20 @@ export function OnlineGame() {
                 </div>
                 <label className="label mt-5">Gelişmiş kurallar</label>
                 <div className="advanced-settings">
-                  <label>Senaryo<select value={settings.scenarioId} onChange={event=>setSettings(value=>({...value,scenarioId:event.target.value as Settings['scenarioId']}))}><option value="classic">Klasik</option><option value="hidden-gems">Gizli cevherler</option><option value="stars-and-scrubs">Yıldızlar ve sürprizler</option><option value="budget-crunch">Dar bütçe</option><option value="speed-auction">Hızlı açık artırma</option></select></label>
+                  <label>Senaryo<select value={settings.scenarioId} onChange={event=>setSettings(value=>({...value,scenarioId:event.target.value as Settings['scenarioId']}))}><option value="classic">Klasik</option><option value="hidden-gems">Gizli cevherler</option><option value="stars-and-scrubs">Yıldızlar ve sürprizler</option><option value="budget-crunch">Dar bütçe</option><option value="speed-auction">Hızlı açık artırma</option></select><small>{scenarioHelp[settings.scenarioId||'classic']}</small></label>
                   <label>Süre<select value={settings.timerSeconds} onChange={event=>setSettings(value=>({...value,timerSeconds:Number(event.target.value) as Settings['timerSeconds']}))}>{[10,15,20,30].map(value=><option key={value} value={value}>{value} saniye</option>)}</select></label>
                   <label>Teklif artışı<select value={settings.bidIncrement} onChange={event=>setSettings(value=>({...value,bidIncrement:Number(event.target.value) as Settings['bidIncrement']}))}>{[5,10,25].map(value=><option key={value} value={value}>${value}M</option>)}</select></label>
                   <label>Diziliş<select value={settings.formation} onChange={event=>setSettings(value=>({...value,formation:event.target.value as Formation}))}>{FORMATIONS.map(value=><option key={value}>{value}</option>)}</select></label>
                   <label>Sezon<select value={settings.seasonLength} onChange={event=>setSettings(value=>({...value,seasonLength:Number(event.target.value) as Settings['seasonLength']}))}>{[1,3,5].map(value=><option key={value} value={value}>{value} oyun</option>)}</select></label>
                   <label className="check-setting"><input type="checkbox" checked={settings.secondChance} onChange={event=>setSettings(value=>({...value,secondChance:event.target.checked}))}/> Satılmayanlara ikinci şans</label>
                 </div>
+                <span className="label mt-5">Tahmini menajer sayısı</span><div className="manager-count-hint" role="radiogroup" aria-label="Tahmini menajer sayısı">{[2,3,4,5,6,7,8].map(value=><button role="radio" aria-checked={managerEstimate===value} className={managerEstimate===value?'active':''} key={value} onClick={()=>setSettings(current=>({...current,managerCountHint:value as Settings['managerCountHint']}))}>{value}</button>)}</div>
+                <div className={`duration-estimate ${pace.toLocaleLowerCase('tr')}`} role="status"><div><span>TAHMİNİ OYUN SÜRESİ</span><strong>~{estimatedMinutes} dakika · {pace}</strong></div><p>{pace==='Hızlı'?'Kısa sayaç ve küçük masa için akıcı tempo.':pace==='Standart'?'Dengeli karar süresi ve masa temposu.':'Büyük veya yedekli masalarda uzun oturum; 10 saniyelik Hızlı Açık Artırma önerilir.'}</p></div>
                 <label className="label mt-5">Oyuncu havuzu</label>
                 <div className="pool-mode"><button className={settings.poolMode!=='custom'?'active':''} onClick={()=>setSettings(value=>({...value,poolMode:'generated',customPlayerIds:[],customPoolSelections:[]}))}>Otomatik havuz</button><button className={settings.poolMode==='custom'?'active':''} onClick={()=>setSettings(value=>({...value,poolMode:'custom'}))}>Özel Havuz Oluştur</button></div>
                 {settings.poolMode==='custom'&&<div className="custom-pool"><input className="online-input" value={poolQuery} onChange={event=>setPoolQuery(event.target.value)} placeholder="Lig veya takım ara"/><small>Birden fazla takım ve lig seçebilirsin. Seçtiğin havuzda eksik kalan pozisyonları sistem tamamlar.</small>{Boolean(settings.customPoolSelections?.length)&&<div className="custom-pool-tags">{settings.customPoolSelections!.map(item=><button key={`${item.type}:${item.name}`} onClick={()=>setSettings(value=>({...value,customPoolSelections:value.customPoolSelections?.filter(selected=>selected.type!==item.type||selected.name!==item.name)}))}><span>{item.type==='club'?'TAKIM':'LİG'}</span>{item.name} ×</button>)}</div>}{poolQuery.trim().length>1&&<div className="custom-pool-results">{poolOptions.length?poolOptions.map(option=>{const selected=settings.customPoolSelections?.some(item=>item.type===option.type&&item.name===option.name);return <button className={selected?'active':''} key={`${option.type}:${option.name}`} onClick={()=>setSettings(value=>({...value,customPoolSelections:selected?value.customPoolSelections?.filter(item=>item.type!==option.type||item.name!==option.name):[...(value.customPoolSelections||[]),option]}))}><span className="pool-result-type">{option.type==='club'?'TAKIM':'LİG'}</span><b>{selected?'✓ ':'+ '}{option.name}</b><span>{option.type==='club'?(option.league||'Lig bilgisi bulunamadı'):'Ligdeki tüm uygun takımlar'}</span></button>}):<p className="pool-empty">Eşleşen takım veya lig bulunamadı.</p>}</div>}</div>}
+                <label className="leaderboard-opt-in"><input type="checkbox" checked={Boolean(settings.leaderboardOptIn)} onChange={event=>setSettings(value=>({...value,leaderboardOptIn:event.target.checked}))}/><span><b>Başarı tablosuna katıl</b><small>Oyun tamamlanınca menajer adı, puan, tarih ve kadro herkese açık ilk 10 listesinde gösterilebilir. Sonradan kaldırma talep edebilirsin.</small></span></label>
+                <p className="media-rights-note">Oyuncu fotoğrafları yalnız görsel zenginleştirmedir. Kaynak görüntü yüklenmez veya devre dışı bırakılırsa oyun harfli kartlarla eksiksiz devam eder.</p>
               </>
             )}
             {error && (
@@ -664,10 +697,11 @@ export function OnlineGame() {
   const me = room.members.find((member) => member.id === memberId);
   const approved = isHost || Boolean(me?.approved);
   const managers = room.members.filter((member) => member.role === 'manager' && member.approved);
-  const remaining = game?.deadline ? Math.max(0, Math.ceil((game.deadline - now) / 1000)) : 0;
+  const remaining = game?.paused&&typeof game.pausedRemainingMs==='number'?Math.max(0,Math.ceil(game.pausedRemainingMs/1000)):game?.deadline ? Math.max(0, Math.ceil((game.deadline - now) / 1000)) : 0;
   const auctionOpen = game?.activeTurn !== null;
   const canParticipate = Boolean(game && current && myManager && approved && me?.role === 'manager' && myManagerIndex >= 0 && !game.paused && auctionOpen && !game.passed.includes(myManagerIndex) && game.leader !== myManagerIndex && !lotFilled(myManager, current));
   const selected = selectedManager === null ? null : game?.managers[selectedManager] || null;
+  const hostControls=isHost&&mode==='live'&&game&&current?<div className="host-controls permanent-host-controls"><span>KURUCU KONTROLLERİ · HER GÖRÜNÜMDE ERİŞİLEBİLİR</span><button className="danger-action" disabled={busy||game.leader!==null} onClick={()=>{if(confirm(`${current.name} satılmadan geçilsin mi?`))void action('skip')}}>Oyuncuyu pas geç</button><button disabled={busy||!auctionOpen||game.leader===null} onClick={()=>action('close')}>Teklifi sonlandır</button><button className="host-primary" disabled={busy||auctionOpen||game.leader===null} onClick={()=>action('sell')}>Satışı tamamla</button><button disabled={busy||auctionOpen||game.leader===null} onClick={()=>action('reopen')}>Yeniden aç</button><button disabled={busy} onClick={()=>action('pause')}>{game.paused?`Devam ettir · ${remaining}s kaldı`:'Duraklat'}</button><button className="undo-action" disabled={busy||!game.publicMeta?.canUndo} onClick={()=>action('undo')}>↶ Geri al</button></div>:null;
 
   return (
     <main className={`online-room ${game && myManager && room.status === 'auction' ? 'has-mobile-bar' : ''} ${presentation?'presentation-mode':''}`}>
@@ -787,7 +821,7 @@ export function OnlineGame() {
               <b>{mode === 'manual' ? 'MANUEL YÖNETİM' : game.paused ? 'DURAKLATILDI' : auctionOpen ? 'SERBEST TEKLİF' : game.leader === null ? 'SONRAKİ LOT' : 'TEKLİFLER KAPANDI'}</b>
               <em className={remaining>0&&remaining<=5?'countdown-critical':''}><i/>{game.deadline ? `${remaining}s` : '—'}</em>
             </div>
-            {game.bonusReveal&&<div className="missed-bonus-card">{game.bonusReveal.image?<img src={game.bonusReveal.image} alt=""/>:<span>?</span>}<div><b>KAÇAN BONUS</b><p>Eğer bonus açılsaydı <strong>{game.bonusReveal.name}</strong> oyuncusu gelecekti.</p><small>{game.bonusReveal.role} · Puanı: <strong>{game.bonusReveal.rating.toFixed(1)}</strong></small></div></div>}{game.autoAssignments?.map(item=><div className="auto-assignment-card" key={`${item.managerName}-${item.player.id}`}><span>✓</span><div><b>EKSİK POZİSYON TAMAMLANDI</b><p><strong>{item.managerName}</strong> kadrosuna <strong>{item.player.name}</strong> otomatik atandı.</p><small>{ratingLevel(item.player.rating)} · {item.player.rating.toFixed(1)} puan · {money(item.fee)} bütçeden düşüldü</small></div></div>)}<p className="online-lot-progress">{auctionProgressLabel(game.pool, game.index)}</p>
+            {game.bonusReveal&&<div className="missed-bonus-card">{game.bonusReveal.image?<img src={game.bonusReveal.image} alt=""/>:<span>?</span>}<div><b>KAÇAN BONUS</b><p>Eğer bonus açılsaydı <strong>{game.bonusReveal.name}</strong> oyuncusu gelecekti.</p><small>{game.bonusReveal.role} · Puanı: <strong>{game.bonusReveal.rating.toFixed(1)}</strong></small></div></div>}{game.autoAssignments?.map(item=><div className="auto-assignment-card" key={`${item.managerName}-${item.player.id}`}><span>✓</span><div><b>EKSİK POZİSYON TAMAMLANDI</b><p><strong>{item.managerName}</strong> kadrosuna <strong>{item.player.name}</strong> otomatik atandı.</p><small>{ratingLevel(item.player.rating)} · {item.player.rating.toFixed(1)} puan · {money(item.fee)} bütçeden düşüldü</small></div></div>)}<p className="online-lot-progress">{current.role} pozisyonu için {game.publicMeta?.groupOrdinal||1}. oyuncu: {current.name}</p>
             {bonusLot && (
               <div className="bonus-lot-alert">
                 <b>⚠ BONUS OYUNCU</b>
@@ -853,7 +887,7 @@ export function OnlineGame() {
                   </form>
                 </div>
               )}
-              {isHost&&mode==='live'&&<div className="host-controls permanent-host-controls"><span>KURUCU KONTROLLERİ · HER ZAMAN ERİŞİLEBİLİR</span><button className="danger-action" disabled={busy||game.leader!==null} onClick={()=>{if(confirm(`${current.name} satılmadan geçilsin mi?`))void action('skip')}}>Oyuncuyu pas geç</button><button disabled={busy||!auctionOpen||game.leader===null} onClick={()=>action('close')}>Teklifi sonlandır</button><button className="host-primary" disabled={busy||auctionOpen||game.leader===null} onClick={()=>action('sell')}>Satışı tamamla</button><button disabled={busy||auctionOpen||game.leader===null} onClick={()=>action('reopen')}>Yeniden aç</button><button disabled={busy} onClick={()=>action('pause')}>{game.paused?'Devam ettir':'Duraklat'}</button><button className="undo-action" disabled={busy||!game.undo} onClick={()=>action('undo')}>↶ Geri al</button></div>}
+              {hostControls}
             </div>
           </div>
           <aside aria-live="polite" aria-label="Canlı açık artırma akışı">
@@ -866,13 +900,16 @@ export function OnlineGame() {
           </aside>
         </section>
       ) : null}
+      {room.status==='auction'&&view==='squad'&&hostControls&&<section className="host-control-dock" aria-label="Kalıcı kurucu kontrolleri">{hostControls}</section>}
       {isHost&&room.status==='auction'&&game&&<section className="host-game-operations" aria-label="Oda sahibi oyun işlemleri"><div><p className="eyebrow">OYUN İŞLEMLERİ</p><h2>Açık artırmayı yönet</h2><p>Bu işlemler tüm odayı etkiler ve yalnızca kurucu tarafından kullanılabilir.</p></div><button className="auto-finish" disabled={busy} onClick={()=>{if(confirm('Kalan tüm açık artırmalar otomatik tamamlansın ve sonuç hemen açıklansın mı? Bu işlem geri alınamaz.'))void action('autoComplete')}}><b>Otomatik tamamla</b><span>Kalan lotları simüle et ve sonucu açıkla</span></button><button className="restart-auction" disabled={busy} onClick={()=>{if(confirm('Açık artırma en baştan yeniden başlatılsın mı? Tüm mevcut kadrolar, teklifler ve bütçeler sıfırlanacak.'))void action('restart')}}><b>Yeniden başlat</b><span>Aynı odayı ve menajerleri koruyarak sıfırla</span></button></section>}
-      {selected && <ManagerDrawer manager={selected} onClose={() => setSelectedManager(null)} />}
-      <button className={`chat-fab ${chatUnread>0?'has-unread':''}`} onClick={()=>{setChatOpen(value=>!value);setChatUnread(0)}} aria-expanded={chatOpen}>💬 <span>Sohbet</span>{chatUnread>0?<b>{chatUnread}</b>:null}</button>
-      {chatOpen&&<aside className="room-chat" aria-label="Oda sohbeti"><header><b>Oda sohbeti</b><button onClick={()=>setChatOpen(false)}>×</button></header><div>{room.chat?.length?room.chat.map(message=><p key={message.id}><b>{message.name}</b><span>{message.text}</span></p>):<small>Henüz mesaj yok. İlk mesajı siz yazın.</small>}</div><form onSubmit={event=>{event.preventDefault();void sendChat()}}><input maxLength={200} value={chatText} onChange={event=>setChatText(event.target.value)} placeholder="Mesaj yaz…" aria-label="Sohbet mesajı"/><button disabled={busy||!chatText.trim()}>Gönder</button></form></aside>}
+      {selected && <ManagerDrawer manager={selected} onClose={() => setSelectedManager(null)} footer={hostControls}/>}
+      <button ref={chatTriggerRef} className={`chat-fab ${chatUnread>0?'has-unread':''}`} onClick={()=>{setChatOpen(value=>!value);setChatUnread(0)}} aria-expanded={chatOpen} aria-controls="room-chat" aria-label={chatOpen?'Oda sohbetini kapat':chatUnread?`Oda sohbetini aç, ${chatUnread} yeni mesaj`:'Oda sohbetini aç'}>💬 <span>Sohbet</span>{chatUnread>0?<b>{chatUnread}</b>:null}</button>
+      {chatOpen&&<aside ref={chatDialogRef} id="room-chat" className="room-chat" role="dialog" aria-modal="true" aria-labelledby="room-chat-title"><header><b id="room-chat-title">Oda sohbeti</b><button onClick={()=>setChatOpen(false)} aria-label="Oda sohbetini kapat">×</button></header><div>{room.chat?.length?room.chat.map(message=><p key={message.id}><b>{message.name}</b><span>{message.text}</span></p>):<small>Henüz mesaj yok. İlk mesajı siz yazın.</small>}</div><form onSubmit={event=>{event.preventDefault();void sendChat()}}><input ref={chatInputRef} maxLength={200} value={chatText} onChange={event=>setChatText(event.target.value)} placeholder="Mesaj yaz…" aria-label="Sohbet mesajı"/><button disabled={busy||!chatText.trim()}>Gönder</button></form></aside>}
     </main>
   );
 }
+
+/* eslint-enable react-hooks/refs */
 
 function OnlineResults({managers,audit,onRematch,season}: {managers: Manager[];audit:string[];onRematch?:()=>Promise<void>;season?:Room['season']}) {
   const {ranked, insights} = useMemo(() => {
