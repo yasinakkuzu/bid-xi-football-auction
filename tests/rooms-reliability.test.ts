@@ -58,8 +58,8 @@ test('leaderboard supports standard/all rules, consent, aliases and deletion',()
 
 test('leaderboard reliability migration upgrades an existing database',()=>{
   const database=new DatabaseSync(':memory:');
-  database.exec(readFileSync('.openai/drizzle/0003_leaderboard.sql','utf8'));
-  database.exec(readFileSync('.openai/drizzle/0004_reliability_leaderboard.sql','utf8'));
+  database.exec(readFileSync('drizzle/0003_leaderboard.sql','utf8'));
+  database.exec(readFileSync('drizzle/0004_reliability_leaderboard.sql','utf8'));
   const columns=database.prepare('PRAGMA table_info(leaderboard_entries)').all().map(row=>String(row.name));
   for(const column of ['member_id','delete_token_hash','ruleset_json','standard_eligible','auto_completed','human_count','scenario_id','pool_mode','include_bench'])assert.ok(columns.includes(column),column);
   database.prepare("INSERT INTO room_actions VALUES('ROOM01','actor','request-1','{}',1)").run();
