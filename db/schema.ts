@@ -4,6 +4,9 @@ export const ROOM_SCHEMA=[
 `CREATE INDEX IF NOT EXISTS idx_rooms_expires_at ON rooms(expires_at)`,
 `CREATE INDEX IF NOT EXISTS idx_room_members_room_code ON room_members(room_code)`,
 `CREATE TABLE IF NOT EXISTS request_limits (limit_key TEXT PRIMARY KEY, window_start INTEGER NOT NULL, request_count INTEGER NOT NULL)`,
-`CREATE INDEX IF NOT EXISTS idx_request_limits_window ON request_limits(window_start)`
+`CREATE INDEX IF NOT EXISTS idx_request_limits_window ON request_limits(window_start)`,
+`CREATE TABLE IF NOT EXISTS leaderboard_entries (id TEXT PRIMARY KEY, room_code TEXT NOT NULL, manager_name TEXT NOT NULL, score REAL NOT NULL, played_at INTEGER NOT NULL, formation TEXT NOT NULL, squad_json TEXT NOT NULL, coach_json TEXT)`,
+`CREATE INDEX IF NOT EXISTS idx_leaderboard_score_played_at ON leaderboard_entries(score DESC,played_at DESC)`,
+`PRAGMA optimize`
 ];
 

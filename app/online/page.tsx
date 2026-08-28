@@ -60,6 +60,7 @@ type Room = {
 type Session = {code: string; token: string; memberToken?: string; name?: string};
 
 const money = (n: number) => `$${n}M`;
+const auctionFormationPoint=(formation:Formation,slot:Slot)=>{const point=FORMATION_POSITIONS[formation][slot];return{left:`${Math.max(6,Math.min(94,100-Number.parseFloat(point.top)))}%`,top:point.left}};
 const roomSessionKey = (roomCode: string) => `bidxi-room:${roomCode.toUpperCase()}`;
 function readSavedSession(roomCode?: string, managerName?: string) {
   const requestedCode = roomCode?.trim().toUpperCase();
@@ -794,7 +795,7 @@ export function OnlineGame() {
               </div>
             )}
             <article className={`online-player ${isCoach(current) ? 'coach-lot' : ''} ${bonusLot ? 'bonus-lot-card' : ''}`}>
-              {!isCoach(current)&&<div className="auction-mini-formation" aria-label={`${current.role} mevki konumu, yatay saha görünümü`}><i className="mini-halfway"/>{SLOT_KEYS.map(slot=>{const point=FORMATION_POSITIONS[myManager?.formation||room.settings.formation||'4-2-3-1'][slot];return <span key={slot} className={slot===current.slot?'active':''} style={{left:`${100-Number.parseFloat(point.top)}%`,top:point.left}}>{slot===current.slot?slot:''}</span>})}</div>}
+              {!isCoach(current)&&<div className="auction-mini-formation" aria-label={`${current.role} mevki konumu, kaleci solda yatay saha görünümü`}><i className="mini-halfway"/><i className="mini-goal mini-goal-left"/><i className="mini-goal mini-goal-right"/>{SLOT_KEYS.map(slot=><span key={slot} data-slot={slot} className={slot===current.slot?'active':''} style={auctionFormationPoint(myManager?.formation||room.settings.formation||'4-2-3-1',slot)}>{slot===current.slot?slot:''}</span>)}</div>}
               <div className="online-player-visual">
                 <span>{current.name[0]}</span>
                 <PlayerImage player={current} className="online-player-photo" />
@@ -865,6 +866,7 @@ export function OnlineGame() {
           </aside>
         </section>
       ) : null}
+      {isHost&&room.status==='auction'&&game&&<section className="host-game-operations" aria-label="Oda sahibi oyun işlemleri"><div><p className="eyebrow">OYUN İŞLEMLERİ</p><h2>Açık artırmayı yönet</h2><p>Bu işlemler tüm odayı etkiler ve yalnızca kurucu tarafından kullanılabilir.</p></div><button className="auto-finish" disabled={busy} onClick={()=>{if(confirm('Kalan tüm açık artırmalar otomatik tamamlansın ve sonuç hemen açıklansın mı? Bu işlem geri alınamaz.'))void action('autoComplete')}}><b>Otomatik tamamla</b><span>Kalan lotları simüle et ve sonucu açıkla</span></button><button className="restart-auction" disabled={busy} onClick={()=>{if(confirm('Açık artırma en baştan yeniden başlatılsın mı? Tüm mevcut kadrolar, teklifler ve bütçeler sıfırlanacak.'))void action('restart')}}><b>Yeniden başlat</b><span>Aynı odayı ve menajerleri koruyarak sıfırla</span></button></section>}
       {selected && <ManagerDrawer manager={selected} onClose={() => setSelectedManager(null)} />}
       <button className={`chat-fab ${chatUnread>0?'has-unread':''}`} onClick={()=>{setChatOpen(value=>!value);setChatUnread(0)}} aria-expanded={chatOpen}>💬 <span>Sohbet</span>{chatUnread>0?<b>{chatUnread}</b>:null}</button>
       {chatOpen&&<aside className="room-chat" aria-label="Oda sohbeti"><header><b>Oda sohbeti</b><button onClick={()=>setChatOpen(false)}>×</button></header><div>{room.chat?.length?room.chat.map(message=><p key={message.id}><b>{message.name}</b><span>{message.text}</span></p>):<small>Henüz mesaj yok. İlk mesajı siz yazın.</small>}</div><form onSubmit={event=>{event.preventDefault();void sendChat()}}><input maxLength={200} value={chatText} onChange={event=>setChatText(event.target.value)} placeholder="Mesaj yaz…" aria-label="Sohbet mesajı"/><button disabled={busy||!chatText.trim()}>Gönder</button></form></aside>}
