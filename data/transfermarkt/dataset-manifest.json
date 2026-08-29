@@ -1,0 +1,20 @@
+{
+  "datasetVersion": "transfermarkt-2026-08-05",
+  "generatorVersion": "pool-v3",
+  "scoreVersion": "score-v3",
+  "sourceName": "transfermarkt-datasets players.csv",
+  "sourceUrl": "https://github.com/dcaribou/transfermarkt-datasets",
+  "retrievedAt": "2026-08-05T04:19:58.000Z",
+  "generatedAt": "2026-08-29T09:52:01.823Z",
+  "coveredSeasons": {
+    "current": "2025 ve sonrası",
+    "legends": "1996 ve sonrası; aktif oyuncu örtüşmesi pozisyon başına en fazla %12"
+  },
+  "sourceSha256": "ea3a3903eda7d40cbf265b3e470307ea60622d7d03a7de06a055b2f1d36bc727",
+  "rights": {
+    "structuredDataset": "Kaynak depo lisansı ayrıca doğrulanmalıdır.",
+    "playerPhotos": "Doğrulanmış ticari lisans kaydı yok.",
+    "clubLogos": "Doğrulanmış ticari lisans kaydı yok.",
+    "reviewStatus": "pending-legal-review"
+  }
+}

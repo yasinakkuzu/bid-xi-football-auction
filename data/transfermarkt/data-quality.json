@@ -1,13 +1,60 @@
 {
-  "generatedAt": "2026-08-25T18:32:09.624Z",
+  "generatedAt": "2026-08-29T09:52:01.823Z",
   "sourceRows": 50149,
-  "playableProfiles": 3466,
+  "playableProfiles": 4520,
   "missingSubPosition": 586,
   "unsupportedSubPositions": [],
   "wingMappings": {
     "right": 3735,
     "left": 3863
   },
+  "overlapBySlot": {
+    "GK": {
+      "count": 28,
+      "ratio": 0.117
+    },
+    "RB": {
+      "count": 28,
+      "ratio": 0.117
+    },
+    "CB1": {
+      "count": 6,
+      "ratio": 0.05
+    },
+    "CB2": {
+      "count": 6,
+      "ratio": 0.05
+    },
+    "LB": {
+      "count": 28,
+      "ratio": 0.117
+    },
+    "DM": {
+      "count": 28,
+      "ratio": 0.117
+    },
+    "CM": {
+      "count": 28,
+      "ratio": 0.117
+    },
+    "AM": {
+      "count": 28,
+      "ratio": 0.117
+    },
+    "RW": {
+      "count": 28,
+      "ratio": 0.117
+    },
+    "LW": {
+      "count": 28,
+      "ratio": 0.117
+    },
+    "ST": {
+      "count": 28,
+      "ratio": 0.117
+    }
+  },
+  "leagueCoverage": 0.987,
   "tiers": {
     "current": {
       "GK": {
@@ -27,6 +74,14 @@
         "Standart": 36
       },
       "CB1": {
+        "Süperstar": 10,
+        "Elit": 14,
+        "Çok iyi": 24,
+        "İyi": 26,
+        "Ortalama": 28,
+        "Standart": 18
+      },
+      "CB2": {
         "Süperstar": 10,
         "Elit": 14,
         "Çok iyi": 24,
@@ -109,6 +164,14 @@
         "Standart": 36
       },
       "CB1": {
+        "Süperstar": 10,
+        "Elit": 14,
+        "Çok iyi": 24,
+        "İyi": 26,
+        "Ortalama": 28,
+        "Standart": 18
+      },
+      "CB2": {
         "Süperstar": 10,
         "Elit": 14,
         "Çok iyi": 24,

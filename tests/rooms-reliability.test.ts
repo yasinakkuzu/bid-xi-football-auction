@@ -18,7 +18,7 @@ test('hidden rooms redact active ratings and future lot identities',()=>{
 });
 
 test('pause preserves the remaining countdown and public metadata drives hidden UI',()=>{
-  assert.match(rooms,/pausedRemainingMs=g\.deadline\?Math\.max\(0,g\.deadline-Date\.now\(\)\)/);
+  assert.match(rooms,/g\.pausedRemainingMs=Math\.max\(0,g\.deadline-Date\.now\(\)\)/);
   assert.match(rooms,/g\.deadline=Date\.now\(\)\+Math\.max\(1000,g\.pausedRemainingMs/);
   const online=readFileSync('app/online/page.tsx','utf8');
   assert.match(online,/game\.publicMeta\?\.currentIsBonus/);
@@ -63,9 +63,9 @@ test('leaderboard reliability migration upgrades an existing database',()=>{
   const columns=database.prepare('PRAGMA table_info(leaderboard_entries)').all().map(row=>String(row.name));
   for(const column of ['member_id','delete_token_hash','ruleset_json','standard_eligible','auto_completed','human_count','scenario_id','pool_mode','include_bench'])assert.ok(columns.includes(column),column);
   database.prepare("INSERT INTO room_actions VALUES('ROOM01','actor','request-1','{}',1)").run();
-  assert.equal(database.prepare('SELECT COUNT(*) count FROM room_actions').get().count,1);
+  assert.equal(Number(database.prepare('SELECT COUNT(*) count FROM room_actions').get()?.count),1);
   database.prepare("INSERT INTO leaderboard_deletions VALUES('ROOM01:1:0',1)").run();
-  assert.equal(database.prepare('SELECT COUNT(*) count FROM leaderboard_deletions').get().count,1);
+  assert.equal(Number(database.prepare('SELECT COUNT(*) count FROM leaderboard_deletions').get()?.count),1);
   database.close();
 });
 

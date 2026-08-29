@@ -1,0 +1,10 @@
+{
+  "name":"Kadro İhalesi",
+  "short_name":"Kadro İhalesi",
+  "description":"Futbol açık artırma oyunu",
+  "start_url":"/",
+  "display":"standalone",
+  "background_color":"#090c0a",
+  "theme_color":"#c9ff45",
+  "icons":[{"src":"/favicon.ico","sizes":"any","type":"image/x-icon"}]
+}

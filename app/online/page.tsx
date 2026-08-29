@@ -3,7 +3,8 @@
 /* eslint-disable @next/next/no-img-element */
 
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {auctionOpeningPrice, auctionPassIsSafe, BENCH_SLOTS, canPlaceLotBid, FORMATIONS, FORMATION_POSITIONS, isBonusPlayerLot, isCoach, lotFilled, rankManagers, ratingLevel, RATING_TIERS, resultInsights, simulateTournament, SLOT_KEYS, type AuctionLot, type Formation, type Manager, type PoolSourceEntry, type RatingTier, type Slot} from '../../lib/game-engine';
+import {useRouter} from 'next/navigation';
+import {auctionOpeningPrice, auctionPassIsSafe, BENCH_SLOTS, canPlaceLotBid, FORMATIONS, FORMATION_POSITIONS, isBonusPlayerLot, isCoach, lotFilled, rankManagers, ratingLevel, RATING_TIERS, resultInsights, simulateTournament, SLOT_KEYS, type AuctionLot, type Footballer, type Formation, type Manager, type PoolSourceEntry, type RatingTier, type Slot} from '../../lib/game-engine';
 import {customPoolOptions,type CustomPoolSelection} from '../../lib/club-leagues';
 
 type Member = {
@@ -109,19 +110,21 @@ const defaults: Settings = {
   leaderboardOptIn: false,
 };
 const coordinates:Record<Slot,{left:string;top:string}>={GK:{left:'50%',top:'91%'},RB:{left:'82%',top:'72%'},CB1:{left:'61%',top:'77%'},CB2:{left:'39%',top:'77%'},LB:{left:'18%',top:'72%'},DM:{left:'36%',top:'57%'},CM:{left:'64%',top:'57%'},AM:{left:'50%',top:'32%'},RW:{left:'82%',top:'32%'},LW:{left:'18%',top:'32%'},ST:{left:'50%',top:'13%'}};
+class ApiError extends Error {constructor(message:string,readonly code:string,readonly status:number){super(message)}}
 async function json(url: string, options?: RequestInit) {
   let response: Response;
   try {
     response = await fetch(url, options);
-  } catch {
-    throw new Error('Bağlantı kurulamadı. Lütfen tekrar deneyin.');
+  } catch (error) {
+    if ((error as DOMException).name === 'AbortError' || (error as DOMException).name === 'TimeoutError') throw new ApiError('Bağlantı zaman aşımına uğradı. Lütfen tekrar deneyin.','NETWORK_TIMEOUT',408);
+    throw new ApiError('Bağlantı kurulamadı. Lütfen tekrar deneyin.','NETWORK_ERROR',0);
   }
   const text = await response.text();
   let data: Record<string, unknown> = {};
   try {
     data = JSON.parse(text) as Record<string, unknown>;
   } catch {}
-  if (!response.ok) throw new Error(String(data.error || 'İşlem başarısız'));
+  if (!response.ok) throw new ApiError(String(data.error || 'İşlem başarısız'),String(data.code||'REQUEST_FAILED'),response.status);
   return data;
 }
 
@@ -281,7 +284,7 @@ function ManagerDrawer({manager, onClose, footer}: {manager: Manager; onClose: (
   );
 }
 
-function ManualControls({game, current, busy, onAction}: {game: Game; current: AuctionLot; busy: boolean; onAction: (type: string, payload?: Record<string, unknown>) => Promise<void>}) {
+function ManualControls({game, current, busy, onAction}: {game: Game; current: AuctionLot; busy: boolean; onAction: (type: string, payload?: Record<string, unknown>) => Promise<boolean>}) {
   const eligible = (manager: Manager) => !lotFilled(manager, current);
   const first = game.managers.findIndex(eligible);
   const triggersFallback = !isCoach(current) && !(game.publicMeta?.currentPassIsSafe ?? auctionPassIsSafe(game.pool, game.index, game.managers));
@@ -323,6 +326,8 @@ function ManualControls({game, current, busy, onAction}: {game: Game; current: A
 /* The request lock intentionally uses a ref so two taps in the same render frame cannot dispatch twice. */
 /* eslint-disable react-hooks/refs */
 export function OnlineGame() {
+  const router=useRouter();
+  const [hydrating,setHydrating]=useState(true);
   const [screen, setScreen] = useState<'entry' | 'room'>('entry');
   const [tab, setTab] = useState<'create' | 'join'>('create');
   const [name, setName] = useState('');
@@ -346,6 +351,8 @@ export function OnlineGame() {
   const [chatOpen,setChatOpen]=useState(false);
   const [chatText,setChatText]=useState('');
   const [chatUnread,setChatUnread]=useState(0);
+  const [chatBusy,setChatBusy]=useState(false);
+  const [loadIssue,setLoadIssue]=useState<'network'|'timeout'|''>('');
   const [customBid,setCustomBid]=useState('');
   const seenChatIdsRef=useRef<Set<string>>(new Set());
   const chatInitializedRef=useRef(false);
@@ -353,19 +360,37 @@ export function OnlineGame() {
   const chatDialogRef=useRef<HTMLElement>(null);
   const chatInputRef=useRef<HTMLInputElement>(null);
   const chatTriggerRef=useRef<HTMLButtonElement>(null);
-  const poolOptions=useMemo(()=>customPoolOptions(poolCatalog.map(player=>player.club),poolQuery),[poolCatalog,poolQuery]);
+  const chatMessagesRef=useRef<HTMLDivElement>(null);
+  const poolOptions=useMemo(()=>customPoolOptions(poolCatalog.map(player=>({club:player.club,league:player.league})),poolQuery),[poolCatalog,poolQuery]);
 
   const loadRoom = useCallback(async (s: Session) => {
     try {
-      const data = await json(`/api/rooms/${s.code}`, {headers: {Authorization: `Bearer ${s.token}`}}),
+      const data = await json(`/api/rooms/${s.code}`, {headers: {Authorization: `Bearer ${s.token}`},signal:AbortSignal.timeout(10000)}),
         next = data.state as Room;
       if (next.game && next.game.activeTurn !== null && next.game.activeTurn < 0) next.game.activeTurn = null;
       setRoom(next);
       setIsHost(Boolean(data.isHost));
       setMemberId(data.memberId as string | null);
       setOnline(true);
-    } catch {
+      setLoadIssue('');
+      return true;
+    } catch (caught) {
       setOnline(false);
+      const known=caught instanceof ApiError?caught:null;
+      if(known&&['AUTH_INVALID','ROOM_EXPIRED','ROOM_NOT_FOUND'].includes(known.code)){
+        removeSession(s);
+        setSession(null);
+        setRoom(null);
+        setScreen('entry');
+        setTab('join');
+        setCode(s.code);
+        setError(known.code==='AUTH_INVALID'?'Bu cihazdaki oda oturumu artık geçerli değil. Odaya yeniden katılın.':'Oda bulunamadı veya saklama süresi sona erdi.');
+        history.replaceState(null,'',`/?mode=online&room=${s.code}&fresh=1`);
+      }else{
+        setLoadIssue(known?.code==='NETWORK_TIMEOUT'?'timeout':'network');
+        setError((caught as Error).message);
+      }
+      return false;
     }
   }, []);
   const refresh = useCallback(async () => {
@@ -380,7 +405,7 @@ export function OnlineGame() {
         setCode(shared.toUpperCase());
         setTab('join');
       }
-      if (params.has('fresh')) return;
+      if (params.has('fresh')) {setHydrating(false);return;}
       const saved = readSavedSession(shared || undefined);
       if (saved) {
         if (saved.name) setName(saved.name);
@@ -388,6 +413,7 @@ export function OnlineGame() {
         setScreen('room');
         void loadRoom(saved);
       }
+      setHydrating(false);
     }, 0);
     return () => clearTimeout(id);
   }, [loadRoom]);
@@ -407,6 +433,8 @@ export function OnlineGame() {
   useEffect(()=>{chatInitializedRef.current=false;seenChatIdsRef.current.clear();const id=setTimeout(()=>setChatUnread(0),0);return()=>clearTimeout(id)},[session?.code]);
   useEffect(()=>{const messages=room?.chat||[];if(!chatInitializedRef.current){seenChatIdsRef.current=new Set(messages.map(message=>message.id));chatInitializedRef.current=true;return}const incoming=messages.filter(message=>!seenChatIdsRef.current.has(message.id)&&message.memberId!==memberId);messages.forEach(message=>seenChatIdsRef.current.add(message.id));const id=setTimeout(()=>{if(chatOpen)setChatUnread(0);else if(incoming.length)setChatUnread(value=>value+incoming.length)},0);return()=>clearTimeout(id)},[room?.chat,chatOpen,memberId]);
   useEffect(()=>{if(!chatOpen)return;const oldOverflow=document.body.style.overflow,trigger=chatTriggerRef.current;document.body.style.overflow='hidden';chatInputRef.current?.focus();const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();setChatOpen(false);return}if(event.key!=='Tab'||!chatDialogRef.current)return;const focusable=[...chatDialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),[tabindex]:not([tabindex="-1"])')];if(!focusable.length)return;const first=focusable[0],last=focusable[focusable.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}};document.addEventListener('keydown',key);return()=>{document.body.style.overflow=oldOverflow;document.removeEventListener('keydown',key);trigger?.focus()}},[chatOpen]);
+  useEffect(()=>{if(chatOpen)chatMessagesRef.current?.scrollTo({top:chatMessagesRef.current.scrollHeight})},[chatOpen,room?.chat?.length]);
+  useEffect(()=>{const sync=()=>{if(!document.fullscreenElement)setPresentation(false)};document.addEventListener('fullscreenchange',sync);return()=>document.removeEventListener('fullscreenchange',sync)},[]);
 
   const game = room?.game;
   const approvedManagers = room?.members.filter((member) => member.role === 'manager' && member.approved) || [];
@@ -483,12 +511,12 @@ export function OnlineGame() {
   }
 
   async function action(type: string, payload: Record<string, unknown> = {}) {
-    if (!session||inFlightActionRef.current) return;
+    if (!session||inFlightActionRef.current) return false;
     inFlightActionRef.current=true;
     const actionId=typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;
     let outgoingPayload=payload;
     const lotScopedActions=['bid','pass','sell','close','skip','reopen','manualSell','manualSkip'];
-    if(lotScopedActions.includes(type)){const lotId=room?.game?.pool[room.game.index]?.id;if(!lotId){inFlightActionRef.current=false;return}outgoingPayload={...payload,lotId,actionId}}
+      if(lotScopedActions.includes(type)){const lotId=room?.game?.pool[room.game.index]?.id;if(!lotId){inFlightActionRef.current=false;return false}outgoingPayload={...payload,lotId,actionId}}
     else outgoingPayload={...payload,actionId};
     setBusy(true);
     const send=()=>json(`/api/rooms/${session.code}/actions`, {
@@ -501,30 +529,32 @@ export function OnlineGame() {
       try{data=await send()}catch(caught){if(type!=='pass'||!(caught as Error).message.includes('Durum değişti'))throw caught;await new Promise(resolve=>setTimeout(resolve,120));data=await send()}
       setRoom(data.state as Room);
       setError('');
+      return true;
     } catch (caught) {
       setError((caught as Error).message);
       await refresh();
+      return false;
     } finally {
       inFlightActionRef.current=false;
       setBusy(false);
     }
   }
 
-  async function leave() {
+  async function leave(preserveSession=room?.status!=='lobby') {
     if (session && room?.status === 'lobby' && !isHost) try {await action('leave')} catch {return}
-    if (session) removeSession(session);
+    if (session&&!preserveSession) removeSession(session);
     history.replaceState(null, '', '/?mode=online&fresh=1');
     setSession(null);
     setRoom(null);
     setScreen('entry');
     setView('auction');
   }
-  async function togglePresentation(){const next=!presentation;setPresentation(next);try{if(next)await document.documentElement.requestFullscreen?.();else if(document.fullscreenElement)await document.exitFullscreen()}catch{}}
-  async function sendChat(){const text=chatText.trim();if(!text)return;setChatText('');await action('chat',{text})}
+  async function togglePresentation(){const next=!presentation;try{if(next){if(!document.documentElement.requestFullscreen)throw new Error('Bu tarayıcı TV modunu desteklemiyor.');await document.documentElement.requestFullscreen();setPresentation(true)}else{if(document.fullscreenElement)await document.exitFullscreen();setPresentation(false)}}catch(caught){setPresentation(false);setError((caught as Error).message||'TV modu açılamadı.')}}
+  async function sendChat(){const text=chatText.trim();if(!text||!session||chatBusy)return;setChatBusy(true);const actionId=crypto.randomUUID();try{const data=await json(`/api/rooms/${session.code}/actions`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.token}`,'Idempotency-Key':actionId},body:JSON.stringify({type:'chat',payload:{text,actionId},requestId:actionId})});setRoom(data.state as Room);setChatText('');setError('')}catch(caught){setError((caught as Error).message);await refresh()}finally{setChatBusy(false)}}
   async function copyRoomCode(){try{await navigator.clipboard.writeText(room?.code||'');setCopied(true);setTimeout(()=>setCopied(false),1800)}catch{setError('Oda kodu kopyalanamadı.')}}
   async function invite(){if(!room)return;const url=`${location.origin}/?mode=online&room=${room.code}`;try{if(navigator.share)await navigator.share({title:'Kadro İhalesi odasına katıl',text:`${room.code} kodlu odaya katıl`,url});else await navigator.clipboard.writeText(url);setCopied(true);setTimeout(()=>setCopied(false),1800)}catch(error){if((error as DOMException).name!=='AbortError')setError('Davet bağlantısı paylaşılamadı.')}}
-  function confirmLeave(goHome=false){if(!confirm('Oyundan ve odadan tamamen çıkmak istediğinize emin misiniz?'))return;void leave().then(()=>{if(goHome)location.assign('/')})}
-  function brandHome(){if(room&&room.status!=='lobby'){if(!confirm('Oyundan çıkıp ana sayfaya dönmek istediğinize emin misiniz?'))return}void leave().then(()=>location.assign('/'))}
+  function confirmLeave(goHome=false){const active=room?.status!=='lobby',message=active?'Ana sayfaya dönmek istediğinize emin misiniz? Devam eden oyun oturumunuz bu cihazda korunacak ve aynı menajerle geri dönebileceksiniz.':'Odadan tamamen çıkmak istediğinize emin misiniz?';if(!confirm(message))return;void leave(active).then(()=>{if(goHome)router.push('/')})}
+  function brandHome(){const active=room&&room.status!=='lobby';if(active&&!confirm('Ana sayfaya dönmek istediğinize emin misiniz? Devam eden oyun oturumunuz bu cihazda korunacak.'))return;void leave(Boolean(active)).then(()=>router.push('/'))}
 
   const managerEstimate=settings.managerCountHint||4;
   const estimatedLots=(11+(settings.includeBench?4:0)+1)*(managerEstimate+1);
@@ -532,10 +562,11 @@ export function OnlineGame() {
   const pace=estimatedMinutes<=25?'Hızlı':estimatedMinutes<=50?'Standart':'Uzun';
   const scenarioHelp:Record<NonNullable<Settings['scenarioId']>,string>={classic:'Tüm seçili seviyeleri dengeli dağıtır.', 'hidden-gems':'Puanlar gizlenir; değerli düşük maliyetli adayların payı artar.', 'stars-and-scrubs':'Üst ve alt seviyeleri aynı havuzda daha belirgin karıştırır; her lot yıldız değildir.', 'budget-crunch':'Daha dar bütçe, erken harcama ve kadro tamamlama riskini artırır.', 'speed-auction':'Daha kısa sayaçla hızlı karar ve seri lot geçişi sağlar.'};
 
+  if(hydrating)return <main className="online-loading" aria-live="polite">Oturum kontrol ediliyor…</main>;
   if (screen === 'entry')
     return (
       <main className="online-shell">
-        <nav className="online-nav"><button className="brand-lockup brand-home" onClick={()=>location.assign('/')} aria-label="Kadro İhalesi ana sayfasına dön"><img src="/brand-mark.svg" alt=""/><span><b>KADRO İHALESİ</b><small>FUTBOL AÇIK ARTIRMA OYUNU</small></span></button><span className="mode-label">Çok oyunculu</span></nav>
+        <nav className="online-nav"><button className="brand-lockup brand-home" onClick={()=>router.push('/')} aria-label="Kadro İhalesi ana sayfasına dön"><img src="/brand-mark.svg" alt=""/><span><b>KADRO İHALESİ</b><small>FUTBOL AÇIK ARTIRMA OYUNU</small></span></button><span className="mode-label">Çok oyunculu</span></nav>
         <section className="online-entry">
           <div>
             <p className="eyebrow">AYNI MASA · HER CİHAZ</p>
@@ -587,7 +618,7 @@ export function OnlineGame() {
                     <b>Son 30 Yıl</b><span>Prime dönem oyuncuları</span>
                   </button>
                 </div>
-                <span className="label mt-5">Oyuncu yetenekleri</span><button aria-pressed={settings.revealRatings} className={`ability-choice online-ability ${settings.revealRatings?'active':''}`} onClick={()=>setSettings(value=>({...value,revealRatings:!value.revealRatings}))}><strong>{settings.revealRatings?'Göster':'Gizle'}</strong><span>{settings.revealRatings?'Puan ve seviye açık':'Sürpriz açık artırma'}</span></button>
+                <span className="label mt-5">Oyuncu yetenekleri</span><button aria-pressed={settings.revealRatings} className={`ability-choice online-ability ${settings.revealRatings?'active':''}`} onClick={()=>setSettings(value=>({...value,revealRatings:!value.revealRatings}))}><strong>{settings.revealRatings?'Göster':'Aktif lotta gizle'}</strong><span>{settings.revealRatings?'Puan ve seviye açık':'Satın alınan oyuncular kadroda açıklanır'}</span></button>
                 <label className="label mt-5">Havuza dahil edilecek seviyeler</label>
                 <div className="tier-picker online-tier-picker">
                   {RATING_TIERS.map((tier) => (
@@ -673,7 +704,7 @@ export function OnlineGame() {
                 <div className={`duration-estimate ${pace.toLocaleLowerCase('tr')}`} role="status"><div><span>TAHMİNİ OYUN SÜRESİ</span><strong>~{estimatedMinutes} dakika · {pace}</strong></div><p>{pace==='Hızlı'?'Kısa sayaç ve küçük masa için akıcı tempo.':pace==='Standart'?'Dengeli karar süresi ve masa temposu.':'Büyük veya yedekli masalarda uzun oturum; 10 saniyelik Hızlı Açık Artırma önerilir.'}</p></div>
                 <label className="label mt-5">Oyuncu havuzu</label>
                 <div className="pool-mode"><button className={settings.poolMode!=='custom'?'active':''} onClick={()=>setSettings(value=>({...value,poolMode:'generated',customPlayerIds:[],customPoolSelections:[]}))}>Otomatik havuz</button><button className={settings.poolMode==='custom'?'active':''} onClick={()=>setSettings(value=>({...value,poolMode:'custom'}))}>Özel Havuz Oluştur</button></div>
-                {settings.poolMode==='custom'&&<div className="custom-pool"><input className="online-input" value={poolQuery} onChange={event=>setPoolQuery(event.target.value)} placeholder="Lig veya takım ara"/><small>Birden fazla takım ve lig seçebilirsin. Seçtiğin havuzda eksik kalan pozisyonları sistem tamamlar.</small>{Boolean(settings.customPoolSelections?.length)&&<div className="custom-pool-tags">{settings.customPoolSelections!.map(item=><button key={`${item.type}:${item.name}`} onClick={()=>setSettings(value=>({...value,customPoolSelections:value.customPoolSelections?.filter(selected=>selected.type!==item.type||selected.name!==item.name)}))}><span>{item.type==='club'?'TAKIM':'LİG'}</span>{item.name} ×</button>)}</div>}{poolQuery.trim().length>1&&<div className="custom-pool-results">{poolOptions.length?poolOptions.map(option=>{const selected=settings.customPoolSelections?.some(item=>item.type===option.type&&item.name===option.name);return <button className={selected?'active':''} key={`${option.type}:${option.name}`} onClick={()=>setSettings(value=>({...value,customPoolSelections:selected?value.customPoolSelections?.filter(item=>item.type!==option.type||item.name!==option.name):[...(value.customPoolSelections||[]),option]}))}><span className="pool-result-type">{option.type==='club'?'TAKIM':'LİG'}</span><b>{selected?'✓ ':'+ '}{option.name}</b><span>{option.type==='club'?(option.league||'Lig bilgisi bulunamadı'):'Ligdeki tüm uygun takımlar'}</span></button>}):<p className="pool-empty">Eşleşen takım veya lig bulunamadı.</p>}</div>}</div>}
+                {settings.poolMode==='custom'&&<div className="custom-pool"><label className="label" htmlFor="custom-pool-search">Lig veya takım ara</label><input id="custom-pool-search" className="online-input" aria-describedby="custom-pool-help custom-pool-status" value={poolQuery} onChange={event=>setPoolQuery(event.target.value)} placeholder="Örn. Fenerbahçe veya Türkiye Ligi"/><small id="custom-pool-help">Birden fazla takım ve lig seçebilirsin. Seçtiğin havuzda eksik kalan pozisyonları sistem tamamlar.</small><span id="custom-pool-status" className="sr-only" aria-live="polite">{poolQuery.trim().length>1?`${poolOptions.length} sonuç bulundu`:''}</span>{Boolean(settings.customPoolSelections?.length)&&<div className="custom-pool-tags">{settings.customPoolSelections!.map(item=><button key={`${item.type}:${item.name}`} onClick={()=>setSettings(value=>({...value,customPoolSelections:value.customPoolSelections?.filter(selected=>selected.type!==item.type||selected.name!==item.name)}))}><span>{item.type==='club'?'TAKIM':'LİG'}</span>{item.name} ×</button>)}</div>}{poolQuery.trim().length>1&&<div className="custom-pool-results">{poolOptions.length?poolOptions.map(option=>{const selected=settings.customPoolSelections?.some(item=>item.type===option.type&&item.name===option.name);return <button className={selected?'active':''} key={`${option.type}:${option.name}`} onClick={()=>setSettings(value=>({...value,customPoolSelections:selected?value.customPoolSelections?.filter(item=>item.type!==option.type||item.name!==option.name):[...(value.customPoolSelections||[]),option]}))}><span className="pool-result-type">{option.type==='club'?'TAKIM':'LİG'}</span><b>{selected?'✓ ':'+ '}{option.name}</b><span>{option.type==='club'?(option.league||'Lig bilgisi bulunamadı'):'Ligdeki tüm uygun takımlar'}</span></button>}):<p className="pool-empty">Eşleşen takım veya lig bulunamadı.</p>}</div>}</div>}
                 <label className="leaderboard-opt-in"><input type="checkbox" checked={Boolean(settings.leaderboardOptIn)} onChange={event=>setSettings(value=>({...value,leaderboardOptIn:event.target.checked}))}/><span><b>Başarı tablosuna katıl</b><small>Oyun tamamlanınca menajer adı, puan, tarih ve kadro herkese açık ilk 10 listesinde gösterilebilir. Sonradan kaldırma talep edebilirsin.</small></span></label>
                 <p className="media-rights-note">Oyuncu fotoğrafları yalnız görsel zenginleştirmedir. Kaynak görüntü yüklenmez veya devre dışı bırakılırsa oyun harfli kartlarla eksiksiz devam eder.</p>
               </>
@@ -692,7 +723,7 @@ export function OnlineGame() {
       </main>
     );
 
-  if (!room || !session) return <main className="online-loading">Odaya bağlanılıyor…</main>;
+  if (!room || !session) return <main className="online-loading" aria-live="polite"><b>{loadIssue?'Odaya bağlanılamadı':'Odaya bağlanılıyor…'}</b>{loadIssue&&session?<><span>Oturumunuz cihazda korunuyor.</span><button onClick={()=>void loadRoom(session)}>Tekrar dene</button><button onClick={()=>router.push('/?fresh=1')}>Ana ekrana dön</button></>:null}</main>;
 
   const me = room.members.find((member) => member.id === memberId);
   const approved = isHost || Boolean(me?.approved);
@@ -719,10 +750,11 @@ export function OnlineGame() {
         )}
         <div className="room-share"><button className="room-code" onClick={copyRoomCode} title="Oda kodunu kopyala"><small>ODA KODU · KOPYALA</small><b>{room.code}</b></button>{room.status==='lobby'&&<button className="invite-link" onClick={invite}>↗ Link ile davet et</button>}</div>
         <button className="tool-btn leave-room" onClick={()=>confirmLeave(false)}>
-          Odadan çık
+          {room.status==='lobby'?'Odadan çık':'Ana sayfaya dön'}
         </button>
         {game&&room.status==='auction'&&<button className="tool-btn tv-mode" onClick={togglePresentation}>{presentation?'TV modundan çık':'▣ TV modu'}</button>}
       </header>
+      {presentation&&<button className="presentation-exit" onClick={togglePresentation}>TV modundan çık</button>}
       {game && myManager && room.status === 'auction' && (
         <nav className="manager-view-tabs" aria-label="Menajer ekranı">
           <button aria-pressed={view==='auction'} className={view === 'auction' ? 'active' : ''} onClick={() => setView('auction')}>
@@ -737,7 +769,7 @@ export function OnlineGame() {
           </button>
         </nav>
       )}
-      <div className="sr-only" aria-live="polite">{copied?'Oda bağlantısı kopyalandı.':error}</div>{copied&&<p className="online-toast success">Bağlantı kopyalandı</p>}{error && <p className="online-toast" role="alert">{error}</p>}
+      <div className="sr-only" aria-live="polite">{copied?'Oda bağlantısı kopyalandı.':''}</div>{copied&&<p className="online-toast success">Bağlantı kopyalandı</p>}{error && <p className="online-toast" role="alert">{error}</p>}
 
       {room.status === 'lobby' ? (
         <section className="lobby">
@@ -781,7 +813,7 @@ export function OnlineGame() {
             </h3>
             <p>{mode === 'manual' ? 'Manuel kurucu yönetimi' : 'Herkes kendi cihazından teklif verir'}</p>
             <p>Seviyeler: {room.settings.selectedTiers?.join(' · ') || 'Tüm seviyeler'}</p>
-            <p>Puanlar {room.settings.revealRatings ? 'görünür' : 'gizli'}</p>
+            <p>{room.settings.revealRatings ? 'Puanlar görünür' : 'Aktif lot puanı gizli; satın alınınca açıklanır'}</p>
             <p>{room.settings.includeBench ? '11 oyuncu + 4 yedek · kişi başı +$250M' : '11 oyuncu · yedeksiz'}</p>
             <p>
               {managers.length} onaylı menajer · {room.members.filter((member) => member.role === 'spectator').length} seyirci
@@ -880,7 +912,7 @@ export function OnlineGame() {
                       Pas
                     </button>
                   </div>
-                  <form className="custom-bid-form" onSubmit={event=>{event.preventDefault();const amount=Math.round(Number(customBid));if(Number.isFinite(amount)&&amount>0)void action('bid',{amount}).then(()=>setCustomBid(''))}}>
+                  <form className="custom-bid-form" onSubmit={event=>{event.preventDefault();const amount=Math.round(Number(customBid));if(Number.isFinite(amount)&&amount>0)void action('bid',{amount}).then(success=>{if(success)setCustomBid('')})}}>
                     <label htmlFor="custom-bid">Elle teklif ($M)</label>
                     <input id="custom-bid" inputMode="numeric" min={game.leader===null?auctionOpeningPrice(current,game.managers):game.bid+1} max={myManager?.budget} step="1" type="number" value={customBid} onChange={event=>setCustomBid(event.target.value)} placeholder={String(game.leader===null?auctionOpeningPrice(current,game.managers):game.bid+1)} disabled={!canParticipate||busy}/>
                     <button disabled={!canParticipate||busy||!customBid}>Teklif ver</button>
@@ -904,14 +936,15 @@ export function OnlineGame() {
       {isHost&&room.status==='auction'&&game&&<section className="host-game-operations" aria-label="Oda sahibi oyun işlemleri"><div><p className="eyebrow">OYUN İŞLEMLERİ</p><h2>Açık artırmayı yönet</h2><p>Bu işlemler tüm odayı etkiler ve yalnızca kurucu tarafından kullanılabilir.</p></div><button className="auto-finish" disabled={busy} onClick={()=>{if(confirm('Kalan tüm açık artırmalar otomatik tamamlansın ve sonuç hemen açıklansın mı? Bu işlem geri alınamaz.'))void action('autoComplete')}}><b>Otomatik tamamla</b><span>Kalan lotları simüle et ve sonucu açıkla</span></button><button className="restart-auction" disabled={busy} onClick={()=>{if(confirm('Açık artırma en baştan yeniden başlatılsın mı? Tüm mevcut kadrolar, teklifler ve bütçeler sıfırlanacak.'))void action('restart')}}><b>Yeniden başlat</b><span>Aynı odayı ve menajerleri koruyarak sıfırla</span></button></section>}
       {selected && <ManagerDrawer manager={selected} onClose={() => setSelectedManager(null)} footer={hostControls}/>}
       <button ref={chatTriggerRef} className={`chat-fab ${chatUnread>0?'has-unread':''}`} onClick={()=>{setChatOpen(value=>!value);setChatUnread(0)}} aria-expanded={chatOpen} aria-controls="room-chat" aria-label={chatOpen?'Oda sohbetini kapat':chatUnread?`Oda sohbetini aç, ${chatUnread} yeni mesaj`:'Oda sohbetini aç'}>💬 <span>Sohbet</span>{chatUnread>0?<b>{chatUnread}</b>:null}</button>
-      {chatOpen&&<aside ref={chatDialogRef} id="room-chat" className="room-chat" role="dialog" aria-modal="true" aria-labelledby="room-chat-title"><header><b id="room-chat-title">Oda sohbeti</b><button onClick={()=>setChatOpen(false)} aria-label="Oda sohbetini kapat">×</button></header><div>{room.chat?.length?room.chat.map(message=><p key={message.id}><b>{message.name}</b><span>{message.text}</span></p>):<small>Henüz mesaj yok. İlk mesajı siz yazın.</small>}</div><form onSubmit={event=>{event.preventDefault();void sendChat()}}><input ref={chatInputRef} maxLength={200} value={chatText} onChange={event=>setChatText(event.target.value)} placeholder="Mesaj yaz…" aria-label="Sohbet mesajı"/><button disabled={busy||!chatText.trim()}>Gönder</button></form></aside>}
+      {chatOpen&&<><button className="room-chat-backdrop" aria-label="Sohbeti kapat" onClick={()=>setChatOpen(false)}/><aside ref={chatDialogRef} id="room-chat" className="room-chat" role="dialog" aria-modal="true" aria-labelledby="room-chat-title"><header><b id="room-chat-title">Oda sohbeti</b><button onClick={()=>setChatOpen(false)} aria-label="Oda sohbetini kapat">×</button></header><div ref={chatMessagesRef}>{room.chat?.length?room.chat.map(message=><p key={message.id}><b>{message.name}</b><span>{message.text}</span><time dateTime={new Date(message.at).toISOString()}>{new Date(message.at).toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'})}</time></p>):<small>Henüz mesaj yok. İlk mesajı siz yazın.</small>}</div><form onSubmit={event=>{event.preventDefault();void sendChat()}}><input ref={chatInputRef} maxLength={200} value={chatText} onChange={event=>setChatText(event.target.value)} placeholder="Mesaj yaz…" aria-label="Sohbet mesajı"/><button disabled={chatBusy||!chatText.trim()}>{chatBusy?'Gönderiliyor…':'Gönder'}</button></form></aside></>}
     </main>
   );
 }
 
 /* eslint-enable react-hooks/refs */
 
-function OnlineResults({managers,audit,onRematch,season}: {managers: Manager[];audit:string[];onRematch?:()=>Promise<void>;season?:Room['season']}) {
+function OnlineResults({managers,audit,onRematch,season}: {managers: Manager[];audit:string[];onRematch?:()=>Promise<boolean>;season?:Room['season']}) {
+  const [shareError,setShareError]=useState('');
   const {ranked, insights} = useMemo(() => {
     const ordered = rankManagers(managers);
     return {ranked: ordered, insights: resultInsights(ordered)};
@@ -958,7 +991,8 @@ function OnlineResults({managers,audit,onRematch,season}: {managers: Manager[];a
       {tournament.table.length>2&&<section className="tournament"><p className="eyebrow">MUHTEMEL MİNİ LİG</p><div className="tournament-table"><b>#</b><b>Takım</b><b>O</b><b>AV</b><b>P</b>{tournament.table.map((row,index)=><span key={row.managerId} className="tournament-row"><i>{index+1}</i><strong>{row.name}</strong><i>{row.played}</i><i>{row.goalDifference}</i><b>{row.points}</b></span>)}</div><small>Sonuçlar kadro, hat eşleşmeleri ve teknik direktör uyumundan deterministik olarak üretilen oyun tahminidir.</small></section>}
       {season&&season.length>1&&<section className="tournament"><p className="eyebrow">SEZON · {season.round}/{season.length}</p><div className="season-list">{Object.values(season.standings).sort((a,b)=>b.points-a.points||b.totalScore-a.totalScore).map((row,index)=><p key={row.name}><b>{index+1}. {row.name}</b><span>{row.points} puan · {row.wins} galibiyet</span></p>)}</div></section>}
       {audit.length>0&&<details className="result-audit"><summary>Oyun kararları ve otomatik atamalar</summary>{audit.map((item,index)=><p key={`${item}-${index}`}>{item}</p>)}</details>}
-      <button className="share-card" onClick={shareCard}>↗ Sonuç kartını paylaş</button>
+      <button className="share-card" onClick={()=>{setShareError('');void shareCard().catch(()=>setShareError('Sonuç kartı oluşturulamadı. Lütfen tekrar deneyin.'))}}>↗ Sonuç kartını paylaş</button>
+      {shareError&&<p className="share-error" role="alert">{shareError}</p>}
       {onRematch&&<button className="start mx-auto mt-4" onClick={onRematch}>Aynı menajerlerle rövanş <span>↻</span></button>}
       <p>Bu sonuç odada 7 gün boyunca saklanır.</p>
     </section>

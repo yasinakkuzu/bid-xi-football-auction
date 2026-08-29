@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, statSync } from 'node:fs';
+import {createHash} from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
 const SOURCE = 'data/transfermarkt/players.csv';
@@ -49,7 +50,7 @@ function slotFor(sub){const value=normalizedPosition(sub),exact=new Map([
  ]);return exact.get(value)}
 
 if(!existsSync(SOURCE)) throw new Error(`Eksik kaynak: ${SOURCE}`);
-const rows=parseCsv(readFileSync(SOURCE,'utf8'));
+const sourceBuffer=readFileSync(SOURCE),rows=parseCsv(sourceBuffer.toString('utf8'));
 const headers=rows.shift();
 const ix=Object.fromEntries(headers.map((h,i)=>[h,i]));
 if(existsSync(DB_PATH)) rmSync(DB_PATH);
@@ -77,14 +78,19 @@ for(const era of ['current','legends']) for(const slot of baseSlots) pool[era][s
 for(const r of rows){
   const slot=slotFor(r[ix.sub_position]); if(!slot) continue;
   const clubId=Number(r[ix.current_club_id])||0;
-  const common={id:Number(r[ix.player_id]),name:r[ix.name],country:r[ix.country_of_citizenship]||'',club:r[ix.current_club_name]||'',image:r[ix.image_url]||'',clubLogo:clubId?`https://tmssl.akamaized.net/images/wappen/head/${clubId}.png`:''};
+  const common={id:Number(r[ix.player_id]),name:r[ix.name],country:r[ix.country_of_citizenship]||'',club:r[ix.current_club_name]||'',league:r[ix.current_club_domestic_competition_id]||'',image:r[ix.image_url]||'',clubLogo:clubId?`https://tmssl.akamaized.net/images/wappen/head/${clubId}.png`:''};
   const currentValue=Number(r[ix.market_value_in_eur])||0, peakValue=Number(r[ix.highest_market_value_in_eur])||0;
   if(Number(r[ix.last_season])>=2025 && currentValue>0) pool.current[slot].push({...common,rating:toRating(currentValue,r[ix.international_caps],r[ix.international_goals]),price:toPrice(currentValue),value:currentValue});
   if(Number(r[ix.last_season])>=1996 && peakValue>0){const normalized=normalizePrimeValue(peakValue,r[ix.last_season]);pool.legends[slot].push({...common,rating:toRating(normalized,r[ix.international_caps],r[ix.international_goals],true),price:toPrice(normalized),value:normalized});}
 }
-for(const era of ['current','legends']) for(const slot of baseSlots){
-  const ranked=pool[era][slot].sort((a,b)=>b.rating-a.rating||b.value-a.value).slice(0,240);
-  pool[era][slot]=ranked.map((p,i)=>({...p,rating:percentileRating(i,ranked.length)}));
+for(const slot of baseSlots){
+  const current=pool.current[slot].sort((a,b)=>b.rating-a.rating||b.value-a.value).slice(0,240);
+  const currentIds=new Set(current.map(player=>player.id));
+  const legendCandidates=pool.legends[slot].sort((a,b)=>b.rating-a.rating||b.value-a.value);
+  const overlapLimit=Math.floor(240*.12),returning=legendCandidates.filter(player=>currentIds.has(player.id)).slice(0,overlapLimit),historic=legendCandidates.filter(player=>!currentIds.has(player.id)).slice(0,240-returning.length);
+  const legends=[...historic,...returning].sort((a,b)=>b.rating-a.rating||b.value-a.value).slice(0,240);
+  pool.current[slot]=current.map((p,i)=>({...p,rating:percentileRating(i,current.length)}));
+  pool.legends[slot]=legends.map((p,i)=>({...p,rating:percentileRating(i,legends.length)}));
 }
 for(const era of ['current','legends']){
   const center=pool[era].CB;
@@ -96,9 +102,13 @@ writeFileSync(POOL_PATH,JSON.stringify(pool));
 const count=db.prepare('SELECT COUNT(*) AS count FROM players').get().count;
 const playable=new Set([...Object.values(pool.current),...Object.values(pool.legends)].flat().map(p=>p.id)).size;
 const wingMappings={right:rows.filter(r=>slotFor(r[ix.sub_position])==='RW').length,left:rows.filter(r=>slotFor(r[ix.sub_position])==='LW').length};
-const quality={generatedAt:new Date().toISOString(),sourceRows:Number(count),playableProfiles:playable,missingSubPosition:rows.filter(r=>!r[ix.sub_position]).length,unsupportedSubPositions:[...new Set(rows.map(r=>r[ix.sub_position]).filter(s=>s&&!slotFor(s)))].sort(),wingMappings,tiers:{}};
-for(const era of ['current','legends'])quality.tiers[era]=Object.fromEntries(baseSlots.flatMap(s=>{const key=s==='CB'?'CB1':s;const list=pool[era][key]||[];return [[key,Object.fromEntries(['Süperstar','Elit','Çok iyi','İyi','Ortalama','Standart'].map(t=>[t,list.filter(p=>(p.rating>=93?'Süperstar':p.rating>=90?'Elit':p.rating>=86?'Çok iyi':p.rating>=82?'İyi':p.rating>=77?'Ortalama':'Standart')===t).length]))]]}));
+const poolKeys=['GK','RB','CB1','CB2','LB','DM','CM','AM','RW','LW','ST'],overlapBySlot=Object.fromEntries(poolKeys.map(slot=>{const current=new Set(pool.current[slot].map(player=>player.id)),same=pool.legends[slot].filter(player=>current.has(player.id)).length;return[slot,{count:same,ratio:Number((same/Math.max(1,pool.current[slot].length)).toFixed(3))}]}));
+const generatedPlayers=Object.values(pool.current).flat();
+const quality={generatedAt:new Date().toISOString(),sourceRows:Number(count),playableProfiles:playable,missingSubPosition:rows.filter(r=>!r[ix.sub_position]).length,unsupportedSubPositions:[...new Set(rows.map(r=>r[ix.sub_position]).filter(s=>s&&!slotFor(s)))].sort(),wingMappings,overlapBySlot,leagueCoverage:Number((generatedPlayers.filter(player=>player.league).length/Math.max(1,generatedPlayers.length)).toFixed(3)),tiers:{}};
+for(const era of ['current','legends'])quality.tiers[era]=Object.fromEntries(poolKeys.map(key=>{const list=pool[era][key]||[];return[key,Object.fromEntries(['Süperstar','Elit','Çok iyi','İyi','Ortalama','Standart'].map(t=>[t,list.filter(p=>(p.rating>=93?'Süperstar':p.rating>=90?'Elit':p.rating>=86?'Çok iyi':p.rating>=82?'İyi':p.rating>=77?'Ortalama':'Standart')===t).length]))]}));
 writeFileSync('data/transfermarkt/data-quality.json',JSON.stringify(quality,null,2));
+const manifest={datasetVersion:`transfermarkt-${new Date(statSync(SOURCE).mtimeMs).toISOString().slice(0,10)}`,generatorVersion:'pool-v3',scoreVersion:'score-v3',sourceName:'transfermarkt-datasets players.csv',sourceUrl:'https://github.com/dcaribou/transfermarkt-datasets',retrievedAt:new Date(statSync(SOURCE).mtimeMs).toISOString(),generatedAt:quality.generatedAt,coveredSeasons:{current:'2025 ve sonrası',legends:'1996 ve sonrası; aktif oyuncu örtüşmesi pozisyon başına en fazla %12'},sourceSha256:createHash('sha256').update(sourceBuffer).digest('hex'),rights:{structuredDataset:'Kaynak depo lisansı ayrıca doğrulanmalıdır.',playerPhotos:'Doğrulanmış ticari lisans kaydı yok.',clubLogos:'Doğrulanmış ticari lisans kaydı yok.',reviewStatus:'pending-legal-review'}};
+writeFileSync('data/transfermarkt/dataset-manifest.json',JSON.stringify(manifest,null,2));
 console.log(JSON.stringify({players:Number(count),playable,current:Object.values(pool.current).reduce((n,a)=>n+a.length,0),legends:Object.values(pool.legends).reduce((n,a)=>n+a.length,0),database:DB_PATH,pool:POOL_PATH}));
 db.close();
 

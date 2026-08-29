@@ -6,7 +6,7 @@ export async function GET(request:Request){
     const ip=request.headers.get('cf-connecting-ip')||'unknown';
     await rateLimit(`leaderboard:${await digest(ip)}`,30);
     const filter=new URL(request.url).searchParams.get('filter')==='all'?'all':'standard';
-    return NextResponse.json({entries:await leaderboard(10,filter),filter},{headers:{'Cache-Control':'public, max-age=30'}});
+    return NextResponse.json({entries:await leaderboard(10,filter),filter},{headers:{'Cache-Control':'no-store'}});
   }catch(error){
     const known=error instanceof RoomError;
     return NextResponse.json({error:(error as Error).message},{status:known?error.status:500});
@@ -15,6 +15,7 @@ export async function GET(request:Request){
 
 export async function DELETE(request:Request){
   try{
+    if(Number(request.headers.get('content-length')||0)>4096)throw new RoomError('BODY_TOO_LARGE','İstek çok büyük',413);
     const token=request.headers.get('authorization')?.replace(/^Bearer\s+/i,'')||'';
     const body=await request.json() as {roomCode?:string;entryId?:string};
     const roomCode=String(body.roomCode||'').toUpperCase(),entryId=String(body.entryId||'');

@@ -14,7 +14,7 @@ npm ci
 npm run dev
 ```
 
-Uygulama varsayılan olarak `http://localhost:3000` adresinde açılır. Çevrim içi oda ekranı `/online` yolundadır.
+Uygulama varsayılan olarak `http://localhost:3000` adresinde açılır. Tek cihaz ve çevrim içi oda akışları aynı kök sayfada `?mode=local` ve `?mode=online` seçenekleriyle çalışır.
 
 ## Kontroller
 
@@ -22,11 +22,11 @@ Uygulama varsayılan olarak `http://localhost:3000` adresinde açılır. Çevrim
 npm run check
 ```
 
-Bu komut lint, otomatik testler ve production build işlemlerini çalıştırır.
+Bu komut lint, TypeScript typecheck, otomatik davranış testleri ve production build işlemlerini çalıştırır.
 
 ## Transfermarkt veri havuzu
 
-Sürümlenmiş oyun havuzu `app/data/auction-pool.generated.json` dosyasındadır. Kaynak verileri yeniden indirip havuzu üretmek için:
+Sürümlenmiş oyun havuzu `app/data/auction-pool.generated.json` dosyasındadır. İçe aktarma işlemi ağdan veri indirmez; git tarafından izlenmeyen `data/transfermarkt/players.csv` kaynak dosyası hazırlandıktan sonra havuzu, SQLite doğrulama veritabanını, kalite raporunu ve veri manifestini üretmek için:
 
 ```bash
 npm run data:import
@@ -36,4 +36,6 @@ npm run data:import
 
 Proje OpenAI Sites yapılandırmasını `.openai/hosting.json` altında içerir. Yeni sürüm yayımlanmadan önce `npm run check` çalıştırılmalıdır.
 
-Canlı adres: https://bid-xi-football-auction.yasinakkuzu.chatgpt.site
+Canlı adres: https://kadro-ihalesi.yasinakkuzu.chatgpt.site
+
+Ticari hazırlık için `COMMERCIAL_MODE=true` kullanıldığında, açıkça etkinleştirilmemiş doğrulanmamış oyuncu fotoğrafları ve kulüp logoları sunucu yanıtlarından kaldırılır. Ayrıntılı hak kontrol listesi `docs/data-rights.md` dosyasındadır.
