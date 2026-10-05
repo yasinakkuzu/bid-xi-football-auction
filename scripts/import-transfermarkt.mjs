@@ -3,19 +3,53 @@ import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import {
   POOL_MODEL_VERSION,
+  PERFORMANCE_MODEL_VERSION,
   POOL_SIZE,
   CURRENT_MIN_SEASON,
   LEGENDS_MIN_SEASON,
   OVERLAP_LIMIT_RATIO,
   slotFor,
+  competitionWeight,
   percentileRating,
+  aggregatePerformance,
   ratingSignals,
   priceForRating,
 } from './lib/pool-model.mjs';
+import { forEachCsvRow } from './lib/csv-stream.mjs';
 
 const SOURCE = 'data/transfermarkt/players.csv';
+const APPEARANCES_SOURCE = 'data/transfermarkt/appearances.csv';
 const DB_PATH = 'data/transfermarkt/players.sqlite';
 const POOL_PATH = 'app/data/auction-pool.generated.json';
+
+/**
+ * Derive the July–June season label from an ISO `YYYY-MM-DD` match date.
+ *
+ * Calendar years would split a single season in half, so a match played from
+ * July onwards belongs to the following year's season (2025-08 → season 2026).
+ *
+ * @param {unknown} value
+ * @returns {number|null} Season year, or `null` when the date is unusable.
+ */
+function seasonFromDate(value) {
+  const text = String(value ?? '').trim();
+  if (!/^\d{4}-\d{2}/.test(text)) return null;
+  const year = Number(text.slice(0, 4));
+  const month = Number(text.slice(5, 7));
+  if (!Number.isFinite(year) || year <= 0) return null;
+  return year + (month >= 7 ? 1 : 0);
+}
+
+/**
+ * Convert a factual CSV counter to a finite, non-negative number.
+ *
+ * @param {unknown} value
+ * @returns {number}
+ */
+function toNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
 
 function parseCsv(text) {
   const rows = [];
@@ -53,6 +87,64 @@ const sourceBuffer = readFileSync(SOURCE),
   rows = parseCsv(sourceBuffer.toString('utf8'));
 const headers = rows.shift();
 const ix = Object.fromEntries(headers.map((h, i) => [h, i]));
+
+// Factual per-match performance, streamed once. Competition strength is applied
+// per appearance, not per season, so a Champions League minute counts for more
+// than a cup minute in the same season. Only player ids that exist in
+// players.csv are accumulated, which bounds memory by the published universe.
+const playerIds = new Set(rows.map((r) => Number(r[ix.player_id])).filter((id) => Number.isFinite(id) && id > 0));
+const performanceByPlayer = new Map();
+let appearanceRows = 0;
+const appearancesAvailable = existsSync(APPEARANCES_SOURCE);
+if (appearancesAvailable) {
+  await forEachCsvRow(APPEARANCES_SOURCE, (fields, header) => {
+    const playerId = Number(fields[header.player_id]);
+    if (!Number.isFinite(playerId) || !playerIds.has(playerId)) return;
+    const season = seasonFromDate(fields[header.date]);
+    if (season === null) return;
+    let seasons = performanceByPlayer.get(playerId);
+    if (!seasons) {
+      seasons = new Map();
+      performanceByPlayer.set(playerId, seasons);
+    }
+    let bucket = seasons.get(season);
+    if (!bucket) {
+      bucket = { minutes: 0, weightedMinutes: 0, goals: 0, assists: 0 };
+      seasons.set(season, bucket);
+    }
+    const minutes = toNumber(fields[header.minutes_played]);
+    bucket.minutes += minutes;
+    bucket.weightedMinutes += minutes * competitionWeight(fields[header.competition_id]);
+    bucket.goals += toNumber(fields[header.goals]);
+    bucket.assists += toNumber(fields[header.assists]);
+    appearanceRows += 1;
+  });
+}
+const performanceAggregates = new Map();
+for (const [playerId, seasons] of performanceByPlayer) {
+  performanceAggregates.set(
+    playerId,
+    aggregatePerformance(
+      [...seasons].map(([season, bucket]) => ({
+        season,
+        minutes: bucket.minutes,
+        weightedMinutes: bucket.weightedMinutes,
+        goals: bucket.goals,
+        assists: bucket.assists,
+      })),
+    ),
+  );
+}
+const playersWithPerformance = performanceAggregates.size;
+const performanceDataUsed = appearancesAvailable && playersWithPerformance > 0;
+performanceByPlayer.clear();
+playerIds.clear();
+console.log(
+  performanceDataUsed
+    ? `Performans verisi kullanıldı (${PERFORMANCE_MODEL_VERSION}): ${playersWithPerformance} oyuncu, ${appearanceRows} maç satırı.`
+    : `Uyarı: ${APPEARANCES_SOURCE} bulunamadı ya da kullanılabilir satır yok; performans sinyali devre dışı, kapsül tabanlı yedek model kullanılıyor.`,
+);
+
 if (existsSync(DB_PATH)) rmSync(DB_PATH);
 mkdirSync('app/data', { recursive: true });
 const db = new DatabaseSync(DB_PATH);
@@ -67,6 +159,7 @@ const insert = db.prepare(`INSERT INTO players VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?
 db.exec('BEGIN');
 for (const r of rows) {
   if (!r[ix.player_id]) continue;
+  const playerId = Number(r[ix.player_id]);
   const signal = ratingSignals(
     {
       internationalCaps: Number(r[ix.international_caps]) || 0,
@@ -74,6 +167,7 @@ for (const r of rows) {
       dateOfBirth: r[ix.date_of_birth] || null,
       competitionId: r[ix.current_club_domestic_competition_id] || null,
       lastSeason: Number(r[ix.last_season]) || null,
+      performance: performanceAggregates.get(playerId) ?? null,
     },
     { referenceYear: CURRENT_MIN_SEASON, legend: false },
   );
@@ -106,17 +200,26 @@ const baseSlots = ['GK', 'RB', 'CB', 'LB', 'DM', 'CM', 'AM', 'RW', 'LW', 'ST'];
 const pool = { current: {}, legends: {} };
 for (const era of ['current', 'legends']) for (const slot of baseSlots) pool[era][slot] = [];
 const overlapLimit = Math.floor(POOL_SIZE * OVERLAP_LIMIT_RATIO);
-const bySignalThenName = (a, b) => b.signal - a.signal || a.name.localeCompare(b.name);
+// Factual per-season performance is the primary ranking signal. Players without
+// it (absent from appearances.csv) keep the caps-only fallback score but are
+// ranked below every player that has real data, so an obscure high-caps profile
+// can never displace an elite performer. They stay in the pool so a thin slot
+// remains fillable; when appearances.csv is missing, every candidate has
+// `hasPerformance === false` and the comparator degenerates to the old ordering.
+const byRankThenName = (a, b) =>
+  (b.hasPerformance ? 1 : 0) - (a.hasPerformance ? 1 : 0) || b.signal - a.signal || a.name.localeCompare(b.name);
 for (const r of rows) {
   const slot = slotFor(r[ix.sub_position]);
   if (!slot) continue;
   const lastSeason = Number(r[ix.last_season]) || 0;
+  const performance = performanceAggregates.get(Number(r[ix.player_id])) ?? null;
   const common = {
     id: Number(r[ix.player_id]),
     name: r[ix.name],
     country: r[ix.country_of_citizenship] || '',
     club: r[ix.current_club_name] || '',
     league: r[ix.current_club_domestic_competition_id] || '',
+    hasPerformance: Boolean(performance),
   };
   const signals = {
     internationalCaps: Number(r[ix.international_caps]) || 0,
@@ -124,6 +227,7 @@ for (const r of rows) {
     dateOfBirth: r[ix.date_of_birth] || null,
     competitionId: r[ix.current_club_domestic_competition_id] || null,
     lastSeason: Number(r[ix.last_season]) || null,
+    performance,
   };
   if (lastSeason >= CURRENT_MIN_SEASON)
     pool.current[slot].push({
@@ -152,12 +256,12 @@ const finalizeSlot = (list) =>
     };
   });
 for (const slot of baseSlots) {
-  const current = pool.current[slot].sort(bySignalThenName).slice(0, POOL_SIZE);
+  const current = pool.current[slot].sort(byRankThenName).slice(0, POOL_SIZE);
   const currentIds = new Set(current.map((player) => player.id));
-  const legendCandidates = pool.legends[slot].sort(bySignalThenName);
+  const legendCandidates = pool.legends[slot].sort(byRankThenName);
   const returning = legendCandidates.filter((player) => currentIds.has(player.id)).slice(0, overlapLimit),
     historic = legendCandidates.filter((player) => !currentIds.has(player.id)).slice(0, POOL_SIZE - returning.length);
-  const legends = [...historic, ...returning].sort(bySignalThenName).slice(0, POOL_SIZE);
+  const legends = [...historic, ...returning].sort(byRankThenName).slice(0, POOL_SIZE);
   pool.current[slot] = finalizeSlot(current);
   pool.legends[slot] = finalizeSlot(legends);
 }
@@ -194,6 +298,9 @@ const quality = {
   generatedAt: new Date().toISOString(),
   poolModel: POOL_MODEL_VERSION,
   marketValueUsed: false,
+  performanceDataUsed,
+  performanceModel: PERFORMANCE_MODEL_VERSION,
+  playersWithPerformance,
   sourceRows: Number(count),
   playableProfiles: playable,
   missingSubPosition: rows.filter((r) => !r[ix.sub_position]).length,
@@ -242,7 +349,11 @@ const manifest = {
     name: 'kadro-ihalesi-signal-v1',
     version: POOL_MODEL_VERSION,
     marketValueUsed: false,
-    inputs: ['internationalCaps', 'internationalGoals', 'dateOfBirth', 'competitionId', 'lastSeason'],
+    performanceDataUsed,
+    performanceModel: PERFORMANCE_MODEL_VERSION,
+    inputs: performanceDataUsed
+      ? ['internationalCaps', 'internationalGoals', 'dateOfBirth', 'competitionId', 'lastSeason', 'appearances']
+      : ['internationalCaps', 'internationalGoals', 'dateOfBirth', 'competitionId', 'lastSeason'],
     priceModel: 'priceForRating',
   },
   sourceName: 'transfermarkt-datasets players.csv',
@@ -283,6 +394,8 @@ console.log(
     playable,
     current: Object.values(pool.current).reduce((n, a) => n + a.length, 0),
     legends: Object.values(pool.legends).reduce((n, a) => n + a.length, 0),
+    performanceDataUsed,
+    playersWithPerformance,
     database: DB_PATH,
     pool: POOL_PATH,
   }),

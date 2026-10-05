@@ -1,35 +1,44 @@
 {
   "datasetVersion": "transfermarkt-2026-08-05",
-  "generatorVersion": "pool-v3",
+  "generatorVersion": "pool-v5",
   "scoreVersion": "score-v3",
   "valuationModel": {
     "name": "kadro-ihalesi-signal-v1",
-    "version": "pool-v4",
+    "version": "pool-v5",
     "marketValueUsed": false,
-    "inputs": ["internationalCaps", "internationalGoals", "dateOfBirth", "competitionId", "lastSeason"],
+    "performanceDataUsed": true,
+    "performanceModel": "perf-v1",
+    "inputs": [
+      "internationalCaps",
+      "internationalGoals",
+      "dateOfBirth",
+      "competitionId",
+      "lastSeason",
+      "appearances"
+    ],
     "priceModel": "priceForRating"
   },
   "sourceName": "transfermarkt-datasets players.csv",
   "sourceUrl": "https://github.com/dcaribou/transfermarkt-datasets",
   "retrievedAt": "2026-08-05T04:19:58.000Z",
-  "generatedAt": "2026-08-29T09:52:01.823Z",
+  "generatedAt": "2026-10-05T21:00:32.538Z",
   "coveredSeasons": {
     "current": "2025 ve sonrası",
     "legends": "1996 ve sonrası; aktif oyuncu örtüşmesi pozisyon başına en fazla %12"
   },
   "sourceSha256": "ea3a3903eda7d40cbf265b3e470307ea60622d7d03a7de06a055b2f1d36bc727",
-  "scoreProvenance": "Yayınlanan havuz pool-v3 ile üretildi: o dönemde puan ve fiyatlar piyasa değerlerinden türetiliyordu. Ham piyasa değerleri yayınlanmaz ve pool-v4 modeli hiçbir piyasa değeri okumaz; havuz data:import ile yeniden üretilecektir.",
+  "scoreProvenance": "Puan ve fiyatlar pool-v5 modeliyle üretilir; hiçbir piyasa değeri okunmaz ve ham piyasa değerleri yayınlanmaz.",
   "rights": {
     "structuredDataset": "CC0 1.0 Universal (kamu malı adanması); derleyicinin telif ve veritabanı hakları feragat edilmiştir.",
     "playerPhotos": "Veri setine alınmaz ve yayınlanmaz.",
     "clubLogos": "Veri setine alınmaz ve yayınlanmaz.",
-    "marketValues": "Veri setine alınmaz ve yayınlanmaz.",
     "reviewStatus": "documented",
     "datasetLicense": "CC0-1.0",
     "datasetLicenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
     "datasetLicensedBy": "dcaribou/transfermarkt-datasets",
     "commercialUseAllowed": true,
     "evidenceUrl": "https://raw.githubusercontent.com/dcaribou/transfermarkt-datasets/master/LICENSE",
+    "marketValues": "Veri setine alınmaz ve yayınlanmaz.",
     "reviewScope": "Derleyici lisansı (CC0) ve yayınlanan alanlar doğrulandı; kaynak sağlayıcının kendi kullanım koşulları hukuk incelemesi gerektirir."
   }
 }

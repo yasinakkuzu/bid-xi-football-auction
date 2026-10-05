@@ -10,6 +10,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+import { POOL_MODEL_VERSION } from '../../scripts/lib/pool-model.mjs';
 
 const DB_PATH = 'data/transfermarkt/players.sqlite';
 
@@ -29,13 +30,12 @@ const manifest = JSON.parse(readFileSync('data/transfermarkt/dataset-manifest.js
   scoreProvenance: string;
   valuationModel: { version: string; marketValueUsed: boolean };
 };
-const POOL_MODEL_VERSION = 'pool-v4';
 
 test('the published pool was regenerated with the valuation-free model', () => {
   assert.equal(
     manifest.generatorVersion,
     POOL_MODEL_VERSION,
-    'Yayınlanan havuz eski modelle üretilmiş. players.csv hazır olduğunda "npm run data:import" ile pool-v4 üretin.',
+    `Yayınlanan havuz eski modelle üretilmiş. Kaynak dosyalar hazır olduğunda "npm run data:import" ile ${POOL_MODEL_VERSION} üretin.`,
   );
   assert.equal(quality.poolModel, POOL_MODEL_VERSION);
   assert.equal(quality.marketValueUsed, false);

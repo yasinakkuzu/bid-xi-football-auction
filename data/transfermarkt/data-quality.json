@@ -1,7 +1,10 @@
 {
-  "poolModel": "pool-v3",
-  "marketValueUsed": true,
-  "generatedAt": "2026-08-29T09:52:01.823Z",
+  "generatedAt": "2026-10-05T21:00:32.538Z",
+  "poolModel": "pool-v5",
+  "marketValueUsed": false,
+  "performanceDataUsed": true,
+  "performanceModel": "perf-v1",
+  "playersWithPerformance": 29530,
   "sourceRows": 50149,
   "playableProfiles": 4520,
   "missingSubPosition": 586,
@@ -24,8 +27,8 @@
       "ratio": 0.05
     },
     "CB2": {
-      "count": 6,
-      "ratio": 0.05
+      "count": 5,
+      "ratio": 0.042
     },
     "LB": {
       "count": 28,
@@ -56,7 +59,7 @@
       "ratio": 0.117
     }
   },
-  "leagueCoverage": 0.987,
+  "leagueCoverage": 0.995,
   "tiers": {
     "current": {
       "GK": {

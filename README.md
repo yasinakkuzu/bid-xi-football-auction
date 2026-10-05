@@ -56,10 +56,11 @@ Yayınlanan oyuncu havuzu yalnızca **olgusal alanlar** ve **oyunun kendi skorla
 
 - Piyasa değerleri, oyuncu fotoğrafları ve kulüp logoları veri setine **alınmaz ve yayınlanmaz**.
 - `rating` ve `price`, `scripts/lib/pool-model.mjs` içindeki şeffaf modele göre üretilir; model hiçbir piyasa değeri okumaz (`marketValueUsed: false`).
+- Kalite sinyali **olgusal maç istatistiklerinden** gelir: `data/transfermarkt/appearances.csv` (dakika, gol, asist, turnuva) maç bazında ağırlıklandırılır; "Son 30 Yıl" kadrosu oyuncunun **zirve sezonuna**, "Güncel" kadrosu **son sezonlara** göre sıralanır (`perf-v1`, `marketValueUsed: false`). Dosya yoksa hat verilir ve eski (yalnızca millî maç) modele düşülür.
 - Kaynak derleme **CC0 1.0** lisanslıdır; kanıt `data/transfermarkt/dataset-manifest.json` içinde saklanır ve testle korunur.
 - Kaynağın kendi kullanım koşullarına ilişkin kalıntı risk, [docs/data-rights.md](docs/data-rights.md) içinde açıkça kayıtlıdır.
 
-> **Bekleyen iş:** yayınlanan havuz hâlâ eski modelle (`pool-v3`) üretilmiştir. `data/transfermarkt/players.csv` hazır olduğunda `npm run data:import` ile `pool-v4` üretilmeli ve `npm run test:data` yeşile alınmalıdır.
+> **Kaynak ve yeniden üretim:** havuz `pool-v5` + `perf-v1` ile üretilmiştir (`data/transfermarkt/dataset-manifest.json`). Yeniden üretmek için `data/transfermarkt/players.csv` (zorunlu) ve `appearances.csv` (kalite sinyali için önerilir) dosyalarını koyup `npm run data:import && npm run test:data` çalıştırın. Kaynak dosyalar git tarafından izlenmez; `sourceSha256` hangi snapshot'ın kullanıldığını sabitler.
 
 ## Yaş ve rıza politikası
 
@@ -152,4 +153,4 @@ Dağıtım OpenAI Sites panelinden yapılır (repoda dağıtım CLI'si veya plat
 
    `media` veya `marketValues` sıfırdan büyükse **yeni sürüm canlı değildir**.
 
-5. **Bekleyen veri işi:** `app/data/auction-pool.generated.json` hâlâ `pool-v3`. Kaynak CSV elinizde olduğunda `npm run data:import && npm run test:data` ile `pool-v4` üretin; `test:data` bu işi zorunlu kılar.
+5. **Veri:** havuz `pool-v5`/`perf-v1` ile üretilmiş ve `npm run test:data` yeşildir. Kaynak dosyalar (git tarafından izlenmez) elinizde yoksa mevcut havuz yayına hazırdır; kaynak güncellendiğinde `npm run data:import && npm run test:data` ile yeniden üretin.

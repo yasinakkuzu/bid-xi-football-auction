@@ -45,7 +45,7 @@ const BASE_ROW = {
 const BASE_OPTIONS = { referenceYear: CURRENT_MIN_SEASON, legend: false };
 
 test('the published model constants stay stable', () => {
-  assert.equal(POOL_MODEL_VERSION, 'pool-v4');
+  assert.equal(POOL_MODEL_VERSION, 'pool-v5');
   assert.equal(POOL_SIZE, 240);
   assert.equal(CURRENT_MIN_SEASON, 2025);
   assert.equal(LEGENDS_MIN_SEASON, 1996);
