@@ -1,4 +1,45 @@
-import {NextResponse} from 'next/server';import {createRoom,defaultSettings,digest,joinRoom,rateLimit,RoomError,type RoomSettings} from '../../../lib/rooms';
-const clean=(v:unknown)=>String(v||'').trim().slice(0,24);
-export async function POST(request:Request){try{if(Number(request.headers.get('content-length')||0)>8192)throw new RoomError('BODY_TOO_LARGE','İstek çok büyük',413);const ip=request.headers.get('cf-connecting-ip')||'unknown';await rateLimit(`entry:${await digest(ip)}`,20);const body=await request.json() as {action?:string;code?:string;name?:string;role?:'manager'|'spectator';settings?:RoomSettings};const name=clean(body.name);if(!name)throw new RoomError('NAME_REQUIRED','İsim gerekli',400);if(body.action==='join'){const code=String(body.code||'').trim().toUpperCase();if(!/^[A-Z2-9]{6}$/.test(code))throw new RoomError('INVALID_CODE','Oda kodu geçersiz',400);return NextResponse.json(await joinRoom(code,name,body.role==='spectator'?'spectator':'manager'))}const settings=body.settings||defaultSettings;return NextResponse.json(await createRoom(name,settings))}catch(error){const known=error instanceof RoomError;return NextResponse.json({error:(error as Error).message,code:known?error.code:'REQUEST_FAILED'},{status:known?error.status:400})}}
+import { NextResponse } from 'next/server';
+import {
+  createRoom,
+  defaultSettings,
+  digest,
+  joinRoom,
+  rateLimit,
+  RoomError,
+  type RoomSettings,
+} from '../../../lib/rooms';
 
+type CreateBody = {
+  action?: string;
+  code?: string;
+  name?: string;
+  role?: 'manager' | 'spectator';
+  settings?: RoomSettings;
+};
+
+export async function POST(request: Request) {
+  try {
+    if (Number(request.headers.get('content-length') || 0) > 8192)
+      throw new RoomError('BODY_TOO_LARGE', 'İstek çok büyük', 413);
+    const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+    await rateLimit(`entry:${await digest(ip)}`, 20);
+    const body = (await request.json()) as CreateBody;
+    if (body.action === 'join') {
+      const code = String(body.code || '')
+        .trim()
+        .toUpperCase();
+      if (!/^[A-Z2-9]{6}$/.test(code)) throw new RoomError('INVALID_CODE', 'Oda kodu geçersiz', 400);
+      return NextResponse.json(
+        await joinRoom(code, body.name ?? '', body.role === 'spectator' ? 'spectator' : 'manager'),
+      );
+    }
+    return NextResponse.json(await createRoom(body.name ?? '', body.settings || defaultSettings));
+  } catch (error) {
+    const known = error instanceof RoomError;
+    const headers = known && error.status === 429 ? { 'Retry-After': '30' } : undefined;
+    return NextResponse.json(
+      { error: (error as Error).message, code: known ? error.code : 'REQUEST_FAILED' },
+      { status: known ? error.status : 400, headers },
+    );
+  }
+}

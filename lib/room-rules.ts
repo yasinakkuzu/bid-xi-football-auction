@@ -1,12 +1,25 @@
-import {canPlaceLotBid, type AuctionLot, type Manager} from './game-engine.ts';
+import { canPlaceLotBid, type AuctionLot, type Manager } from './game-engine.ts';
 
-export const LOT_SCOPED_ACTIONS = ['bid', 'pass', 'sell', 'close', 'skip', 'reopen', 'manualSell', 'manualSkip'] as const;
+export const LOT_SCOPED_ACTIONS = [
+  'bid',
+  'pass',
+  'sell',
+  'close',
+  'skip',
+  'reopen',
+  'manualSell',
+  'manualSkip',
+] as const;
 
-export function currentLotId(game: {pool: AuctionLot[]; index: number} | undefined) {
+export function currentLotId(game: { pool: AuctionLot[]; index: number } | undefined) {
   return game?.pool[game.index]?.id;
 }
 
-export function validateLotAction(type: string, lotId: unknown, game: {pool: AuctionLot[]; index: number} | undefined) {
+export function validateLotAction(
+  type: string,
+  lotId: unknown,
+  game: { pool: AuctionLot[]; index: number } | undefined,
+) {
   if (!(LOT_SCOPED_ACTIONS as readonly string[]).includes(type)) return;
   if (typeof lotId !== 'string' || !lotId) throw new Error('LOT_ID_REQUIRED');
   if (lotId !== currentLotId(game)) throw new Error('STALE_LOT');
@@ -30,7 +43,9 @@ export function reopenLiveLot(game: ReopenableGame, timerSeconds: number, now = 
   if (!lot || game.activeTurn !== null || game.leader === null) return false;
   game.passed = [];
   const offer = game.bid + 1;
-  const challenger = game.managers.findIndex((manager, index) => index !== game.leader && canPlaceLotBid(manager, lot, offer, index, game.passed));
+  const challenger = game.managers.findIndex(
+    (manager, index) => index !== game.leader && canPlaceLotBid(manager, lot, offer, index, game.passed),
+  );
   if (challenger < 0) return false;
   game.activeTurn = challenger;
   game.deadline = now + timerSeconds * 1000;

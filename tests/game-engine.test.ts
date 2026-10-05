@@ -1,46 +1,547 @@
-import test from 'node:test';import assert from 'node:assert/strict';
-import {affordableLimit,auctionLimit,auctionOpeningPrice,auctionPassIsSafe,auctionProgressLabel,botMaximumBid,calculateStartingBudget,canPlaceBid,canPlaceLotBid,chooseBotFormation,estimateAuctionSession,fallbackTierForSelection,fillMissingBenchSlot,fillMissingCoaches,fillMissingSlot,FORMATIONS,FORMATION_POSITIONS,hashSeed,isBonusPlayerLot,leaderboardRulesetFingerprint,lotFilled,mixedAuctionLots,openingPrice,optimizeStartingEleven,passIsSafe,positionAuctionLots,preferFresh,randomSlotOrder,rankManagers,RATING_TIERS,resultInsights,safeCsvCell,scoreManager,seededRandom,selectStarsAndScrubs,shuffleSeeded,simulateTournament,standardLeaderboardEligibility,starsAndScrubsTierWeights,validManagerNames,type Footballer,type Manager,type PoolSourceEntry,type RatingTier,type Slot} from '../lib/game-engine.ts';
-import {COACHES} from '../lib/coaches.ts';
-import {customPoolOptions,matchesCustomPool} from '../lib/club-leagues.ts';
-const slots:Slot[]=['GK','RB','CB1','CB2','LB','DM','CM','AM','RW','LW','ST'];
-const player=(slot:Slot,rating=85,price=50,i=0):Footballer=>({id:`${slot}-${i}`,name:`P${i}`,slot,role:slot,rating,price,nation:'TR'});
-const reserveCandidate=(i:number):PoolSourceEntry=>({id:i,name:`Reserve ${i}`,country:'Türkiye',club:'Serbest',rating:68+i%3,price:5,value:1000+i,image:`https://example.com/${i}.png`});
-test('seeded shuffle is reproducible and preserves members',()=>{const a=shuffleSeeded([1,2,3,4,5],seededRandom(hashSeed('game-1')));const b=shuffleSeeded([1,2,3,4,5],seededRandom(hashSeed('game-1')));assert.deepEqual(a,b);assert.deepEqual([...a].sort(),[1,2,3,4,5])});
-test('reserve protects the remaining squad slots and a coach budget',()=>{const m:Manager={id:0,name:'A',budget:100,squad:{GK:player('GK')},spent:0};assert.equal(affordableLimit(m),50)});
-test('opening price adapts to what managers can safely afford',()=>{const lot=player('ST',90,120);const ms:Manager[]=[{id:0,name:'A',budget:60,squad:{},spent:0},{id:1,name:'B',budget:80,squad:{},spent:0}];assert.equal(openingPrice(lot,ms),25)});
-test('every eligible room manager can place a live bid',()=>{const lot=player('ST',90,25),guest:Manager={id:1,name:'Guest',budget:100,squad:{},spent:0};assert.equal(canPlaceBid(guest,lot,25,1),true);assert.equal(canPlaceBid(guest,lot,25,1,[1]),false);guest.squad.ST=lot;assert.equal(canPlaceBid(guest,lot,25,1),false)});
-test('the final regular candidate is detected for automatic fallback',()=>{const pool=[player('GK',80,20,1),player('GK',80,20,2)];const ms:Manager[]=[{id:0,name:'A',budget:100,squad:{},spent:0},{id:1,name:'B',budget:100,squad:{},spent:0}];assert.equal(passIsSafe(pool,0,ms),false);pool.push(player('GK',80,20,3));assert.equal(passIsSafe(pool,0,ms),true)});
-test('every simulated manager can finish eleven slots without negative budget',()=>{for(let run=0;run<1000;run++){const budget=300;const ms:Array<Manager>=Array.from({length:2},(_,id)=>({id,name:`M${id}`,budget,squad:{},spent:0}));for(const slot of slots)for(const m of ms){const p=player(slot,75+run%20,5,run);m.squad[slot]=p;m.budget-=p.price;m.spent+=p.price}assert.equal(Object.keys(ms[0].squad).length,11);assert.ok(ms.every(m=>m.budget>=0))}});
-test('score ranking uses hundredth precision and deterministic tie breakers',()=>{const squad=Object.fromEntries(slots.map((s,i)=>[s,player(s,80+i%3,5,i)]));const ranked=rankManagers([{id:0,name:'A',budget:100,squad,spent:55},{id:1,name:'B',budget:90,squad:{...squad,ST:player('ST',90)},spent:65}]);assert.equal(ranked[0].name,'B');assert.equal(Number.isInteger(ranked[0].score*100),true)});
-test('names and CSV cells are hardened',()=>{assert.equal(validManagerNames(['Yasin',' yasin ']),false);assert.equal(validManagerNames(['','Yakup']),false);assert.match(safeCsvCell('=1+1'),/^"'/)});
-test('every standard pool starts with one billion',()=>{const pool=slots.flatMap(s=>[player(s,80,30),player(s,82,40,1)]);assert.equal(calculateStartingBudget(pool,'all'),1000);assert.equal(calculateStartingBudget(pool,'best'),1000)});
-test('recent lots are avoided until fresh candidates run out',()=>{const candidates=['a','b','c','d'].map(id=>({id})),random=seededRandom(hashSeed('fresh'));const selected=preferFresh(candidates,new Set(['a','b']),3,random);assert.equal(selected.filter(x=>x.id==='a'||x.id==='b').length,1);assert.deepEqual(new Set(selected.map(x=>x.id)),new Set(['c','d',selected.find(x=>x.id==='a'||x.id==='b')!.id]))});
-test('auction names are mixed and the surprise card can be strong or weak',()=>{const candidates=Array.from({length:40},(_,i)=>({id:`p-${i}`,rating:100-i})),lastRatings:number[]=[];let mixed=false;for(let run=0;run<80;run++){const lots=mixedAuctionLots(candidates,new Set<string>(),5,seededRandom(hashSeed(`mixed-${run}`))),ratings=lots.map(lot=>lot.rating);lastRatings.push(ratings.at(-1)!);if(ratings.some((rating,index)=>index>0&&rating>ratings[index-1]))mixed=true}assert.equal(mixed,true);assert.ok(lastRatings.some(rating=>rating>=90));assert.ok(lastRatings.some(rating=>rating<=75))});
-test('position blocks start in different random orders across games',()=>{const firstSlots=new Set(Array.from({length:20},(_,run)=>randomSlotOrder(slots,seededRandom(hashSeed(`slot-order-${run}`)))[0]));assert.ok(firstSlots.size>3);for(let run=0;run<5;run++)assert.deepEqual([...randomSlotOrder(slots,seededRandom(hashSeed(`all-slots-${run}`)))].sort(),[...slots].sort())});
-test('position groups can contain several similarly rated stars without a quota',()=>{const stars=Array.from({length:24},(_,i)=>({id:`star-${i}`,rating:93+(i%8)*.35})),lots=positionAuctionLots(stars,new Set<string>(),6,seededRandom(hashSeed('clustered-strikers')),1,1.2),ratings=lots.map(lot=>lot.rating);assert.equal(lots.length,6);assert.equal(lots.filter(lot=>lot.rating>=93).length,6);assert.ok(Math.max(...ratings)-Math.min(...ratings)<=2.4)});
-test('coach auction uses remaining budget and prevents duplicate coaches',()=>{const coach=COACHES[0],manager:Manager={id:0,name:'A',budget:45,squad:{},spent:0};assert.equal(auctionOpeningPrice(coach,[manager]),coach.price);assert.equal(canPlaceLotBid(manager,coach,coach.price,0),true);assert.equal(auctionPassIsSafe([coach,COACHES[1]],0,[manager]),true);manager.coach=coach;assert.equal(canPlaceLotBid(manager,COACHES[1],5,0),false)});
-test('a compatible coach can only add a positive team contribution',()=>{const squad=Object.fromEntries(slots.map((slot,i)=>[slot,player(slot,86+i%4,10,i)]));const base:Manager={id:0,name:'A',budget:100,squad,spent:110},withCoach:Manager={...base,budget:60,coach:COACHES.find(c=>c.preferredFormation==='4-2-3-1')};const plain=scoreManager(base),coached=scoreManager(withCoach);assert.ok(coached.coachBoost>0);assert.ok(coached.score>plain.score);assert.ok(coached.coachFit>=0)});
-test('missing positions use the tier immediately below the selected pool for five million',()=>{const existing=player('GK'),managers:Manager[]=[{id:0,name:'A',budget:100,squad:{},spent:0},{id:1,name:'B',budget:100,squad:{},spent:0},{id:2,name:'C',budget:100,squad:{GK:existing},spent:0}],candidates=Array.from({length:30},(_,i)=>({...reserveCandidate(i+1),rating:86+i%4}));const result=fillMissingSlot(managers,'GK',candidates,'Kaleci','fallback-test',[],['Süperstar','Elit']);assert.equal(fallbackTierForSelection(['Süperstar','Elit']),'Çok iyi');assert.equal(result.assignments.length,2);assert.equal(new Set(result.assignments.map(item=>item.player.name)).size,2);assert.ok(result.managers.slice(0,2).every(manager=>manager.budget===95&&manager.spent===5));assert.ok(result.managers.slice(0,2).every(manager=>manager.squad.GK?.price===5&&manager.squad.GK!.rating>=86&&manager.squad.GK!.rating<90));assert.match(result.managers[0].squad.GK?.role||'',/Otomatik Çok iyi/);assert.equal(result.managers[2].squad.GK?.id,existing.id)});
-test('fallback completion guarantees eleven players without negative budget',()=>{let managers:Manager[]=[{id:0,name:'A',budget:100,squad:{},spent:0},{id:1,name:'B',budget:100,squad:{},spent:0}];for(const slot of slots)managers=fillMissingSlot(managers,slot,Array.from({length:30},(_,i)=>reserveCandidate(i+1)),slot,`all-${slot}`).managers;assert.ok(managers.every(manager=>Object.keys(manager.squad).length===11));assert.ok(managers.every(manager=>manager.budget===45&&manager.spent===55))});
-test('bench auctions reserve the other three substitutes and complete all four roles',()=>{const squad=Object.fromEntries(slots.map((slot,i)=>[slot,player(slot,82,5,i)])),manager:Manager={id:0,name:'A',budget:250,squad,bench:{},spent:55},goalkeeper:Footballer={...player('GK',84,30,70),benchSlot:'BGK',role:'Yedek Kaleci'};assert.equal(auctionLimit(manager,goalkeeper),230);assert.equal(canPlaceLotBid(manager,goalkeeper,230,0),true);manager.bench!.BGK=goalkeeper;assert.equal(lotFilled(manager,goalkeeper),true);let managers:Manager[]=[manager];for(const [benchSlot,slot] of [['BDEF','CB1'],['BMID','CM'],['BFWD','ST']] as const)managers=fillMissingBenchSlot(managers,benchSlot,Array.from({length:30},(_,i)=>({...reserveCandidate(i+1),slot})),benchSlot,`bench-${benchSlot}`).managers;assert.equal(Object.keys(managers[0].bench||{}).length,4);assert.ok(managers[0].budget>=0)});
-test('every team receives a distinct lower-tier coach when the coach auction ends empty',()=>{const managers:Manager[]=[{id:0,name:'A',budget:20,squad:{},spent:0},{id:1,name:'B',budget:3,squad:{},spent:0,coach:COACHES[0]}],result=fillMissingCoaches(managers,COACHES,'coach-final');assert.equal(result.assignments.length,1);assert.match(result.managers[0].coach?.name||'',/Geçici/);assert.ok((result.managers[0].coach?.rating||100)<=72);assert.notEqual(result.managers[0].coach?.name.replace(' (Geçici)',''),COACHES[0].name);assert.equal(result.managers[0].budget,15);assert.equal(result.managers[1].coach?.id,COACHES[0].id)});
-test('strong substitutes add a limited squad-depth score',()=>{const squad=Object.fromEntries(slots.map((slot,i)=>[slot,player(slot,86,10,i)])),plain=scoreManager({id:0,name:'A',budget:50,squad,spent:110}),deep=scoreManager({id:1,name:'B',budget:50,squad,spent:110,bench:{BGK:{...player('GK',90,5,20),benchSlot:'BGK'},BDEF:{...player('CB1',90,5,21),benchSlot:'BDEF'},BMID:{...player('CM',90,5,22),benchSlot:'BMID'},BFWD:{...player('ST',90,5,23),benchSlot:'BFWD'}}});assert.ok(deep.benchDepth>0&&deep.benchDepth<=1.6);assert.ok(deep.score>plain.score)});
-test('a stronger substitute is promoted into its eligible starting line',()=>{const squad=Object.fromEntries(slots.map((slot,i)=>[slot,player(slot,82,10,i)])),manager:Manager={id:1,name:'B',budget:50,squad,spent:110,bench:{BDEF:{...player('CB1',94,5,21),benchSlot:'BDEF'},BFWD:{...player('ST',80,5,23),benchSlot:'BFWD'}}},optimized=optimizeStartingEleven(manager);assert.equal(optimized.squad.RB?.rating,94);assert.equal(optimized.bench?.BDEF?.rating,82);assert.equal(optimized.squad.ST?.rating,82);const scored=scoreManager(manager);assert.equal(scored.squad.RB?.rating,94);assert.ok(scored.starterImpact>scored.benchDepth)});
-test('every auction note includes the group order and player name',()=>{const first=player('RB',88,20,1),second=player('RB',87,20,2),bench={...player('ST',86,20,3),benchSlot:'BFWD' as const,role:'Yedek Forvet'};assert.equal(auctionProgressLabel([first,second,bench],1),'RB pozisyonu için 2. oyuncu: P2');assert.equal(auctionProgressLabel([first,second,bench],2),'Yedek Forvet pozisyonu için 1. oyuncu: P3')});
-test('the extra player after every manager is marked as the bonus lot',()=>{const pool=[player('ST',90,20,1),player('ST',89,20,2),player('ST',88,20,3),player('RB',87,20,4)];assert.equal(isBonusPlayerLot(pool,1,2),false);assert.equal(isBonusPlayerLot(pool,2,2),true);assert.equal(isBonusPlayerLot(pool,3,2),false)});
-test('remaining budget changes team score by at most two tenths',()=>{const squad=Object.fromEntries(slots.map((slot,i)=>[slot,player(slot,86+i%4,10,i)])),low=scoreManager({id:0,name:'Low',budget:0,squad,spent:110}),high=scoreManager({id:1,name:'High',budget:1000,squad,spent:110});assert.ok(high.score-low.score<=.2)});
-test('result insights explain the top two and predict a score',()=>{const firstSquad=Object.fromEntries(slots.map((slot,i)=>[slot,player(slot,91+i%3,10,i)])),secondSquad=Object.fromEntries(slots.map((slot,i)=>[slot,player(slot,87+i%3,10,i)])),ranked=rankManagers([{id:0,name:'Lider',budget:30,squad:firstSquad,spent:110},{id:1,name:'Takipçi',budget:35,squad:secondSquad,spent:110}]),insights=resultInsights(ranked);assert.match(insights.winner,/Lider/);assert.match(insights.runnerUp,/Takipçi/);assert.match(insights.match.scoreLine,/Lider \d–\d Takipçi/);assert.match(insights.match.summary,/Tahmini maçta/)});
-test('all supported formations place exactly eleven canonical slots',()=>{for(const formation of FORMATIONS){assert.deepEqual(Object.keys(FORMATION_POSITIONS[formation]).sort(),[...slots].sort());assert.equal(new Set(Object.values(FORMATION_POSITIONS[formation]).map(point=>`${point.left}-${point.top}`)).size,11)}});
-test('rule based bots are deterministic, affordable and cannot use hidden ratings',()=>{const manager:Manager={id:7,name:'AI',budget:120,squad:{},spent:0,isBot:true,botStyle:'balanced'},weak=player('ST',70,40,1),star=player('ST',99,40,2);assert.equal(botMaximumBid(manager,weak,'room',false),botMaximumBid(manager,star,'room',false));const amount=botMaximumBid(manager,star,'room',true);assert.ok(amount<=auctionLimit(manager,star));assert.equal(amount,botMaximumBid(manager,star,'room',true))});
-test('AI difficulty creates ordered bidding pressure',()=>{const lot=player('ST',91,35,8),base:Manager={id:3,name:'AI',budget:180,squad:{},spent:0,isBot:true},beginner=botMaximumBid({...base,botStyle:'value'},lot,'difficulty'),average=botMaximumBid({...base,botStyle:'balanced'},lot,'difficulty'),expert=botMaximumBid({...base,botStyle:'aggressive'},lot,'difficulty');assert.ok(beginner<average);assert.ok(average<expert)});
-test('AI pressure is ordered across a fixed-seed simulation and never breaks reserve safety',()=>{const lot=player('ST',91,35,8),base:Manager={id:3,name:'AI',budget:180,squad:{},spent:0,isBot:true},median=(values:number[])=>[...values].sort((a,b)=>a-b)[Math.floor(values.length/2)],bids=(style:Manager['botStyle'])=>Array.from({length:101},(_,run)=>botMaximumBid({...base,botStyle:style},lot,`simulation-${run}`,true,{lotIndex:44,totalLots:80,remainingLotsInGroup:2,managersMissingGroup:2}));const beginner=bids('value'),average=bids('balanced'),expert=bids('aggressive');assert.ok(median(beginner)<median(average));assert.ok(median(average)<median(expert));for(const amount of [...beginner,...average,...expert])assert.ok(amount>=0&&amount<=auctionLimit(base,lot))});
-test('hidden-rating AI decisions are invariant when only the secret rating changes',()=>{const manager:Manager={id:9,name:'AI',budget:190,squad:{},spent:0,isBot:true,botStyle:'aggressive'},weak=player('ST',70,40,44),star={...weak,rating:99};const context={lotIndex:20,totalLots:70,remainingLotsInGroup:3,managersMissingGroup:2};assert.equal(botMaximumBid(manager,weak,'hidden-v2',false,context),botMaximumBid(manager,star,'hidden-v2',false,context));assert.notEqual(botMaximumBid(manager,weak,'visible-v2',true,context),botMaximumBid(manager,star,'visible-v2',true,context))});
-test('bot formation choice follows squad sector strengths',()=>{const squad=Object.fromEntries(slots.map((slot,i)=>[slot,player(slot,['RW','LW','ST'].includes(slot)?94:82,10,i)]));assert.equal(chooseBotFormation({id:1,name:'AI',budget:0,spent:0,squad}),'4-3-3')});
-test('stars and scrubs selection respects tiers and favors both selected extremes',()=>{const tiers:RatingTier[]=['Süperstar','Elit','Çok iyi','İyi','Ortalama','Standart'],ratings=[94,91,87,83,79,74],candidates=Array.from({length:600},(_,i)=>({id:i,rating:ratings[i%ratings.length]})),selected:RatingTier[]=['Süperstar','Çok iyi','Standart'],weights=starsAndScrubsTierWeights(selected);assert.equal(weights.Elit,0);const picked=selectStarsAndScrubs(candidates,selected,180,seededRandom(hashSeed('stars-scrubs'))),counts=Object.fromEntries(tiers.map(tier=>[tier,picked.filter(item=>item.rating>=0&&((item.rating>=93?'Süperstar':item.rating>=90?'Elit':item.rating>=86?'Çok iyi':item.rating>=82?'İyi':item.rating>=77?'Ortalama':'Standart')===tier)).length]));assert.equal(picked.every(item=>[94,87,74].includes(item.rating)),true);assert.ok(counts.Süperstar>counts['Çok iyi']);assert.ok(counts.Standart>counts['Çok iyi'])});
-test('session estimate includes manager plus one lots for starters, bench and coach',()=>{const normal=estimateAuctionSession({managerCount:4}),withBench=estimateAuctionSession({managerCount:4,benchEnabled:true});assert.deepEqual({groups:normal.groups,lots:normal.lots},{groups:12,lots:60});assert.deepEqual({groups:withBench.groups,lots:withBench.lots},{groups:16,lots:80});assert.ok(normal.quickMinutes<normal.minutes)});
-test('standard leaderboard rules are stable and exclude assisted or incomparable games',()=>{const standard={era:'current' as const,selectedTiers:[...RATING_TIERS] as RatingTier[],benchEnabled:false,mode:'online' as const,auctionMode:'live' as const,scenarioId:'classic',humanManagerCount:4,aiManagerCount:0,timerSeconds:20,bidIncrement:5,datasetVersion:'data-v1',scoreVersion:'score-v3'},first=standardLeaderboardEligibility(standard);assert.equal(first.eligible,true);assert.equal(first.fingerprint,leaderboardRulesetFingerprint({...standard,selectedTiers:[...RATING_TIERS].reverse()}));const assisted=standardLeaderboardEligibility({...standard,customPool:true,automationUsed:true,aiManagerCount:1});assert.equal(assisted.eligible,false);assert.equal(assisted.reasons.length,3);assert.equal(standardLeaderboardEligibility({...standard,humanManagerCount:3}).eligible,false);assert.notEqual(first.fingerprint,leaderboardRulesetFingerprint({...standard,datasetVersion:'data-v2'}))});
-test('the published team score always remains within zero and one hundred',()=>{const squad=Object.fromEntries(slots.map((slot,i)=>[slot,player(slot,97,10,i)])),bench={BGK:{...player('GK',97,5,21),benchSlot:'BGK' as const},BDEF:{...player('CB1',97,5,22),benchSlot:'BDEF' as const},BMID:{...player('CM',97,5,23),benchSlot:'BMID' as const},BFWD:{...player('ST',97,5,24),benchSlot:'BFWD' as const}},score=scoreManager({id:1,name:'Max',budget:1000,spent:0,squad,bench,coach:COACHES[0]});assert.ok(score.score>=0&&score.score<=100);assert.equal(score.score,100)});
-test('mini league is deterministic and schedules every pair once',()=>{const managers=Array.from({length:4},(_,id)=>({id,name:`M${id}`,budget:20,spent:110,squad:Object.fromEntries(slots.map((slot,i)=>[slot,player(slot,84+id,10,i+id*20)]))}));const first=simulateTournament(managers,'season-1'),second=simulateTournament(managers,'season-1');assert.deepEqual(first,second);assert.equal(first.matches.length,6);assert.equal(first.table.reduce((sum,row)=>sum+row.played,0),12)});
-test('custom pool search returns the matching club before its league and supports multiple filters',()=>{const results=customPoolOptions(['Fenerbahce','Galatasaray','Arsenal FC'],'Fenerbahçe');assert.equal(results[0]?.type,'club');assert.equal(results[0]?.name,'Fenerbahce');assert.equal(results[1]?.name,'Türkiye Ligi');assert.equal(matchesCustomPool('Fenerbahce',[results[0],{type:'league',name:'İngiltere Premier Ligi'}]),true);assert.equal(matchesCustomPool('Arsenal FC',[{type:'league',name:'İngiltere Premier Ligi'}]),true)});
-test('custom pool search uses dataset league codes beyond the static club catalog',()=>{const results=customPoolOptions([{club:'Seattle Sounders FC',league:'MLS1'},{club:'Inter Miami CF',league:'MLS1'}],'Seattle');assert.equal(results[0]?.name,'Seattle Sounders FC');assert.equal(results[0]?.league,'ABD MLS');const league=results.find(result=>result.type==='league');assert.equal(league?.code,'MLS1');assert.equal(matchesCustomPool('Inter Miami CF',[league!],'MLS1'),true)});
-
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  affordableLimit,
+  auctionLimit,
+  auctionOpeningPrice,
+  auctionPassIsSafe,
+  auctionProgressLabel,
+  botMaximumBid,
+  calculateStartingBudget,
+  canPlaceBid,
+  canPlaceLotBid,
+  chooseBotFormation,
+  estimateAuctionSession,
+  fallbackTierForSelection,
+  fillMissingBenchSlot,
+  fillMissingCoaches,
+  fillMissingSlot,
+  FORMATIONS,
+  FORMATION_POSITIONS,
+  hashSeed,
+  isBonusPlayerLot,
+  leaderboardRulesetFingerprint,
+  lotFilled,
+  mixedAuctionLots,
+  openingPrice,
+  optimizeStartingEleven,
+  passIsSafe,
+  positionAuctionLots,
+  preferFresh,
+  randomSlotOrder,
+  rankManagers,
+  RATING_TIERS,
+  resultInsights,
+  safeCsvCell,
+  scoreManager,
+  seededRandom,
+  selectStarsAndScrubs,
+  shuffleSeeded,
+  simulateTournament,
+  standardLeaderboardEligibility,
+  starsAndScrubsTierWeights,
+  validManagerNames,
+  type Footballer,
+  type Manager,
+  type PoolSourceEntry,
+  type RatingTier,
+  type Slot,
+} from '../lib/game-engine.ts';
+import { COACHES } from '../lib/coaches.ts';
+import { customPoolOptions, matchesCustomPool } from '../lib/club-leagues.ts';
+const slots: Slot[] = ['GK', 'RB', 'CB1', 'CB2', 'LB', 'DM', 'CM', 'AM', 'RW', 'LW', 'ST'];
+const player = (slot: Slot, rating = 85, price = 50, i = 0): Footballer => ({
+  id: `${slot}-${i}`,
+  name: `P${i}`,
+  slot,
+  role: slot,
+  rating,
+  price,
+  nation: 'TR',
+});
+const reserveCandidate = (i: number): PoolSourceEntry => ({
+  id: i,
+  name: `Reserve ${i}`,
+  country: 'Türkiye',
+  club: 'Serbest',
+  rating: 68 + (i % 3),
+  price: 5,
+  value: 1000 + i,
+  image: `https://example.com/${i}.png`,
+});
+test('seeded shuffle is reproducible and preserves members', () => {
+  const a = shuffleSeeded([1, 2, 3, 4, 5], seededRandom(hashSeed('game-1')));
+  const b = shuffleSeeded([1, 2, 3, 4, 5], seededRandom(hashSeed('game-1')));
+  assert.deepEqual(a, b);
+  assert.deepEqual([...a].sort(), [1, 2, 3, 4, 5]);
+});
+test('reserve protects the remaining squad slots and a coach budget', () => {
+  const m: Manager = { id: 0, name: 'A', budget: 100, squad: { GK: player('GK') }, spent: 0 };
+  assert.equal(affordableLimit(m), 50);
+});
+test('opening price adapts to what managers can safely afford', () => {
+  const lot = player('ST', 90, 120);
+  const ms: Manager[] = [
+    { id: 0, name: 'A', budget: 60, squad: {}, spent: 0 },
+    { id: 1, name: 'B', budget: 80, squad: {}, spent: 0 },
+  ];
+  assert.equal(openingPrice(lot, ms), 25);
+});
+test('every eligible room manager can place a live bid', () => {
+  const lot = player('ST', 90, 25),
+    guest: Manager = { id: 1, name: 'Guest', budget: 100, squad: {}, spent: 0 };
+  assert.equal(canPlaceBid(guest, lot, 25, 1), true);
+  assert.equal(canPlaceBid(guest, lot, 25, 1, [1]), false);
+  guest.squad.ST = lot;
+  assert.equal(canPlaceBid(guest, lot, 25, 1), false);
+});
+test('the final regular candidate is detected for automatic fallback', () => {
+  const pool = [player('GK', 80, 20, 1), player('GK', 80, 20, 2)];
+  const ms: Manager[] = [
+    { id: 0, name: 'A', budget: 100, squad: {}, spent: 0 },
+    { id: 1, name: 'B', budget: 100, squad: {}, spent: 0 },
+  ];
+  assert.equal(passIsSafe(pool, 0, ms), false);
+  pool.push(player('GK', 80, 20, 3));
+  assert.equal(passIsSafe(pool, 0, ms), true);
+});
+test('every simulated manager can finish eleven slots without negative budget', () => {
+  for (let run = 0; run < 1000; run++) {
+    const budget = 300;
+    const ms: Array<Manager> = Array.from({ length: 2 }, (_, id) => ({
+      id,
+      name: `M${id}`,
+      budget,
+      squad: {},
+      spent: 0,
+    }));
+    for (const slot of slots)
+      for (const m of ms) {
+        const p = player(slot, 75 + (run % 20), 5, run);
+        m.squad[slot] = p;
+        m.budget -= p.price;
+        m.spent += p.price;
+      }
+    assert.equal(Object.keys(ms[0].squad).length, 11);
+    assert.ok(ms.every((m) => m.budget >= 0));
+  }
+});
+test('score ranking uses hundredth precision and deterministic tie breakers', () => {
+  const squad = Object.fromEntries(slots.map((s, i) => [s, player(s, 80 + (i % 3), 5, i)]));
+  const ranked = rankManagers([
+    { id: 0, name: 'A', budget: 100, squad, spent: 55 },
+    { id: 1, name: 'B', budget: 90, squad: { ...squad, ST: player('ST', 90) }, spent: 65 },
+  ]);
+  assert.equal(ranked[0].name, 'B');
+  assert.equal(Number.isInteger(ranked[0].score * 100), true);
+});
+test('names and CSV cells are hardened', () => {
+  assert.equal(validManagerNames(['Yasin', ' yasin ']), false);
+  assert.equal(validManagerNames(['', 'Yakup']), false);
+  assert.match(safeCsvCell('=1+1'), /^"'/);
+});
+test('every standard pool starts with one billion', () => {
+  const pool = slots.flatMap((s) => [player(s, 80, 30), player(s, 82, 40, 1)]);
+  assert.equal(calculateStartingBudget(pool, 'all'), 1000);
+  assert.equal(calculateStartingBudget(pool, 'best'), 1000);
+});
+test('recent lots are avoided until fresh candidates run out', () => {
+  const candidates = ['a', 'b', 'c', 'd'].map((id) => ({ id })),
+    random = seededRandom(hashSeed('fresh'));
+  const selected = preferFresh(candidates, new Set(['a', 'b']), 3, random);
+  assert.equal(selected.filter((x) => x.id === 'a' || x.id === 'b').length, 1);
+  assert.deepEqual(
+    new Set(selected.map((x) => x.id)),
+    new Set(['c', 'd', selected.find((x) => x.id === 'a' || x.id === 'b')!.id]),
+  );
+});
+test('auction names are mixed and the surprise card can be strong or weak', () => {
+  const candidates = Array.from({ length: 40 }, (_, i) => ({ id: `p-${i}`, rating: 100 - i })),
+    lastRatings: number[] = [];
+  let mixed = false;
+  for (let run = 0; run < 80; run++) {
+    const lots = mixedAuctionLots(candidates, new Set<string>(), 5, seededRandom(hashSeed(`mixed-${run}`))),
+      ratings = lots.map((lot) => lot.rating);
+    lastRatings.push(ratings.at(-1)!);
+    if (ratings.some((rating, index) => index > 0 && rating > ratings[index - 1])) mixed = true;
+  }
+  assert.equal(mixed, true);
+  assert.ok(lastRatings.some((rating) => rating >= 90));
+  assert.ok(lastRatings.some((rating) => rating <= 75));
+});
+test('position blocks start in different random orders across games', () => {
+  const firstSlots = new Set(
+    Array.from({ length: 20 }, (_, run) => randomSlotOrder(slots, seededRandom(hashSeed(`slot-order-${run}`)))[0]),
+  );
+  assert.ok(firstSlots.size > 3);
+  for (let run = 0; run < 5; run++)
+    assert.deepEqual([...randomSlotOrder(slots, seededRandom(hashSeed(`all-slots-${run}`)))].sort(), [...slots].sort());
+});
+test('position groups can contain several similarly rated stars without a quota', () => {
+  const stars = Array.from({ length: 24 }, (_, i) => ({ id: `star-${i}`, rating: 93 + (i % 8) * 0.35 })),
+    lots = positionAuctionLots(stars, new Set<string>(), 6, seededRandom(hashSeed('clustered-strikers')), 1, 1.2),
+    ratings = lots.map((lot) => lot.rating);
+  assert.equal(lots.length, 6);
+  assert.equal(lots.filter((lot) => lot.rating >= 93).length, 6);
+  assert.ok(Math.max(...ratings) - Math.min(...ratings) <= 2.4);
+});
+test('coach auction uses remaining budget and prevents duplicate coaches', () => {
+  const coach = COACHES[0],
+    manager: Manager = { id: 0, name: 'A', budget: 45, squad: {}, spent: 0 };
+  assert.equal(auctionOpeningPrice(coach, [manager]), coach.price);
+  assert.equal(canPlaceLotBid(manager, coach, coach.price, 0), true);
+  assert.equal(auctionPassIsSafe([coach, COACHES[1]], 0, [manager]), true);
+  manager.coach = coach;
+  assert.equal(canPlaceLotBid(manager, COACHES[1], 5, 0), false);
+});
+test('a compatible coach can only add a positive team contribution', () => {
+  const squad = Object.fromEntries(slots.map((slot, i) => [slot, player(slot, 86 + (i % 4), 10, i)]));
+  const base: Manager = { id: 0, name: 'A', budget: 100, squad, spent: 110 },
+    withCoach: Manager = { ...base, budget: 60, coach: COACHES.find((c) => c.preferredFormation === '4-2-3-1') };
+  const plain = scoreManager(base),
+    coached = scoreManager(withCoach);
+  assert.ok(coached.coachBoost > 0);
+  assert.ok(coached.score > plain.score);
+  assert.ok(coached.coachFit >= 0);
+});
+test('missing positions use the tier immediately below the selected pool for five million', () => {
+  const existing = player('GK'),
+    managers: Manager[] = [
+      { id: 0, name: 'A', budget: 100, squad: {}, spent: 0 },
+      { id: 1, name: 'B', budget: 100, squad: {}, spent: 0 },
+      { id: 2, name: 'C', budget: 100, squad: { GK: existing }, spent: 0 },
+    ],
+    candidates = Array.from({ length: 30 }, (_, i) => ({ ...reserveCandidate(i + 1), rating: 86 + (i % 4) }));
+  const result = fillMissingSlot(managers, 'GK', candidates, 'Kaleci', 'fallback-test', [], ['Süperstar', 'Elit']);
+  assert.equal(fallbackTierForSelection(['Süperstar', 'Elit']), 'Çok iyi');
+  assert.equal(result.assignments.length, 2);
+  assert.equal(new Set(result.assignments.map((item) => item.player.name)).size, 2);
+  assert.ok(result.managers.slice(0, 2).every((manager) => manager.budget === 95 && manager.spent === 5));
+  assert.ok(
+    result.managers
+      .slice(0, 2)
+      .every(
+        (manager) => manager.squad.GK?.price === 5 && manager.squad.GK!.rating >= 86 && manager.squad.GK!.rating < 90,
+      ),
+  );
+  assert.match(result.managers[0].squad.GK?.role || '', /Otomatik Çok iyi/);
+  assert.equal(result.managers[2].squad.GK?.id, existing.id);
+});
+test('fallback completion guarantees eleven players without negative budget', () => {
+  let managers: Manager[] = [
+    { id: 0, name: 'A', budget: 100, squad: {}, spent: 0 },
+    { id: 1, name: 'B', budget: 100, squad: {}, spent: 0 },
+  ];
+  for (const slot of slots)
+    managers = fillMissingSlot(
+      managers,
+      slot,
+      Array.from({ length: 30 }, (_, i) => reserveCandidate(i + 1)),
+      slot,
+      `all-${slot}`,
+    ).managers;
+  assert.ok(managers.every((manager) => Object.keys(manager.squad).length === 11));
+  assert.ok(managers.every((manager) => manager.budget === 45 && manager.spent === 55));
+});
+test('bench auctions reserve the other three substitutes and complete all four roles', () => {
+  const squad = Object.fromEntries(slots.map((slot, i) => [slot, player(slot, 82, 5, i)])),
+    manager: Manager = { id: 0, name: 'A', budget: 250, squad, bench: {}, spent: 55 },
+    goalkeeper: Footballer = { ...player('GK', 84, 30, 70), benchSlot: 'BGK', role: 'Yedek Kaleci' };
+  assert.equal(auctionLimit(manager, goalkeeper), 230);
+  assert.equal(canPlaceLotBid(manager, goalkeeper, 230, 0), true);
+  manager.bench!.BGK = goalkeeper;
+  assert.equal(lotFilled(manager, goalkeeper), true);
+  let managers: Manager[] = [manager];
+  for (const [benchSlot, slot] of [
+    ['BDEF', 'CB1'],
+    ['BMID', 'CM'],
+    ['BFWD', 'ST'],
+  ] as const)
+    managers = fillMissingBenchSlot(
+      managers,
+      benchSlot,
+      Array.from({ length: 30 }, (_, i) => ({ ...reserveCandidate(i + 1), slot })),
+      benchSlot,
+      `bench-${benchSlot}`,
+    ).managers;
+  assert.equal(Object.keys(managers[0].bench || {}).length, 4);
+  assert.ok(managers[0].budget >= 0);
+});
+test('every team receives a distinct lower-tier coach when the coach auction ends empty', () => {
+  const managers: Manager[] = [
+      { id: 0, name: 'A', budget: 20, squad: {}, spent: 0 },
+      { id: 1, name: 'B', budget: 3, squad: {}, spent: 0, coach: COACHES[0] },
+    ],
+    result = fillMissingCoaches(managers, COACHES, 'coach-final');
+  assert.equal(result.assignments.length, 1);
+  assert.match(result.managers[0].coach?.name || '', /Geçici/);
+  assert.ok((result.managers[0].coach?.rating || 100) <= 72);
+  assert.notEqual(result.managers[0].coach?.name.replace(' (Geçici)', ''), COACHES[0].name);
+  assert.equal(result.managers[0].budget, 15);
+  assert.equal(result.managers[1].coach?.id, COACHES[0].id);
+});
+test('strong substitutes add a limited squad-depth score', () => {
+  const squad = Object.fromEntries(slots.map((slot, i) => [slot, player(slot, 86, 10, i)])),
+    plain = scoreManager({ id: 0, name: 'A', budget: 50, squad, spent: 110 }),
+    deep = scoreManager({
+      id: 1,
+      name: 'B',
+      budget: 50,
+      squad,
+      spent: 110,
+      bench: {
+        BGK: { ...player('GK', 90, 5, 20), benchSlot: 'BGK' },
+        BDEF: { ...player('CB1', 90, 5, 21), benchSlot: 'BDEF' },
+        BMID: { ...player('CM', 90, 5, 22), benchSlot: 'BMID' },
+        BFWD: { ...player('ST', 90, 5, 23), benchSlot: 'BFWD' },
+      },
+    });
+  assert.ok(deep.benchDepth > 0 && deep.benchDepth <= 1.6);
+  assert.ok(deep.score > plain.score);
+});
+test('a stronger substitute is promoted into its eligible starting line', () => {
+  const squad = Object.fromEntries(slots.map((slot, i) => [slot, player(slot, 82, 10, i)])),
+    manager: Manager = {
+      id: 1,
+      name: 'B',
+      budget: 50,
+      squad,
+      spent: 110,
+      bench: {
+        BDEF: { ...player('CB1', 94, 5, 21), benchSlot: 'BDEF' },
+        BFWD: { ...player('ST', 80, 5, 23), benchSlot: 'BFWD' },
+      },
+    },
+    optimized = optimizeStartingEleven(manager);
+  assert.equal(optimized.squad.RB?.rating, 94);
+  assert.equal(optimized.bench?.BDEF?.rating, 82);
+  assert.equal(optimized.squad.ST?.rating, 82);
+  const scored = scoreManager(manager);
+  assert.equal(scored.squad.RB?.rating, 94);
+  assert.ok(scored.starterImpact > scored.benchDepth);
+});
+test('every auction note includes the group order and player name', () => {
+  const first = player('RB', 88, 20, 1),
+    second = player('RB', 87, 20, 2),
+    bench = { ...player('ST', 86, 20, 3), benchSlot: 'BFWD' as const, role: 'Yedek Forvet' };
+  assert.equal(auctionProgressLabel([first, second, bench], 1), 'RB pozisyonu için 2. oyuncu: P2');
+  assert.equal(auctionProgressLabel([first, second, bench], 2), 'Yedek Forvet pozisyonu için 1. oyuncu: P3');
+});
+test('the extra player after every manager is marked as the bonus lot', () => {
+  const pool = [player('ST', 90, 20, 1), player('ST', 89, 20, 2), player('ST', 88, 20, 3), player('RB', 87, 20, 4)];
+  assert.equal(isBonusPlayerLot(pool, 1, 2), false);
+  assert.equal(isBonusPlayerLot(pool, 2, 2), true);
+  assert.equal(isBonusPlayerLot(pool, 3, 2), false);
+});
+test('remaining budget changes team score by at most two tenths', () => {
+  const squad = Object.fromEntries(slots.map((slot, i) => [slot, player(slot, 86 + (i % 4), 10, i)])),
+    low = scoreManager({ id: 0, name: 'Low', budget: 0, squad, spent: 110 }),
+    high = scoreManager({ id: 1, name: 'High', budget: 1000, squad, spent: 110 });
+  assert.ok(high.score - low.score <= 0.2);
+});
+test('result insights explain the top two and predict a score', () => {
+  const firstSquad = Object.fromEntries(slots.map((slot, i) => [slot, player(slot, 91 + (i % 3), 10, i)])),
+    secondSquad = Object.fromEntries(slots.map((slot, i) => [slot, player(slot, 87 + (i % 3), 10, i)])),
+    ranked = rankManagers([
+      { id: 0, name: 'Lider', budget: 30, squad: firstSquad, spent: 110 },
+      { id: 1, name: 'Takipçi', budget: 35, squad: secondSquad, spent: 110 },
+    ]),
+    insights = resultInsights(ranked);
+  assert.match(insights.winner, /Lider/);
+  assert.match(insights.runnerUp, /Takipçi/);
+  assert.match(insights.match.scoreLine, /Lider \d–\d Takipçi/);
+  assert.match(insights.match.summary, /Tahmini maçta/);
+});
+test('all supported formations place exactly eleven canonical slots', () => {
+  for (const formation of FORMATIONS) {
+    assert.deepEqual(Object.keys(FORMATION_POSITIONS[formation]).sort(), [...slots].sort());
+    assert.equal(
+      new Set(Object.values(FORMATION_POSITIONS[formation]).map((point) => `${point.left}-${point.top}`)).size,
+      11,
+    );
+  }
+});
+test('rule based bots are deterministic, affordable and cannot use hidden ratings', () => {
+  const manager: Manager = { id: 7, name: 'AI', budget: 120, squad: {}, spent: 0, isBot: true, botStyle: 'balanced' },
+    weak = player('ST', 70, 40, 1),
+    star = player('ST', 99, 40, 2);
+  assert.equal(botMaximumBid(manager, weak, 'room', false), botMaximumBid(manager, star, 'room', false));
+  const amount = botMaximumBid(manager, star, 'room', true);
+  assert.ok(amount <= auctionLimit(manager, star));
+  assert.equal(amount, botMaximumBid(manager, star, 'room', true));
+});
+test('AI difficulty creates ordered bidding pressure', () => {
+  const lot = player('ST', 91, 35, 8),
+    base: Manager = { id: 3, name: 'AI', budget: 180, squad: {}, spent: 0, isBot: true },
+    beginner = botMaximumBid({ ...base, botStyle: 'value' }, lot, 'difficulty'),
+    average = botMaximumBid({ ...base, botStyle: 'balanced' }, lot, 'difficulty'),
+    expert = botMaximumBid({ ...base, botStyle: 'aggressive' }, lot, 'difficulty');
+  assert.ok(beginner < average);
+  assert.ok(average < expert);
+});
+test('AI pressure is ordered across a fixed-seed simulation and never breaks reserve safety', () => {
+  const lot = player('ST', 91, 35, 8),
+    base: Manager = { id: 3, name: 'AI', budget: 180, squad: {}, spent: 0, isBot: true },
+    median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)],
+    bids = (style: Manager['botStyle']) =>
+      Array.from({ length: 101 }, (_, run) =>
+        botMaximumBid({ ...base, botStyle: style }, lot, `simulation-${run}`, true, {
+          lotIndex: 44,
+          totalLots: 80,
+          remainingLotsInGroup: 2,
+          managersMissingGroup: 2,
+        }),
+      );
+  const beginner = bids('value'),
+    average = bids('balanced'),
+    expert = bids('aggressive');
+  assert.ok(median(beginner) < median(average));
+  assert.ok(median(average) < median(expert));
+  for (const amount of [...beginner, ...average, ...expert])
+    assert.ok(amount >= 0 && amount <= auctionLimit(base, lot));
+});
+test('hidden-rating AI decisions are invariant when only the secret rating changes', () => {
+  const manager: Manager = { id: 9, name: 'AI', budget: 190, squad: {}, spent: 0, isBot: true, botStyle: 'aggressive' },
+    weak = player('ST', 70, 40, 44),
+    star = { ...weak, rating: 99 };
+  const context = { lotIndex: 20, totalLots: 70, remainingLotsInGroup: 3, managersMissingGroup: 2 };
+  assert.equal(
+    botMaximumBid(manager, weak, 'hidden-v2', false, context),
+    botMaximumBid(manager, star, 'hidden-v2', false, context),
+  );
+  assert.notEqual(
+    botMaximumBid(manager, weak, 'visible-v2', true, context),
+    botMaximumBid(manager, star, 'visible-v2', true, context),
+  );
+});
+test('bot formation choice follows squad sector strengths', () => {
+  const squad = Object.fromEntries(
+    slots.map((slot, i) => [slot, player(slot, ['RW', 'LW', 'ST'].includes(slot) ? 94 : 82, 10, i)]),
+  );
+  assert.equal(chooseBotFormation({ id: 1, name: 'AI', budget: 0, spent: 0, squad }), '4-3-3');
+});
+test('stars and scrubs selection respects tiers and favors both selected extremes', () => {
+  const tiers: RatingTier[] = ['Süperstar', 'Elit', 'Çok iyi', 'İyi', 'Ortalama', 'Standart'],
+    ratings = [94, 91, 87, 83, 79, 74],
+    candidates = Array.from({ length: 600 }, (_, i) => ({ id: i, rating: ratings[i % ratings.length] })),
+    selected: RatingTier[] = ['Süperstar', 'Çok iyi', 'Standart'],
+    weights = starsAndScrubsTierWeights(selected);
+  assert.equal(weights.Elit, 0);
+  const picked = selectStarsAndScrubs(candidates, selected, 180, seededRandom(hashSeed('stars-scrubs'))),
+    counts = Object.fromEntries(
+      tiers.map((tier) => [
+        tier,
+        picked.filter(
+          (item) =>
+            item.rating >= 0 &&
+            (item.rating >= 93
+              ? 'Süperstar'
+              : item.rating >= 90
+                ? 'Elit'
+                : item.rating >= 86
+                  ? 'Çok iyi'
+                  : item.rating >= 82
+                    ? 'İyi'
+                    : item.rating >= 77
+                      ? 'Ortalama'
+                      : 'Standart') === tier,
+        ).length,
+      ]),
+    );
+  assert.equal(
+    picked.every((item) => [94, 87, 74].includes(item.rating)),
+    true,
+  );
+  assert.ok(counts.Süperstar > counts['Çok iyi']);
+  assert.ok(counts.Standart > counts['Çok iyi']);
+});
+test('session estimate includes manager plus one lots for starters, bench and coach', () => {
+  const normal = estimateAuctionSession({ managerCount: 4 }),
+    withBench = estimateAuctionSession({ managerCount: 4, benchEnabled: true });
+  assert.deepEqual({ groups: normal.groups, lots: normal.lots }, { groups: 12, lots: 60 });
+  assert.deepEqual({ groups: withBench.groups, lots: withBench.lots }, { groups: 16, lots: 80 });
+  assert.ok(normal.quickMinutes < normal.minutes);
+});
+test('standard leaderboard rules are stable and exclude assisted or incomparable games', () => {
+  const standard = {
+      era: 'current' as const,
+      selectedTiers: [...RATING_TIERS] as RatingTier[],
+      benchEnabled: false,
+      mode: 'online' as const,
+      auctionMode: 'live' as const,
+      scenarioId: 'classic',
+      humanManagerCount: 4,
+      aiManagerCount: 0,
+      timerSeconds: 20,
+      bidIncrement: 5,
+      datasetVersion: 'data-v1',
+      scoreVersion: 'score-v3',
+    },
+    first = standardLeaderboardEligibility(standard);
+  assert.equal(first.eligible, true);
+  assert.equal(
+    first.fingerprint,
+    leaderboardRulesetFingerprint({ ...standard, selectedTiers: [...RATING_TIERS].reverse() }),
+  );
+  const assisted = standardLeaderboardEligibility({
+    ...standard,
+    customPool: true,
+    automationUsed: true,
+    aiManagerCount: 1,
+  });
+  assert.equal(assisted.eligible, false);
+  assert.equal(assisted.reasons.length, 3);
+  assert.equal(standardLeaderboardEligibility({ ...standard, humanManagerCount: 3 }).eligible, false);
+  assert.notEqual(first.fingerprint, leaderboardRulesetFingerprint({ ...standard, datasetVersion: 'data-v2' }));
+});
+test('the published team score always remains within zero and one hundred', () => {
+  const squad = Object.fromEntries(slots.map((slot, i) => [slot, player(slot, 97, 10, i)])),
+    bench = {
+      BGK: { ...player('GK', 97, 5, 21), benchSlot: 'BGK' as const },
+      BDEF: { ...player('CB1', 97, 5, 22), benchSlot: 'BDEF' as const },
+      BMID: { ...player('CM', 97, 5, 23), benchSlot: 'BMID' as const },
+      BFWD: { ...player('ST', 97, 5, 24), benchSlot: 'BFWD' as const },
+    },
+    score = scoreManager({ id: 1, name: 'Max', budget: 1000, spent: 0, squad, bench, coach: COACHES[0] });
+  assert.ok(score.score >= 0 && score.score <= 100);
+  assert.equal(score.score, 100);
+});
+test('mini league is deterministic and schedules every pair once', () => {
+  const managers = Array.from({ length: 4 }, (_, id) => ({
+    id,
+    name: `M${id}`,
+    budget: 20,
+    spent: 110,
+    squad: Object.fromEntries(slots.map((slot, i) => [slot, player(slot, 84 + id, 10, i + id * 20)])),
+  }));
+  const first = simulateTournament(managers, 'season-1'),
+    second = simulateTournament(managers, 'season-1');
+  assert.deepEqual(first, second);
+  assert.equal(first.matches.length, 6);
+  assert.equal(
+    first.table.reduce((sum, row) => sum + row.played, 0),
+    12,
+  );
+});
+test('custom pool search returns the matching club before its league and supports multiple filters', () => {
+  const results = customPoolOptions(['Fenerbahce', 'Galatasaray', 'Arsenal FC'], 'Fenerbahçe');
+  assert.equal(results[0]?.type, 'club');
+  assert.equal(results[0]?.name, 'Fenerbahce');
+  assert.equal(results[1]?.name, 'Türkiye Ligi');
+  assert.equal(matchesCustomPool('Fenerbahce', [results[0], { type: 'league', name: 'İngiltere Premier Ligi' }]), true);
+  assert.equal(matchesCustomPool('Arsenal FC', [{ type: 'league', name: 'İngiltere Premier Ligi' }]), true);
+});
+test('custom pool search uses dataset league codes beyond the static club catalog', () => {
+  const results = customPoolOptions(
+    [
+      { club: 'Seattle Sounders FC', league: 'MLS1' },
+      { club: 'Inter Miami CF', league: 'MLS1' },
+    ],
+    'Seattle',
+  );
+  assert.equal(results[0]?.name, 'Seattle Sounders FC');
+  assert.equal(results[0]?.league, 'ABD MLS');
+  const league = results.find((result) => result.type === 'league');
+  assert.equal(league?.code, 'MLS1');
+  assert.equal(matchesCustomPool('Inter Miami CF', [league!], 'MLS1'), true);
+});

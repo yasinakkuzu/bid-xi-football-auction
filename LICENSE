@@ -1,0 +1,53 @@
+# Kadro İhalesi — Proprietary License / Tüm Hakları Saklıdır
+
+Copyright (c) 2026 Yasin Akkuzu. All rights reserved.
+
+## 1. Kaynak kod / Source code
+
+Bu depodaki uygulama kaynak kodu ("Yazılım") telif hakkı sahibine aittir.
+Tüm hakları saklıdır. Yazılım; telif hakkı sahibinin yazılı izni olmadan
+kopyalanamaz, çoğaltılamaz, değiştirilemez, dağıtılamaz, alt lisanslanamaz,
+ticari ürün veya hizmet içinde kullanılamaz ve türev çalışma üretmek için
+kullanılamaz. Deponun herkese açık olması, bu maddelerde belirtilen haklardan
+herhangi birini vermez.
+
+The Software in this repository is the property of the copyright holder.
+All rights reserved. The Software may not be copied, reproduced, modified,
+distributed, sublicensed, used in a commercial product or service, or used to
+create derivative works without prior written permission of the copyright
+holder. Making this repository publicly viewable does not grant any of these
+rights.
+
+## 2. Üçüncü taraf veriler, görseller ve markalar / Third-party content
+
+Yazılım, üçüncü taraf kaynaklardan türetilmiş futbolcu verisi (piyasa değeri,
+kulüp, lig, isim) içerir. Veri kaynağı ve sürüm bilgisi
+`data/transfermarkt/dataset-manifest.json`, hak kontrol durumu ise
+`docs/data-rights.md` dosyasında tutulur. Aşağıdakiler bu lisansın kapsamı
+dışındadır ve ayrı hak sahiplerine aittir:
+
+- Oyuncu fotoğrafları ve kulüp logoları (ilgili hak sahipleri / kaynak site).
+- Kulüp, lig ve organizasyon adları ile markaları.
+- Kaynak veri kümesinin kendisi ve türetilmiş havuz
+  (`app/data/auction-pool.generated.json`).
+
+Bu içeriklerin ticari kullanımı, doğrulanmış bir lisans kaydı olmadan
+kapalıdır. Üretim ortamında `COMMERCIAL_MODE=true` ve
+`ALLOW_UNVERIFIED_ASSETS=false` ayarlarıyla doğrulanmamış uzak görseller
+sunucu tarafında kapatılır.
+
+Third-party football data, player photos, club logos and trademarks are not
+covered by this license and remain the property of their respective owners.
+See `docs/data-rights.md` for the rights review state.
+
+## 3. Garanti reddi / No warranty
+
+Yazılım "olduğu gibi" sunulur; açık veya zımni hiçbir garanti verilmez.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+## 4. İletişim / Contact
+
+Hak kullanımı, lisanslama ve kaldırma talepleri için depo sahibiyle iletişime
+geçin (bkz. `docs/data-rights.md` — moderasyon ve kaldırma akışı).
