@@ -346,7 +346,7 @@ const manifest = {
   generatorVersion: POOL_MODEL_VERSION,
   scoreVersion: 'score-v3',
   valuationModel: {
-    name: 'kadro-ihalesi-signal-v1',
+    name: 'mezat11-signal-v1',
     version: POOL_MODEL_VERSION,
     marketValueUsed: false,
     performanceDataUsed,

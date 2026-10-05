@@ -1,6 +1,6 @@
 # KVKK uyum notu ve kayıt envanteri
 
-Bu belge, Kadro İhalesi'nde kişisel verilerin nasıl işlendiğini, hangi teknik önlemlerin **kodda uygulandığını** ve operatörün yerine getirmesi gereken **kalan yükümlülükleri** ayırır. Hukuk danışmanlığı değildir.
+Bu belge, Mezat 11'nde kişisel verilerin nasıl işlendiğini, hangi teknik önlemlerin **kodda uygulandığını** ve operatörün yerine getirmesi gereken **kalan yükümlülükleri** ayırır. Hukuk danışmanlığı değildir.
 
 ## 1. Veri sorumlusu
 

@@ -597,7 +597,7 @@ export function OnlineGame() {
     const url = `${location.origin}/?mode=online&room=${room.code}`;
     try {
       if (navigator.share)
-        await navigator.share({ title: 'Kadro İhalesi odasına katıl', text: `${room.code} kodlu odaya katıl`, url });
+        await navigator.share({ title: 'Mezat 11 odasına katıl', text: `${room.code} kodlu odaya katıl`, url });
       else await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
@@ -650,11 +650,11 @@ export function OnlineGame() {
           <button
             className="brand-lockup brand-home"
             onClick={() => router.push('/')}
-            aria-label="Kadro İhalesi ana sayfasına dön"
+            aria-label="Mezat 11 ana sayfasına dön"
           >
             <img src="/brand-mark.svg" alt="" />
             <span>
-              <b>KADRO İHALESİ</b>
+              <b>MEZAT 11</b>
               <small>FUTBOL AÇIK ARTIRMA OYUNU</small>
             </span>
           </button>
@@ -1248,11 +1248,11 @@ export function OnlineGame() {
           <button
             className="brand-lockup brand-home room-brand"
             onClick={brandHome}
-            aria-label="Kadro İhalesi ana sayfasına dön"
+            aria-label="Mezat 11 ana sayfasına dön"
           >
             <img src="/brand-mark.svg" alt="" />
             <span>
-              <b>KADRO İHALESİ</b>
+              <b>MEZAT 11</b>
               <small>FUTBOL AÇIK ARTIRMA OYUNU</small>
             </span>
           </button>
@@ -1808,5 +1808,5 @@ export default function OnlineRedirect() {
     params.set('mode', 'online');
     location.replace(`/?${params.toString()}`);
   }, []);
-  return <main className="online-loading">Kadro İhalesi deneyimine yönlendiriliyor…</main>;
+  return <main className="online-loading">Mezat 11 deneyimine yönlendiriliyor…</main>;
 }

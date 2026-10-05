@@ -539,7 +539,7 @@ function ModeChooser({ onLocal, onOnline }: { onLocal: () => void; onOnline: () 
       </section>
       <Leaderboard />
       <footer className="home-footer">
-        <span>Kadro İhalesi · Her oyun yeni bir transfer hikâyesi</span>
+        <span>Mezat 11 · Her oyun yeni bir transfer hikâyesi</span>
         <nav aria-label="Yasal ve veri bağlantıları">
           <a href="/gizlilik">Gizlilik</a>
           <a href="/kullanim-kosullari">Kullanım koşulları</a>
@@ -795,13 +795,13 @@ function Brand({ onClick }: { onClick?: () => void }) {
     <>
       <img src="/brand-mark.svg" alt="" />
       <div>
-        <b>KADRO İHALESİ</b>
+        <b>MEZAT 11</b>
         <small>FUTBOL AÇIK ARTIRMA OYUNU</small>
       </div>
     </>
   );
   return onClick ? (
-    <button className="brand-lockup brand-home" onClick={onClick} aria-label="Kadro İhalesi ana sayfasına dön">
+    <button className="brand-lockup brand-home" onClick={onClick} aria-label="Mezat 11 ana sayfasına dön">
       {content}
     </button>
   ) : (
@@ -2123,8 +2123,7 @@ function Setup({
           </p>
         )}
         <p className="source-note">
-          Oyuncu verileri: transfermarkt-datasets (CC0). Kadro İhalesi puanları piyasa değeri ve kariyer verilerinden
-          türetilir.
+          Oyuncu verileri: transfermarkt-datasets (CC0). Mezat 11 puanları maç istatistiklerinden türetilir.
         </p>
       </div>
     </section>

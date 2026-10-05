@@ -1,4 +1,5 @@
 import { FORMATION_POSITIONS, SLOT_KEYS, type ScoreBreakdown } from './game-engine.ts';
+import { SITE_HOST, SITE_NAME } from './site.ts';
 
 const CARD_WIDTH = 1080;
 const CARD_HEIGHT = 1920;
@@ -38,7 +39,7 @@ export async function shareResultCard(ranked: ScoreBreakdown[]) {
   ctx.fillStyle = '#c9ff45';
   ctx.font = '900 28px system-ui';
   ctx.letterSpacing = '6px';
-  ctx.fillText('İHALE TAMAMLANDI', 70, 90);
+  ctx.fillText('MEZAT TAMAMLANDI', 70, 90);
   ctx.letterSpacing = '0px';
   ctx.fillStyle = '#fff';
   ctx.font = '950 76px system-ui';
@@ -74,13 +75,13 @@ export async function shareResultCard(ranked: ScoreBreakdown[]) {
   ctx.fillStyle = '#c9ff45';
   ctx.font = '950 64px system-ui';
   ctx.textAlign = 'center';
-  ctx.fillText('K', 95, 858);
+  ctx.fillText('M', 95, 858);
   ctx.textAlign = 'left';
   ctx.fillStyle = '#09100b';
   ctx.font = '950 42px system-ui';
-  ctx.fillText('KADRO İHALESİ', 165, 825);
+  ctx.fillText(SITE_NAME.toLocaleUpperCase('tr'), 165, 825);
   ctx.font = '750 24px system-ui';
-  ctx.fillText('kadro-ihalesi.yasinakkuzu.chatgpt.site', 165, 865);
+  ctx.fillText(SITE_HOST, 165, 865);
 
   ctx.fillStyle = '#fff';
   ctx.font = '900 36px system-ui';
@@ -131,10 +132,9 @@ export async function shareResultCard(ranked: ScoreBreakdown[]) {
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) return;
-  const file = new File([blob], 'kadro-ihalesi-sonucu.png', { type: 'image/png' });
+  const file = new File([blob], 'mezat-11-sonucu.png', { type: 'image/png' });
   try {
-    if (navigator.canShare?.({ files: [file] }))
-      await navigator.share({ files: [file], title: 'Kadro İhalesi sonucu' });
+    if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: `${SITE_NAME} sonucu` });
     else {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);

@@ -5,8 +5,8 @@ export default function Terms() {
     <LegalPage eyebrow="KULLANIM KOŞULLARI" title="Adil ve güvenli oyun">
       <h2>Oyun niteliği</h2>
       <p>
-        Kadro İhalesi bağımsız bir eğlence oyunudur. Gösterilen puanlar ve fiyatlar, Kadro İhalesi&apos;nin kendi oyun
-        içi değerlendirme modeliyle üretilir; resmî performans notu, piyasa değeri veya yatırım tavsiyesi değildir. Oyun
+        Mezat 11 bağımsız bir eğlence oyunudur. Gösterilen puanlar ve fiyatlar, Mezat 11&apos;in kendi oyun içi
+        değerlendirme modeliyle üretilir; resmî performans notu, piyasa değeri veya yatırım tavsiyesi değildir. Oyun
         herhangi bir kulüp, lig veya veri sağlayıcısıyla bağlantılı, onlar tarafından onaylanmış ya da sponsorlu
         değildir.
       </p>

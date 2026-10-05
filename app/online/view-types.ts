@@ -91,6 +91,11 @@ export const auctionFormationPoint = (formation: Formation, slot: Slot) => {
   return { left: `${Math.max(6, Math.min(94, 100 - Number.parseFloat(point.top)))}%`, top: point.left };
 };
 
+/**
+ * Session keys deliberately keep the historical `bidxi-` prefix after the
+ * rebrand to Mezat 11: saved room sessions, in-progress games and local error
+ * logs live under these keys, so renaming them would silently discard user data.
+ */
 export const roomSessionKey = (roomCode: string) => `bidxi-room:${roomCode.toUpperCase()}`;
 
 export const coordinates: Record<Slot, { left: string; top: string }> = {

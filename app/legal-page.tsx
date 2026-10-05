@@ -16,7 +16,7 @@ export function LegalPage({ eyebrow, title, children }: { eyebrow: string; title
         <Link className="brand-lockup" href="/">
           <Image src="/brand-mark.svg" alt="" width={56} height={56} />
           <span>
-            <b>KADRO İHALESİ</b>
+            <b>MEZAT 11</b>
             <small>FUTBOL AÇIK ARTIRMA OYUNU</small>
           </span>
         </Link>

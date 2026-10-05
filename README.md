@@ -1,4 +1,6 @@
-# Kadro İhalesi — Futbol Açık Artırma Oyunu
+# Mezat 11 — Futbol Açık Artırma Oyunu
+
+> **Marka:** Mezat 11 · _Futbolun canlı mezadı._ Adın gerekçesi, uygulananlar ve kalan operatör işleri: [docs/brand.md](docs/brand.md).
 
 4-2-3-1 kadro düzeninde, tek cihazda veya çevrim içi odalarla oynanabilen çok oyunculu futbol açık artırma oyunu.
 

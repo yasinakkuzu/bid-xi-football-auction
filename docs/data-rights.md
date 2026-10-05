@@ -1,4 +1,4 @@
-# Kadro İhalesi — Veri ve Hak Hazırlık Kontrolü
+# Mezat 11 — Veri ve Hak Hazırlık Kontrolü
 
 Bu belge ürün, mühendislik ve operasyon ekipleri için bir hazırlık listesidir; hukuk danışmanlığı değildir. Ticari yayından önce Türkiye'de ve hedef pazarlarda yetkili bir hukuk uzmanının incelemesi gerekir.
 
@@ -80,7 +80,7 @@ Her veri veya medya kaydı için aşağıdaki alanlar tutulmalıdır:
 
 - Ham kaynak, hesaplama yöntemi, veri tarihi ve türetilmiş puan formülünü belgeleyin.
 - Veri tabanı hakkı ve toplu yeniden kullanım kısıtlarını kontrol edin.
-- Arayüzde puanların Kadro İhalesi tarafından türetildiğini ve resmî olmadığını açıkça belirtin.
+- Arayüzde puanların Mezat 11 tarafından türetildiğini ve resmî olmadığını açıkça belirtin.
 
 ## Ticari sürüm özellik bayrakları
 

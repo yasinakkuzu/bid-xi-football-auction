@@ -1,5 +1,5 @@
 /**
- * Valuation-free pool model for Kadro İhalesi.
+ * Valuation-free pool model for Mezat 11.
  *
  * This module is pure: it performs no I/O and imports nothing. It turns factual
  * per-season performance, international caps, competition strength and age into

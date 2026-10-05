@@ -5,9 +5,8 @@ export default function DataRights() {
     <LegalPage eyebrow="VERİ VE HAKLAR" title="Kaynak, lisans ve kaldırma">
       <h2>Veri kaynağı</h2>
       <p>
-        Oyuncu havuzu transfermarkt-datasets kaynak dosyasından üretilir. Kadro İhalesi puanları kaynak veriden
-        türetilir; her yayın veri özeti (SHA-256), veri sürümü ve üretici sürümüne bağlanır. Ham kaynak dosya depoda
-        tutulmaz.
+        Oyuncu havuzu transfermarkt-datasets kaynak dosyasından üretilir. Mezat 11 puanları kaynak veriden türetilir;
+        her yayın veri özeti (SHA-256), veri sürümü ve üretici sürümüne bağlanır. Ham kaynak dosya depoda tutulmaz.
       </p>
       <h2>Fotoğraf ve kulüp işaretleri</h2>
       <p>

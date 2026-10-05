@@ -3,7 +3,7 @@
   "generatorVersion": "pool-v5",
   "scoreVersion": "score-v3",
   "valuationModel": {
-    "name": "kadro-ihalesi-signal-v1",
+    "name": "mezat11-signal-v1",
     "version": "pool-v5",
     "marketValueUsed": false,
     "performanceDataUsed": true,
@@ -21,7 +21,7 @@
   "sourceName": "transfermarkt-datasets players.csv",
   "sourceUrl": "https://github.com/dcaribou/transfermarkt-datasets",
   "retrievedAt": "2026-08-05T04:19:58.000Z",
-  "generatedAt": "2026-10-05T21:00:32.538Z",
+  "generatedAt": "2026-10-05T22:19:35.427Z",
   "coveredSeasons": {
     "current": "2025 ve sonrası",
     "legends": "1996 ve sonrası; aktif oyuncu örtüşmesi pozisyon başına en fazla %12"

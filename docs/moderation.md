@@ -1,6 +1,6 @@
 # Moderasyon ve kaldırma akışı
 
-Bu belge, Kadro İhalesi'nde kullanıcı içeriğinin (görünen adlar, takma adlar, oda sohbeti) nasıl denetlendiğini ve bir hak sahibinin içerik kaldırma talebinin nasıl işlendiğini tanımlar. Hukuk danışmanlığı değildir; ticari yayın öncesi hedef pazarda yetkili bir uzmanla gözden geçirilmelidir.
+Bu belge, Mezat 11'nde kullanıcı içeriğinin (görünen adlar, takma adlar, oda sohbeti) nasıl denetlendiğini ve bir hak sahibinin içerik kaldırma talebinin nasıl işlendiğini tanımlar. Hukuk danışmanlığı değildir; ticari yayın öncesi hedef pazarda yetkili bir uzmanla gözden geçirilmelidir.
 
 ## 1. Otomatik filtre (sunucu tarafı)
 
