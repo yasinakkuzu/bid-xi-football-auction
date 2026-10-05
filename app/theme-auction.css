@@ -940,3 +940,24 @@
     padding-bottom: 4px !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Alt ajan notu (aynı dosyada çakışmayı önlemek için en sonda):
+   Yeni dikey yığın (lot kartı + satılanlar şeridi) 1440×980 gibi dizüstü
+   yüksekliklerinde birincil "Teklif ver" düğmesini katlanmanın altında
+   bırakıyordu. Çubuk akıştaki yerini korur ama görüntü alanının dibine
+   yapışır; böylece teklif kontrolleri her kaydırma konumunda erişilebilir.
+   Sunum (TV) modunda yapışma kapatılır.
+   -------------------------------------------------------------------------- */
+@media (min-width: 761px) {
+  .mz-action-bar {
+    position: sticky;
+    z-index: 30;
+    bottom: 10px;
+    box-shadow: 0 -14px 34px rgba(0, 0, 0, 0.45);
+  }
+  .presentation-mode .online-auction.mz-auction .mz-action-bar {
+    position: static;
+    box-shadow: none;
+  }
+}

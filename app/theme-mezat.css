@@ -51,8 +51,8 @@ body {
   background-size: 64px 64px;
   mask-image: radial-gradient(70% 70% at 50% 35%, #000 35%, transparent 100%);
 }
-.online-shell > *,
-.online-room > * {
+.online-shell > *:not(.chat-fab):not(.room-chat):not(.room-chat-backdrop):not(.presentation-exit),
+.online-room > *:not(.chat-fab):not(.room-chat):not(.room-chat-backdrop):not(.presentation-exit) {
   position: relative;
   z-index: 1;
 }
