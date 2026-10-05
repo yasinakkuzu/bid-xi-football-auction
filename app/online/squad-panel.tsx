@@ -1,37 +1,9 @@
 'use client';
-/* Remote player photos are optional enhancements; a letter placeholder keeps the card readable when they fail. */
-/* eslint-disable @next/next/no-img-element */
 
-import { useState } from 'react';
-import { BENCH_SLOTS, FORMATION_POSITIONS, SLOT_KEYS, type Manager } from '../../lib/game-engine';
-import { coordinates, money } from './view-types';
-
-export function PlayerImage({ player, className }: { player: { name: string; image?: string }; className: string }) {
-  const [failedUrl, setFailedUrl] = useState<string | undefined>();
-  if (!player.image || failedUrl === player.image)
-    return (
-      <span
-        className={`${className} player-image-placeholder`}
-        role="img"
-        aria-label={`${player.name} için fotoğraf bulunamadı`}
-      >
-        {player.name[0]?.toUpperCase() || '?'}
-      </span>
-    );
-  return (
-    <img
-      className={className}
-      src={player.image}
-      alt={`${player.name} fotoğrafı`}
-      width="240"
-      height="300"
-      loading={className.includes('online-player-photo') ? 'eager' : 'lazy'}
-      decoding="async"
-      referrerPolicy="no-referrer"
-      onError={() => setFailedUrl(player.image)}
-    />
-  );
-}
+import { BENCH_SLOTS, SLOT_KEYS, type Manager } from '../../lib/game-engine';
+import { FormationPitch } from './formation-pitch';
+import { PlayerImage } from './player-image';
+import { money } from './view-types';
 
 export function SquadPanel({ manager, compact = false }: { manager: Manager; compact?: boolean }) {
   return (
@@ -50,39 +22,7 @@ export function SquadPanel({ manager, compact = false }: { manager: Manager; com
           </span>
         </div>
       </div>
-      <div className="online-squad-formation" aria-label={`${manager.name} kadro dizilimi`}>
-        <span className="online-halfway" />
-        <span className="online-center-circle" />
-        {SLOT_KEYS.map((slot) => {
-          const player = manager.squad[slot];
-          return (
-            <div
-              className={`online-formation-player ${player ? 'filled' : ''}`}
-              style={
-                (manager.formation && manager.formation !== '4-2-3-1'
-                  ? FORMATION_POSITIONS[manager.formation]
-                  : coordinates)[slot]
-              }
-              key={slot}
-            >
-              {player ? (
-                <>
-                  <PlayerImage player={player} className="squad-player-photo" />
-                  <b>{player.name}</b>
-                  <small>
-                    {slot} · {player.rating.toFixed(1)} puan
-                  </small>
-                </>
-              ) : (
-                <>
-                  <span>{slot}</span>
-                  <b>Boş</b>
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      <FormationPitch manager={manager} />
       <div className="online-squad-list">
         {SLOT_KEYS.map((slot) => {
           const player = manager.squad[slot];

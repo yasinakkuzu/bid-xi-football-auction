@@ -1,0 +1,942 @@
+/* ============================================================================
+   Mezat 11 — mezat masası YAPISAL katmanı
+   ----------------------------------------------------------------------------
+   `app/theme-mezat.css` sahiplenir: tasarım token'ları ve yüzey dili.
+   Bu dosya sahiplenir: mezat masasının *yapısına* ait olan her şey —
+   üç kolonlu mezat tablosu, tek satırlık teklif çubuğu, kadro rayı, satılan /
+   sıradaki şeritleri, lot damgası ve mobil sabit teklif çubuğu.
+   `app/online/page.tsx` tarafından import edilir; yalnızca o ekranı etkiler.
+   Marka renkleri yalnızca `--mz-*` değişkenlerinden gelir.
+
+   Not: theme-mezat.css içindeki bir `!important` kuralını ezmesi gereken
+   seçiciler bilinçli olarak bileşiktir (`.online-auction.mz-auction`): daha
+   yüksek özgüllük, stil dosyası sırasından bağımsız olarak kazanır.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- 3. üst şerit */
+.room-header.mz-header {
+  display: flex !important;
+  max-width: 1560px !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  flex-wrap: wrap !important;
+  gap: 10px 16px !important;
+  margin: 0 auto 18px !important;
+  border: 1px solid var(--mz-line) !important;
+  border-radius: 16px !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0)), var(--mz-panel) !important;
+  padding: 10px 14px !important;
+}
+.mz-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.mz-header__status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mz-header__live {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--mz-accent) !important;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.room-header.mz-header .manager-identity {
+  margin-left: auto;
+  text-align: right;
+}
+.room-header.mz-header .manager-identity small {
+  display: block;
+  color: var(--mz-dim) !important;
+  font-size: 8.5px;
+  letter-spacing: 0.16em;
+}
+.room-header.mz-header .manager-identity b {
+  color: var(--mz-text);
+  font-weight: 900;
+}
+.room-header.mz-header .manager-identity strong {
+  display: block;
+  color: var(--mz-accent) !important;
+  font-size: 20px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.room-header.mz-header .room-share {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mz-header__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.mz-header__tools .tool-btn {
+  padding: 8px 12px !important;
+  border: 1px solid var(--mz-line-2) !important;
+  border-radius: 12px !important;
+  background: #17120b !important;
+  color: var(--mz-muted) !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.mz-header__tools .tool-btn:hover {
+  border-color: var(--mz-accent) !important;
+  color: var(--mz-accent) !important;
+}
+
+/* ------------------------------------------------- 1./2. üç kolonlu mezat tablosu */
+.online-auction.mz-auction {
+  display: grid !important;
+  grid-template-columns: 280px minmax(0, 1fr) minmax(270px, 310px) !important;
+  gap: 16px !important;
+  align-items: start !important;
+  max-width: 1560px !important;
+}
+.mz-lot-stage,
+.mz-squad-rail,
+.mz-manager-rail {
+  min-width: 0;
+}
+.online-auction.mz-auction > .mz-manager-rail,
+.online-auction.mz-auction > .mz-squad-rail {
+  position: sticky;
+  top: 16px;
+  padding: 14px !important;
+}
+.mz-lot-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ------------------------------------------------------------ 1. lot başlık şeridi */
+.online-lot-head.mz-lot-head {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto auto !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin-bottom: 0 !important;
+  padding-bottom: 10px !important;
+}
+.mz-lot-head__count {
+  color: var(--mz-dim) !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.16em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mz-lot-head__position {
+  overflow: hidden;
+  color: var(--mz-muted) !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.12em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.mz-lot-head__state {
+  color: var(--mz-text) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+}
+/* geri sayım çipi (satır 1) — marka amberi yalnızca süre baskısında */
+.online-lot-head .mz-lot-chip {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 7px;
+  margin-left: 0 !important;
+  border: 1px solid var(--mz-line-2) !important;
+  border-radius: 999px !important;
+  background: #17120b !important;
+  padding: 5px 12px !important;
+  color: var(--mz-muted) !important;
+  font-size: 15px !important;
+  font-variant-numeric: tabular-nums;
+}
+.online-lot-head .mz-lot-chip > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mz-line-2);
+}
+.online-lot-head .mz-lot-chip.is-critical {
+  border-color: var(--mz-amber) !important;
+  background: rgba(255, 122, 89, 0.16) !important;
+  color: var(--mz-amber) !important;
+}
+.online-lot-head .mz-lot-chip.is-critical > i {
+  background: var(--mz-amber);
+}
+
+/* --------------------------------------------------------------- 4. lot kartı */
+.online-player.mz-lot-card {
+  position: relative !important;
+  margin-top: 0 !important;
+}
+/* geniş ekranda mini saha kartın sağ üstünde durur; lot adı ve plakalar
+   onun altındaki bantta kalsın (ad tek kelime olsa bile taşmaz) */
+@media (min-width: 1025px) {
+  .mz-lot-card .online-player-copy {
+    padding-top: 116px;
+  }
+}
+.mz-lot-plates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.mz-lot-plate {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 96px;
+  border: 1px solid var(--mz-line) !important;
+  border-radius: 12px;
+  background: #17120b;
+  padding: 8px 12px;
+}
+.mz-lot-plate small {
+  color: var(--mz-dim);
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+.mz-lot-plate strong {
+  color: var(--mz-text);
+  font-size: 19px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.mz-lot-plate strong em {
+  color: var(--mz-dim);
+  font-size: 11px;
+  font-style: normal;
+}
+.mz-lot-plate__value {
+  filter: blur(5px);
+  user-select: none;
+}
+.mz-lot-plate__lock {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  color: var(--mz-accent);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+.mz-lot-plate.is-hidden {
+  border-color: rgba(255, 180, 92, 0.28) !important;
+  background: rgba(255, 180, 92, 0.05);
+}
+/* SATILDI damgası: yalnızca gerçekten kilitlenmiş bir teklif durumunda basılır */
+.mz-lot-stamp {
+  position: absolute;
+  z-index: 5;
+  top: 16px;
+  left: 16px;
+  transform: rotate(-6deg);
+  border: 2px solid var(--mz-accent);
+  border-radius: 10px;
+  background: rgba(12, 10, 7, 0.78);
+  padding: 5px 13px;
+  color: var(--mz-accent);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+.mz-lot-stamp--won {
+  border-color: var(--mz-amber);
+  color: var(--mz-amber);
+}
+
+/* --------------------------------------- 5. satılanlar + sıradaki lotlar şeridi */
+.mz-ledger {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 12px 16px;
+  border: 1px solid var(--mz-line) !important;
+  border-radius: 16px;
+  background: #15110b;
+  padding: 12px 14px;
+}
+.mz-ledger__block {
+  min-width: 0;
+}
+.mz-ledger__block--upcoming {
+  border-left: 1px solid var(--mz-line);
+  padding-left: 14px;
+}
+.mz-ledger__sales,
+.mz-ledger__upcoming {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  list-style: none;
+}
+.mz-ledger__sales li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--mz-line-2);
+  border-radius: 999px;
+  background: #1c1710;
+  padding: 5px 11px;
+  font-size: 11px;
+}
+.mz-ledger__sales b {
+  color: var(--mz-text);
+  font-weight: 800;
+}
+.mz-ledger__sales span {
+  color: var(--mz-dim);
+}
+.mz-ledger__sales em {
+  color: var(--mz-muted);
+  font-style: normal;
+}
+.mz-ledger__sales strong {
+  color: var(--mz-accent);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.mz-lot-pill {
+  border: 1px dashed var(--mz-line-2);
+  border-radius: 999px;
+  padding: 5px 11px;
+  color: var(--mz-dim);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.mz-lot-pill--more {
+  border-style: solid;
+  border-color: rgba(255, 180, 92, 0.35);
+  color: var(--mz-accent);
+  font-variant-numeric: tabular-nums;
+}
+.mz-ledger__empty {
+  color: var(--mz-dim);
+  font-size: 11px;
+}
+
+/* --------------------------------------------------------------- 1. aksiyon çubuğu */
+.mz-action-bar {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--mz-line) !important;
+  border-radius: 18px;
+  background: #15110b;
+  padding: 12px 14px;
+}
+.mz-action-bar__dock {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 260px) minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+/* geri sayım halkası — son 5 saniye görsel olarak acil */
+.mz-timer {
+  position: relative;
+  display: grid;
+  height: 68px;
+  width: 68px;
+  flex: 0 0 auto;
+  place-items: center;
+}
+.mz-timer svg {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  transform: rotate(-90deg);
+}
+.mz-timer circle {
+  fill: none;
+  stroke-width: 4;
+}
+.mz-timer__track {
+  stroke: var(--mz-line-2);
+}
+.mz-timer__value {
+  stroke: var(--mz-accent);
+  stroke-linecap: round;
+  stroke-dasharray: 119.4;
+  stroke-dashoffset: calc(119.4 * (1 - var(--mz-ring-ratio, 0)));
+  transition: stroke-dashoffset 0.9s linear;
+}
+.mz-timer__seconds {
+  color: var(--mz-text);
+  font-size: 20px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.mz-timer__unit {
+  position: absolute;
+  bottom: 7px;
+  color: var(--mz-dim);
+  font-size: 7.5px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.mz-timer.is-critical .mz-timer__value {
+  stroke: var(--mz-amber);
+}
+.mz-timer.is-critical .mz-timer__seconds {
+  color: var(--mz-amber);
+}
+.mz-timer.is-critical {
+  animation: mz-timer-throb 1s ease-in-out infinite;
+}
+.mz-timer.is-expired .mz-timer__value {
+  stroke: var(--mz-amber);
+}
+.mz-timer.is-paused {
+  opacity: 0.5;
+}
+@keyframes mz-timer-throb {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+/* teklifin kahramanı */
+.mz-action-bar .bid-summary {
+  min-width: 0 !important;
+  max-width: none !important;
+}
+.mz-bid-hero strong {
+  color: var(--mz-accent) !important;
+  font-size: clamp(32px, 4vw, 46px) !important;
+  font-weight: 900 !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em !important;
+  line-height: 1;
+  white-space: nowrap;
+}
+.mz-bid-hero__hint {
+  color: var(--mz-dim);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.mz-action-bar .current-leader {
+  border: 1px solid var(--mz-line) !important;
+  border-radius: 999px !important;
+  background: #1c1710 !important;
+  padding: 3px 12px !important;
+  color: var(--mz-accent) !important;
+  font-size: 13px;
+  font-weight: 900;
+}
+/* artış düğmeleri + birincil eylem + pas — tek yatay sıra */
+.mz-action-bar .online-actions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+}
+.mz-action-bar .online-actions button {
+  min-width: 62px;
+  padding: 12px 16px !important;
+  border-radius: 12px !important;
+  font-size: 13.5px !important;
+  font-weight: 900 !important;
+  font-variant-numeric: tabular-nums;
+}
+.mz-action-bar .online-actions .primary-action.mz-bid-cta {
+  min-width: 132px;
+  border: 0 !important;
+  background: linear-gradient(180deg, #ffd79a, var(--mz-accent)) !important;
+  padding: 13px 26px !important;
+  color: #1a1206 !important;
+  box-shadow: 0 14px 34px rgba(255, 180, 92, 0.22) !important;
+  font-size: 14.5px !important;
+}
+.mz-action-bar .online-actions button:disabled {
+  border-color: var(--mz-line) !important;
+  background: #1a150e !important;
+  color: var(--mz-dim) !important;
+  box-shadow: none !important;
+}
+.mz-bid-pass {
+  border-color: var(--mz-line-2) !important;
+  background: transparent !important;
+  color: var(--mz-muted) !important;
+  letter-spacing: 0.06em;
+}
+.mz-bid-note {
+  margin: 0;
+  border-top: 1px solid var(--mz-line);
+  padding-top: 10px;
+  color: var(--mz-muted);
+  font-size: 11.5px;
+}
+.mz-action-bar .manual-waiting {
+  margin: 0;
+  border-top: 1px solid var(--mz-line);
+  padding-top: 10px;
+  color: var(--mz-muted);
+  font-size: 11.5px;
+}
+.mz-action-bar .manual-controls {
+  margin-top: 2px;
+}
+/* elle teklif — çubuğun içinde, kendi satırında */
+.mz-action-bar .custom-bid-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--mz-line);
+  padding-top: 10px;
+}
+.mz-action-bar .custom-bid-form label {
+  width: 100%;
+  color: var(--mz-dim) !important;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.mz-action-bar .custom-bid-form input {
+  max-width: 150px;
+  height: 42px;
+}
+.mz-action-bar .custom-bid-form button {
+  min-height: 42px;
+  min-width: 110px;
+}
+
+/* --------------------------------------------- 1./4. satır: kurucu kontrolleri */
+.mz-host-row {
+  margin-top: 12px;
+}
+.mz-host-row .permanent-host-controls {
+  margin-top: 0 !important;
+}
+.mz-host-row .host-controls {
+  justify-content: flex-start !important;
+}
+.mz-host-row .host-controls > span {
+  color: var(--mz-dim) !important;
+  text-align: left !important;
+}
+
+/* ------------------------------------------------------- 2. sağ kolon: kadro rayı */
+.mz-rail-card {
+  border-bottom: 1px solid var(--mz-line);
+  padding-bottom: 12px;
+}
+.mz-rail-card__head h2 {
+  margin-top: 3px;
+  color: var(--mz-text);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+.mz-rail-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.mz-rail-stats > div {
+  border: 1px solid var(--mz-line);
+  border-radius: 12px;
+  background: #17120b;
+  padding: 7px 10px;
+}
+.mz-rail-stats small {
+  display: block;
+  color: var(--mz-dim);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+.mz-rail-stats strong {
+  color: var(--mz-accent);
+  font-size: 18px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.mz-rail-stats strong span {
+  color: var(--mz-dim);
+  font-size: 11px;
+}
+/* raydaki saha: aynı bileşen, küçük ölçek */
+.mz-pitch--compact {
+  height: 250px !important;
+  max-width: none !important;
+  margin: 12px 0 0 !important;
+  border-radius: 14px !important;
+}
+.mz-pitch--compact .online-formation-player {
+  width: 46px !important;
+}
+.mz-pitch--compact .online-formation-player > span,
+.mz-pitch--compact .online-formation-player > b {
+  display: grid !important;
+  height: 26px !important;
+  width: 26px !important;
+  margin: 0 !important;
+  place-items: center !important;
+  overflow: visible !important;
+  border: 1px solid var(--mz-line-2) !important;
+  border-radius: 50% !important;
+  background: #1c1710 !important;
+  padding: 0 !important;
+  color: var(--mz-dim) !important;
+  font-size: 8.5px !important;
+  letter-spacing: 0 !important;
+}
+.mz-pitch--compact .online-formation-player.filled > b {
+  border-color: var(--mz-accent) !important;
+  background: var(--mz-accent) !important;
+  color: #1a1206 !important;
+  box-shadow: 0 0 0 3px rgba(255, 180, 92, 0.15);
+}
+.mz-pitch--compact .online-halfway,
+.mz-pitch--compact .online-center-circle {
+  border-color: var(--mz-line-2) !important;
+}
+.mz-pitch--compact .online-center-circle {
+  height: 54px;
+  width: 54px;
+}
+/* canlı akış artık sağ kolonda yaşıyor */
+.mz-feed {
+  margin-top: 12px;
+}
+.mz-feed .online-feed {
+  border-left: 2px solid var(--mz-line-2);
+  margin: 8px 0 0;
+  padding-left: 9px;
+  color: var(--mz-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.mz-feed .online-feed:first-of-type {
+  border-color: var(--mz-accent);
+  color: var(--mz-text);
+}
+.mz-squad-rail > .mz-bid-note,
+.mz-squad-rail .mz-bid-note {
+  margin-top: 10px;
+}
+
+/* --------------------------------------------- konum düzeltmesi: sabit katmanlar
+   `theme-mezat.css` içindeki `.online-room > *` kuralı odanın doğrudan
+   çocuklarına `position: relative; z-index: 1` veriyor; bu, sabit konumlu
+   katmanları (sohbet düğmesi/paneli, sohbet perdesi, TV modundan çık) akışa
+   düşürüyor. Mobil teklif çubuğu bu katmanlarla aynı anda göründüğü için
+   konumlarını burada geri veriyoruz. Görsel dil değişmiyor. */
+.online-room > .chat-fab {
+  position: fixed;
+  z-index: 82;
+}
+.online-room > .room-chat {
+  position: fixed;
+  z-index: 83;
+}
+.online-room > .room-chat-backdrop {
+  position: fixed;
+  z-index: 82;
+}
+.online-room > .presentation-exit {
+  position: fixed;
+  z-index: 120;
+}
+
+/* TV / sunum modu: paneller gizlenir, sahne tek kolon olarak tam genişlik kalır.
+   (globals.css'teki `.presentation-mode .online-auction { display: block }`
+   bildirimi `!important` taşımadığı için tema katmanındaki grid kuralı onu
+   geçersiz kılıyordu.) */
+.presentation-mode .online-auction.mz-auction {
+  display: block !important;
+}
+.presentation-mode .online-auction.mz-auction > .mz-manager-rail,
+.presentation-mode .online-auction.mz-auction > .mz-squad-rail {
+  display: none !important;
+}
+/* üst şerit ve sekmeler sunumda gizlenir (globals.css'in !important'sız kuralını
+   kendi `display: flex !important` bildirimimiz ezdiği için burada tekrarlıyoruz) */
+.presentation-mode .room-header.mz-header,
+.presentation-mode .manager-view-tabs {
+  display: none !important;
+}
+
+/* --------------------------------------------------------------- tablet / mobil */
+@media (max-width: 1240px) {
+  .online-auction.mz-auction {
+    grid-template-columns: 240px minmax(0, 1fr) minmax(240px, 280px) !important;
+  }
+  .mz-action-bar__dock {
+    grid-template-columns: auto minmax(120px, 200px) minmax(0, 1fr);
+    gap: 12px;
+  }
+}
+
+@media (max-width: 1024px) {
+  /* sağ ray sahnenin ALTINA iner; menajer rayı yatay şerit olur */
+  .online-auction.mz-auction {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .online-auction.mz-auction > .mz-manager-rail,
+  .online-auction.mz-auction > .mz-squad-rail {
+    position: static;
+  }
+  .mz-action-bar__dock {
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.2fr);
+  }
+  .mz-ledger {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mz-ledger__block--upcoming {
+    border-top: 1px solid var(--mz-line);
+    border-left: 0;
+    padding-top: 10px;
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  /* 6. mobil: durum çubuğu + geri sayım + artışlar + birincil CTA sabit dipte */
+  .room-header.mz-header {
+    position: sticky;
+    z-index: 45;
+    top: 0;
+    gap: 8px 10px;
+    padding: 8px 10px !important;
+    border-radius: 0 0 16px 16px !important;
+    background: rgba(12, 10, 7, 0.96) !important;
+    backdrop-filter: blur(18px);
+  }
+  /* lot sayacı zaten lot başlık şeridinde; şeritte yatay taşma yaratmasın */
+  .mz-header__live {
+    display: none;
+  }
+  .room-header.mz-header .room-brand img {
+    height: 30px;
+    width: 30px;
+  }
+  .room-header.mz-header .manager-identity {
+    order: 3;
+    flex: 1 1 auto;
+    width: auto !important;
+    margin-left: 0;
+    text-align: left;
+  }
+  .room-header.mz-header .room-share {
+    order: 2;
+    margin-left: auto;
+  }
+  .room-header.mz-header .mz-header__tools {
+    order: 4;
+    margin-left: 0;
+  }
+  .online-room.mz-mobile-dock {
+    padding-bottom: calc(202px + env(safe-area-inset-bottom)) !important;
+  }
+  .mz-mobile-dock .mz-action-bar {
+    padding: 10px 12px !important;
+  }
+  .mz-mobile-dock .mz-action-bar__dock {
+    position: fixed !important;
+    z-index: 95;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    grid-template-columns: auto minmax(0, 1fr) !important;
+    gap: 8px 12px;
+    border-top: 1px solid var(--mz-line);
+    background: rgba(12, 10, 7, 0.97);
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    box-shadow: 0 -14px 40px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(18px);
+  }
+  .mz-mobile-dock .mz-action-bar__dock > .mz-timer {
+    grid-column: 1;
+    grid-row: 1;
+    height: 52px;
+    width: 52px;
+  }
+  .mz-mobile-dock .mz-action-bar__dock > .mz-timer .mz-timer__seconds {
+    font-size: 16px;
+  }
+  .mz-mobile-dock .mz-action-bar__dock > .mz-bid-hero {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .mz-mobile-dock .mz-action-bar__dock > .mz-bid-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    /* mobil referans: artışlar tek satırda, altında geniş birincil CTA + pas */
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+  .mz-mobile-dock .mz-action-bar__dock .online-actions button {
+    width: auto !important;
+    min-width: 0;
+    padding: 12px 6px !important;
+  }
+  .mz-mobile-dock .mz-action-bar__dock .online-actions .primary-action.mz-bid-cta {
+    grid-column: 1 / 3;
+    padding: 13px 18px !important;
+  }
+  .mz-mobile-dock .mz-action-bar__dock .online-actions .mz-bid-pass {
+    grid-column: 3;
+  }
+  .presentation-mode .mz-action-bar__dock {
+    position: static !important;
+  }
+  /* mevcut "Kadrom" sekmeleri artık akışta; alt bar teklifin */
+  .online-room .manager-view-tabs {
+    position: static !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    max-width: none !important;
+    margin: 14px 0 0 !important;
+    box-shadow: none !important;
+  }
+  .online-room .manager-view-tabs button {
+    min-height: 52px;
+  }
+  .mz-mobile-dock .chat-fab {
+    bottom: calc(206px + env(safe-area-inset-bottom)) !important;
+  }
+  .mz-mobile-dock .room-chat {
+    bottom: calc(206px + env(safe-area-inset-bottom)) !important;
+  }
+  .online-lot-head.mz-lot-head {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 6px 10px !important;
+  }
+  .mz-lot-head__count {
+    grid-column: 1;
+  }
+  .mz-lot-head__position {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .mz-lot-head__state {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  .online-lot-head .mz-lot-chip {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+  .online-player.mz-lot-card {
+    padding: 18px !important;
+  }
+  .mz-lot-stamp {
+    top: 12px;
+    left: 12px;
+    font-size: 12px;
+  }
+  .mz-action-bar .custom-bid-form input {
+    max-width: none;
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mz-timer.is-critical {
+    animation: none;
+  }
+  .mz-timer__value {
+    transition: none;
+  }
+}
+
+@media (max-width: 520px) {
+  /* dar ekranda marka sloganı ve lot sayacı şeritten çıkar, gerisi sığar */
+  .room-header.mz-header .room-brand small {
+    display: none;
+  }
+  .room-header.mz-header .room-brand b {
+    font-size: 16px !important;
+  }
+  .mz-header__tools .tool-btn {
+    padding: 7px 9px !important;
+    font-size: 9px !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Lead düzeltmeleri (alt ajan teslimi sonrası inceleme):
+   1) mobilde lider adı kesiliyordu ("Al Menaje…") — tutar satırı sarılabilir,
+      lider çipi tam genişlikte alt satıra iner;
+   2) masaüstünde aksiyon çubuğu 1440×980'de katlanma altında kalıyordu —
+      lot kartı ve başlık dikey ritmi sıkılaştırıldı.
+   -------------------------------------------------------------------------- */
+@media (max-width: 760px) {
+  .mz-mobile-dock .mz-action-bar .bid-summary {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 10px;
+    width: 100%;
+  }
+  .mz-mobile-dock .mz-action-bar .current-leader {
+    flex: 0 1 auto;
+    max-width: 100%;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mz-mobile-dock .mz-action-bar__dock > .mz-bid-hero {
+    min-width: 0;
+  }
+}
+
+@media (min-width: 1025px) {
+  .online-player.mz-lot-card {
+    min-height: 232px !important;
+    padding: 22px 26px !important;
+  }
+  .online-auction.mz-auction .mz-lot-head {
+    padding-bottom: 8px !important;
+  }
+  .online-auction.mz-auction .mz-lot-stage {
+    padding-bottom: 4px !important;
+  }
+}

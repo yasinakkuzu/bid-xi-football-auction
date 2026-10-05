@@ -23,12 +23,15 @@ import {
 import { ADULT_AGE, MIN_AGE, ageBand as bandForAge, ageFromBirthYear, type AgeBand } from '../../lib/age-policy';
 import { customPoolOptions } from '../../lib/club-leagues';
 
+import { AuctionActionBar } from './bid-bar';
 import { clockOffset, remainingSeconds } from './clock';
 import { LeaderboardOptIn } from './leaderboard-opt-in';
-import { ManualControls } from './manual-controls';
+import { LotLedger, lotOwnerName } from './lot-ledger';
 import { ManagerDrawer } from './manager-drawer';
 import { OnlineResults } from './online-results';
-import { PlayerImage, SquadPanel } from './squad-panel';
+import { PlayerImage } from './player-image';
+import { SquadPanel } from './squad-panel';
+import { SquadRail } from './squad-rail';
 import {
   auctionFormationPoint,
   money,
@@ -38,6 +41,8 @@ import {
   type Session,
   type Settings,
 } from './view-types';
+/* Auction-table structure lives in its own stylesheet; the token layer stays in theme-mezat.css. */
+import '../theme-auction.css';
 
 function readSavedSession(roomCode?: string, managerName?: string) {
   const requestedCode = roomCode?.trim().toUpperCase();
@@ -116,7 +121,6 @@ async function json(url: string, options?: RequestInit) {
 }
 
 /* The request lock intentionally uses a ref so two taps in the same render frame cannot dispatch twice. */
-/* eslint-disable react-hooks/refs */
 export function OnlineGame() {
   const router = useRouter();
   const [hydrating, setHydrating] = useState(true);
@@ -1204,6 +1208,28 @@ export function OnlineGame() {
     !lotFilled(myManager, current),
   );
   const selected = selectedManager === null ? null : game?.managers[selectedManager] || null;
+  /** Presentation of the auction table (items 1-6). No behaviour is derived here beyond what is already rendered. */
+  const timerSeconds = room.settings.timerSeconds || 20;
+  const defaultIncrement: 5 | 10 | 25 =
+    room.settings.bidIncrement === 10 ? 10 : room.settings.bidIncrement === 25 ? 25 : 5;
+  const isSpectator = me?.role === 'spectator';
+  const liveBidding = mode === 'live' && !isSpectator;
+  /** `has-mobile-bar` keeps its historical meaning (the fixed "Kadrom" tabs need bottom room). */
+  const mobileBar = Boolean(game && myManager && room.status === 'auction');
+  /** The bottom bid bar only replaces those tabs on the auction table itself. */
+  const mobileDock = Boolean(mobileBar && liveBidding && view === 'auction');
+  /** `rating` is deleted from the public state while ratings are hidden, so read it defensively. */
+  const ratingValue = current && typeof current.rating === 'number' ? current.rating : null;
+  const revealRating = Boolean(room.settings.revealRatings) && ratingValue !== null;
+  const soldTo = game && current ? lotOwnerName(game, current.id) : undefined;
+  /**
+   * The lot card can only ever show a *terminal* bid state (`activeTurn === null` with a
+   * locked leader): the server advances to the next lot inside the same `sell`/timeout
+   * action, so a post-sale state is never rendered for the current lot. Sales that did
+   * happen are listed by `LotLedger` below the lot.
+   */
+  const lotWon = Boolean(game && current && !auctionOpen && game.leader !== null && !game.paused);
+  const lotStamp = soldTo ? 'sold' : lotWon ? 'won' : null;
   const hostControls =
     isHost && mode === 'live' && game && current ? (
       <div className="host-controls permanent-host-controls">
@@ -1241,10 +1267,10 @@ export function OnlineGame() {
 
   return (
     <main
-      className={`online-room ${game && myManager && room.status === 'auction' ? 'has-mobile-bar' : ''} ${presentation ? 'presentation-mode' : ''}`}
+      className={`online-room ${mobileBar ? 'has-mobile-bar' : ''} ${mobileDock ? 'mz-mobile-dock' : ''} ${presentation ? 'presentation-mode' : ''}`}
     >
-      <header className="room-header">
-        <div>
+      <header className="room-header mz-header">
+        <div className="mz-header__brand">
           <button
             className="brand-lockup brand-home room-brand"
             onClick={brandHome}
@@ -1256,16 +1282,23 @@ export function OnlineGame() {
               <small>FUTBOL AÇIK ARTIRMA OYUNU</small>
             </span>
           </button>
-          <span className={`connection ${online ? 'ok' : ''}`}>{online ? '● Bağlı' : '● Yeniden bağlanıyor'}</span>
+          <span className="mz-header__status">
+            <span className={`connection ${online ? 'ok' : ''}`}>{online ? '● Bağlı' : '● Yeniden bağlanıyor'}</span>
+            {game && room.status === 'auction' && (
+              <span className="mz-header__live">
+                ● CANLI · {managers.length} MENAJER · LOT {game.index + 1}/{game.pool.length}
+              </span>
+            )}
+          </span>
         </div>
         {myManager && (
-          <div className="manager-identity">
+          <div className="manager-identity mz-header__identity">
             <small>MENAJER · KALAN BÜTÇE</small>
             <b>{myManager.name}</b>
             <strong>{money(myManager.budget)}</strong>
           </div>
         )}
-        <div className="room-share">
+        <div className="room-share mz-header__code">
           <button className="room-code" onClick={copyRoomCode} title="Oda kodunu kopyala">
             <small>ODA KODU · KOPYALA</small>
             <b>{room.code}</b>
@@ -1276,14 +1309,16 @@ export function OnlineGame() {
             </button>
           )}
         </div>
-        <button className="tool-btn leave-room" onClick={() => confirmLeave(false)}>
-          {room.status === 'lobby' ? 'Odadan çık' : 'Ana sayfaya dön'}
-        </button>
-        {game && room.status === 'auction' && (
-          <button className="tool-btn tv-mode" onClick={togglePresentation}>
-            {presentation ? 'TV modundan çık' : '▣ TV modu'}
+        <div className="mz-header__tools">
+          {game && room.status === 'auction' && (
+            <button className="tool-btn tv-mode" onClick={togglePresentation}>
+              {presentation ? 'TV modundan çık' : '▣ TV modu'}
+            </button>
+          )}
+          <button className="tool-btn leave-room" onClick={() => confirmLeave(false)}>
+            {room.status === 'lobby' ? 'Odadan çık' : 'Ana sayfaya dön'}
           </button>
-        )}
+        </div>
       </header>
       {presentation && (
         <button className="presentation-exit" onClick={togglePresentation}>
@@ -1434,8 +1469,8 @@ export function OnlineGame() {
           <SquadPanel manager={myManager} />
         </div>
       ) : game && current ? (
-        <section className="online-auction">
-          <aside>
+        <section className="online-auction mz-auction">
+          <aside className="mz-manager-rail" aria-label="Menajerler">
             <p className="eyebrow">MENAJERLER · KADRO İÇİN TIKLA</p>
             {game.managers.map((manager, index) => {
               const filled = lotFilled(manager, current),
@@ -1485,12 +1520,15 @@ export function OnlineGame() {
               );
             })}
           </aside>
-          <div>
-            <div className="online-lot-head">
-              <span>
+          <div className="mz-lot-stage">
+            <div className="online-lot-head mz-lot-head">
+              <span className="mz-lot-head__count">
                 {isCoach(current) ? 'TEKNİK DİREKTÖR AÇIK ARTIRMASI' : `LOT ${game.index + 1}/${game.pool.length}`}
               </span>
-              <b>
+              <span className="mz-lot-head__position">
+                {current.slot} · {current.role}
+              </span>
+              <b className="mz-lot-head__state">
                 {mode === 'manual'
                   ? 'MANUEL YÖNETİM'
                   : game.paused
@@ -1501,9 +1539,9 @@ export function OnlineGame() {
                         ? 'SONRAKİ LOT'
                         : 'TEKLİFLER KAPANDI'}
               </b>
-              <em className={remaining > 0 && remaining <= 5 ? 'countdown-critical' : ''}>
+              <em className={`mz-lot-chip ${game.deadline && remaining > 0 && remaining <= 5 ? 'is-critical' : ''}`}>
                 <i />
-                {game.deadline ? `${remaining}s` : '—'}
+                {game.deadline || (game.paused && remaining > 0) ? `${remaining}s` : '—'}
               </em>
             </div>
             {game.bonusReveal && (
@@ -1545,8 +1583,21 @@ export function OnlineGame() {
               </div>
             )}
             <article
-              className={`online-player ${isCoach(current) ? 'coach-lot' : ''} ${bonusLot ? 'bonus-lot-card' : ''}`}
+              className={`online-player mz-lot-card ${isCoach(current) ? 'coach-lot' : ''} ${bonusLot ? 'bonus-lot-card' : ''}`}
             >
+              {lotStamp && (
+                <span
+                  className={`mz-lot-stamp mz-lot-stamp--${lotStamp}`}
+                  role="status"
+                  aria-label={
+                    lotStamp === 'sold'
+                      ? `Satıldı: ${soldTo}`
+                      : 'Satıldı: en yüksek teklif kilitlendi, kurucu onayı bekleniyor'
+                  }
+                >
+                  SATILDI
+                </span>
+              )}
               {!isCoach(current) && (
                 <div
                   className="auction-mini-formation"
@@ -1581,100 +1632,73 @@ export function OnlineGame() {
                   </p>
                 ) : (
                   <p>
-                    {current.club || 'Kulüp bilgisi yok'} ·{' '}
-                    {room.settings.revealRatings
-                      ? `${current.rating}/100 · ${ratingLevel(current.rating)}`
-                      : 'Seviye gizli'}
+                    {current.club || 'Kulüp bilgisi yok'}
+                    {current.league ? ` · ${current.league}` : ''}
                   </p>
                 )}
+                <div className="mz-lot-plates" aria-label="Lot bilgileri">
+                  <div className={`mz-lot-plate ${revealRating ? '' : 'is-hidden'}`}>
+                    <small>PUAN</small>
+                    {revealRating && ratingValue !== null ? (
+                      <strong>
+                        {ratingValue.toFixed(1)}
+                        <em>/100</em>
+                      </strong>
+                    ) : (
+                      <>
+                        <strong className="mz-lot-plate__value" aria-hidden="true">
+                          00.0
+                        </strong>
+                        <span className="mz-lot-plate__lock" aria-hidden="true">
+                          🔒 GİZLİ
+                        </span>
+                        <span className="sr-only">Puan gizli; oyuncu satıldığında açıklanır.</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="mz-lot-plate">
+                    <small>AÇILIŞ</small>
+                    <strong>{money(auctionOpeningPrice(current, game.managers))}</strong>
+                  </div>
+                  <div className="mz-lot-plate">
+                    <small>SEVİYE</small>
+                    <strong>{revealRating && ratingValue !== null ? ratingLevel(ratingValue) : 'Gizli'}</strong>
+                  </div>
+                </div>
               </div>
             </article>
-            <div className="online-bid">
-              <div className="bid-summary">
-                <small>{game.leader === null ? 'AÇILIŞ' : 'MEVCUT TEKLİF'}</small>
-                <strong aria-live="polite">
-                  {money(game.leader === null ? auctionOpeningPrice(current, game.managers) : game.bid)}
-                </strong>
-                {game.leader !== null && (
-                  <span className="current-leader" title={game.managers[game.leader].name}>
-                    {game.managers[game.leader].name}
-                  </span>
-                )}
-              </div>
-              {mode === 'manual' ? (
-                isHost ? (
-                  <ManualControls key={current.id} game={game} current={current} busy={busy} onAction={action} />
-                ) : (
-                  <p className="manual-waiting">Kurucu, kazanan menajeri ve satış tutarını giriyor.</p>
-                )
-              ) : me?.role === 'spectator' ? (
-                <p>Seyirci olarak açık artırmayı izliyorsunuz.</p>
-              ) : (
-                <div className="online-action-stack">
-                  <div className="online-actions">
-                    {game.leader === null ? (
-                      <button
-                        className="primary-action"
-                        disabled={!canParticipate || busy}
-                        onClick={() => action('bid', { increment: 0 })}
-                      >
-                        Teklif ver
-                      </button>
-                    ) : (
-                      [5, 10, 25].map((increment) => (
-                        <button
-                          key={increment}
-                          disabled={!canParticipate || busy}
-                          onClick={() => action('bid', { increment })}
-                        >
-                          +{increment}M
-                        </button>
-                      ))
-                    )}
-                    <button disabled={!canParticipate || busy} onClick={() => action('pass')}>
-                      Pas
-                    </button>
-                  </div>
-                  <form
-                    className="custom-bid-form"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      const amount = Math.round(Number(customBid));
-                      if (Number.isFinite(amount) && amount > 0)
-                        void action('bid', { amount }).then((success) => {
-                          if (success) setCustomBid('');
-                        });
-                    }}
-                  >
-                    <label htmlFor="custom-bid">Elle teklif ($M)</label>
-                    <input
-                      id="custom-bid"
-                      inputMode="numeric"
-                      min={game.leader === null ? auctionOpeningPrice(current, game.managers) : game.bid + 1}
-                      max={myManager?.budget}
-                      step="1"
-                      type="number"
-                      value={customBid}
-                      onChange={(event) => setCustomBid(event.target.value)}
-                      placeholder={String(
-                        game.leader === null ? auctionOpeningPrice(current, game.managers) : game.bid + 1,
-                      )}
-                      disabled={!canParticipate || busy}
-                    />
-                    <button disabled={!canParticipate || busy || !customBid}>Teklif ver</button>
-                  </form>
-                </div>
-              )}
-              {hostControls}
-            </div>
+            <LotLedger game={game} />
+            <AuctionActionBar
+              game={game}
+              current={current}
+              myManager={myManager}
+              mode={mode}
+              isHost={isHost}
+              isSpectator={isSpectator}
+              canParticipate={canParticipate}
+              busy={busy}
+              remaining={remaining}
+              timerSeconds={timerSeconds}
+              defaultIncrement={defaultIncrement}
+              customBid={customBid}
+              onCustomBidChange={setCustomBid}
+              onAction={action}
+            />
+            {hostControls && <div className="mz-host-row">{hostControls}</div>}
           </div>
-          <aside aria-live="polite" aria-label="Canlı açık artırma akışı">
-            <p className="eyebrow">CANLI AKIŞ</p>
-            {game.feed.map((item, index) => (
-              <p className="online-feed" key={`${item}-${index}`}>
-                {item}
-              </p>
-            ))}
+          <aside className="mz-squad-rail" aria-label="Kadrom ve canlı akış">
+            {myManager ? <SquadRail manager={myManager} /> : null}
+            <div className="mz-feed" aria-live="polite" aria-label="Canlı açık artırma akışı">
+              <p className="eyebrow">CANLI AKIŞ</p>
+              {game.feed.map((item, index) => (
+                <p className="online-feed" key={`${item}-${index}`}>
+                  {item}
+                </p>
+              ))}
+            </div>
+            {!myManager && (
+              <p className="mz-bid-note">Seyirci olarak izliyorsunuz; kadro paneli menajerler için görünür.</p>
+            )}
           </aside>
         </section>
       ) : null}
@@ -1799,8 +1823,6 @@ export function OnlineGame() {
     </main>
   );
 }
-
-/* eslint-enable react-hooks/refs */
 
 export default function OnlineRedirect() {
   useEffect(() => {
