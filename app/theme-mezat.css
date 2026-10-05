@@ -7,17 +7,21 @@
    ========================================================================== */
 
 :root {
-  --mz-bg: #070b08;
-  --mz-panel: #0d130e;
-  --mz-panel-2: #121b13;
-  --mz-line: #1e2a1f;
-  --mz-line-2: #283a2a;
-  --mz-lime: #c9ff45;
-  --mz-lime-dim: #a9ed24;
-  --mz-amber: #ffb45c;
-  --mz-text: #f5f6f4;
-  --mz-muted: #9aa39c;
-  --mz-dim: #606a62;
+  /* globals.css marka rengini bu iki değişkende tutuyor ve --lime'ı 108 yerde
+     kullanıyor; burada yeniden tanımlayınca eski katmanın tamamı pirince döner. */
+  --lime: #ffb45c;
+  --ink: #0c0a07;
+  --mz-bg: #0c0a07;
+  --mz-panel: #15110b;
+  --mz-panel-2: #1c1710;
+  --mz-line: #2b2317;
+  --mz-line-2: #3a2f1f;
+  --mz-accent: #ffb45c;
+  --mz-accent-dim: #e79a3c;
+  --mz-amber: #ff7a59;
+  --mz-text: #f7efe2;
+  --mz-muted: #b3a795;
+  --mz-dim: #7d7364;
   --mz-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
   --mz-radius: 20px;
 }
@@ -25,8 +29,8 @@
 /* ---------- zemin ---------- */
 body {
   background:
-    radial-gradient(1200px 600px at 15% -10%, rgba(201, 255, 69, 0.07), transparent 60%),
-    radial-gradient(900px 520px at 110% 110%, rgba(201, 255, 69, 0.05), transparent 55%), var(--mz-bg) !important;
+    radial-gradient(1200px 600px at 15% -10%, rgba(255, 180, 92, 0.07), transparent 60%),
+    radial-gradient(900px 520px at 110% 110%, rgba(255, 180, 92, 0.05), transparent 55%), var(--mz-bg) !important;
   color: var(--mz-text);
 }
 
@@ -115,24 +119,24 @@ h3 {
 .room-code,
 .room-code-input {
   border: 1px solid var(--mz-line-2) !important;
-  background: #0b120c !important;
+  background: #17120b !important;
   border-radius: 14px !important;
-  color: var(--mz-lime) !important;
+  color: var(--mz-accent) !important;
   font-weight: 900 !important;
   letter-spacing: 0.12em;
 }
 .room-share,
 .invite-link {
   border: 1px solid var(--mz-line-2) !important;
-  background: #0b120c !important;
+  background: #17120b !important;
   color: var(--mz-muted) !important;
   border-radius: 12px !important;
   font-weight: 800 !important;
 }
 .room-share:hover,
 .invite-link:hover {
-  border-color: var(--mz-lime) !important;
-  color: var(--mz-lime) !important;
+  border-color: var(--mz-accent) !important;
+  color: var(--mz-accent) !important;
 }
 
 /* ---------- giriş ekranı ---------- */
@@ -145,7 +149,7 @@ h3 {
 }
 .online-tabs {
   border: 1px solid var(--mz-line) !important;
-  background: #0b110c !important;
+  background: #15110b !important;
   border-radius: 16px !important;
   padding: 5px !important;
 }
@@ -155,13 +159,13 @@ h3 {
   font-weight: 900 !important;
 }
 .online-tabs button.active {
-  background: var(--mz-lime) !important;
-  color: #08110a !important;
+  background: var(--mz-accent) !important;
+  color: #1a1206 !important;
 }
 
 .online-input {
   border: 1px solid var(--mz-line-2) !important;
-  background: #0b120c !important;
+  background: #17120b !important;
   border-radius: 14px !important;
   color: var(--mz-text) !important;
   padding: 14px 15px !important;
@@ -174,8 +178,8 @@ h3 {
   color: var(--mz-dim) !important;
 }
 .online-input:focus {
-  border-color: var(--mz-lime) !important;
-  box-shadow: 0 0 0 4px rgba(201, 255, 69, 0.13) !important;
+  border-color: var(--mz-accent) !important;
+  box-shadow: 0 0 0 4px rgba(255, 180, 92, 0.13) !important;
   outline: none !important;
 }
 
@@ -193,7 +197,7 @@ h3 {
 .online-ability,
 .check-setting {
   border: 1px solid var(--mz-line) !important;
-  background: #0b110c !important;
+  background: #15110b !important;
   border-radius: 14px !important;
   color: var(--mz-muted) !important;
   transition:
@@ -211,13 +215,13 @@ h3 {
 .ai-level-picker button.active,
 .ability-choice.active,
 .online-ability.active {
-  border-color: var(--mz-lime) !important;
-  background: linear-gradient(180deg, rgba(201, 255, 69, 0.16), rgba(201, 255, 69, 0.04)) !important;
+  border-color: var(--mz-accent) !important;
+  background: linear-gradient(180deg, rgba(255, 180, 92, 0.16), rgba(255, 180, 92, 0.04)) !important;
   color: var(--mz-text) !important;
 }
 .tier-picker button span,
 .tier-tools span {
-  color: var(--mz-lime) !important;
+  color: var(--mz-accent) !important;
 }
 .online-settings button strong,
 .ability-choice strong,
@@ -228,22 +232,22 @@ h3 {
 .advanced-settings select,
 .online-settings select {
   border: 1px solid var(--mz-line-2) !important;
-  background: #0b120c !important;
+  background: #17120b !important;
   color: var(--mz-text) !important;
   border-radius: 12px !important;
 }
 
 .duration-estimate {
-  border: 1px solid rgba(201, 255, 69, 0.22) !important;
-  background: rgba(201, 255, 69, 0.055) !important;
+  border: 1px solid rgba(255, 180, 92, 0.22) !important;
+  background: rgba(255, 180, 92, 0.055) !important;
   border-radius: 16px !important;
 }
 .duration-estimate strong {
-  color: var(--mz-lime) !important;
+  color: var(--mz-accent) !important;
 }
 .duration-estimate.uzun {
-  border-color: rgba(255, 180, 92, 0.4) !important;
-  background: rgba(255, 180, 92, 0.08) !important;
+  border-color: rgba(255, 122, 89, 0.4) !important;
+  background: rgba(255, 122, 89, 0.08) !important;
 }
 .duration-estimate.uzun strong {
   color: var(--mz-amber) !important;
@@ -252,12 +256,12 @@ h3 {
 .leaderboard-opt-in,
 .consent-check {
   border: 1px solid var(--mz-line) !important;
-  background: #0b110c !important;
+  background: #15110b !important;
   border-radius: 14px !important;
 }
 .leaderboard-opt-in input,
 .consent-check input {
-  accent-color: var(--mz-lime) !important;
+  accent-color: var(--mz-accent) !important;
 }
 .leaderboard-opt-in b,
 .consent-check a {
@@ -268,20 +272,20 @@ h3 {
 .start {
   border: 0 !important;
   border-radius: 16px !important;
-  background: linear-gradient(180deg, #dcff7d, var(--mz-lime)) !important;
-  color: #08110a !important;
+  background: linear-gradient(180deg, #ffd79a, var(--mz-accent)) !important;
+  color: #1a1206 !important;
   font-weight: 900 !important;
-  box-shadow: 0 14px 34px rgba(201, 255, 69, 0.22) !important;
+  box-shadow: 0 14px 34px rgba(255, 180, 92, 0.22) !important;
   transition:
     transform 0.12s ease,
     box-shadow 0.12s ease;
 }
 .start:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 18px 40px rgba(201, 255, 69, 0.3) !important;
+  box-shadow: 0 18px 40px rgba(255, 180, 92, 0.3) !important;
 }
 .start:disabled {
-  background: #1a211a !important;
+  background: #241d12 !important;
   color: var(--mz-dim) !important;
   box-shadow: none !important;
 }
@@ -301,7 +305,7 @@ h3 {
 }
 .member-list > * {
   border: 1px solid transparent !important;
-  background: #0b110c !important;
+  background: #15110b !important;
   border-radius: 14px !important;
 }
 .manager-identity {
@@ -341,7 +345,7 @@ h3 {
   align-items: center !important;
   gap: 10px !important;
   border: 1px solid transparent !important;
-  background: #0b110c !important;
+  background: #15110b !important;
   border-radius: 14px !important;
   padding: 10px 12px !important;
   margin-top: 8px !important;
@@ -361,9 +365,9 @@ h3 {
   border-radius: 11px !important;
   display: grid;
   place-items: center;
-  background: #16201651 !important;
+  background: #241d1251 !important;
   border: 1px solid var(--mz-line-2) !important;
-  color: var(--mz-lime) !important;
+  color: var(--mz-accent) !important;
   font-weight: 900 !important;
 }
 .online-manager-card b {
@@ -380,18 +384,18 @@ h3 {
   font-weight: 900;
 }
 .online-manager-card.leader {
-  border-color: rgba(201, 255, 69, 0.5) !important;
-  background: linear-gradient(90deg, rgba(201, 255, 69, 0.14), rgba(201, 255, 69, 0.03)) !important;
+  border-color: rgba(255, 180, 92, 0.5) !important;
+  background: linear-gradient(90deg, rgba(255, 180, 92, 0.14), rgba(255, 180, 92, 0.03)) !important;
 }
 .online-manager-card.leader em {
-  color: var(--mz-lime) !important;
+  color: var(--mz-accent) !important;
 }
 .online-manager-card.passed,
 .online-manager-card.ineligible {
   opacity: 0.55;
 }
 .online-manager-card.filled em {
-  color: var(--mz-lime-dim) !important;
+  color: var(--mz-accent-dim) !important;
 }
 .manager-lot-status {
   color: var(--mz-dim) !important;
@@ -421,8 +425,8 @@ h3 {
   display: inline-flex !important;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(255, 180, 92, 0.35) !important;
-  background: rgba(255, 180, 92, 0.08) !important;
+  border: 1px solid rgba(255, 122, 89, 0.35) !important;
+  background: rgba(255, 122, 89, 0.08) !important;
   color: var(--mz-amber) !important;
   border-radius: 999px !important;
   padding: 6px 14px !important;
@@ -440,7 +444,7 @@ h3 {
 }
 .online-lot-head em.countdown-critical {
   border-color: var(--mz-amber) !important;
-  background: rgba(255, 180, 92, 0.18) !important;
+  background: rgba(255, 122, 89, 0.18) !important;
 }
 @keyframes mz-pulse {
   0%,
@@ -464,7 +468,7 @@ h3 {
   padding: 26px 28px !important;
   border: 1px solid var(--mz-line) !important;
   border-radius: 20px !important;
-  background: radial-gradient(circle at 72% 22%, rgba(201, 255, 69, 0.14), transparent 46%), #0a1009 !important;
+  background: radial-gradient(circle at 72% 22%, rgba(255, 180, 92, 0.14), transparent 46%), #14100a !important;
 }
 .online-player-copy {
   max-width: none !important;
@@ -478,7 +482,7 @@ h3 {
   border-radius: 18px;
   overflow: hidden;
   border: 1px solid var(--mz-line-2);
-  background: #0b120c;
+  background: #17120b;
 }
 .online-player-visual span {
   position: absolute;
@@ -487,7 +491,7 @@ h3 {
   place-items: center;
   font-size: 54px;
   font-weight: 900;
-  color: var(--mz-lime);
+  color: var(--mz-accent);
 }
 .online-player-visual img,
 .online-player-photo {
@@ -503,8 +507,8 @@ h3 {
   place-items: center;
   font-size: 54px;
   font-weight: 900;
-  color: var(--mz-lime);
-  background: #0b120c;
+  color: var(--mz-accent);
+  background: #17120b;
 }
 .auction-mini-formation {
   left: auto !important;
@@ -531,15 +535,15 @@ h3 {
 .bid-summary strong {
   font-size: clamp(34px, 5vw, 52px) !important;
   letter-spacing: -0.03em !important;
-  color: var(--mz-lime) !important;
+  color: var(--mz-accent) !important;
 }
 .current-leader {
   border: 1px solid var(--mz-line) !important;
-  background: #0b110c !important;
+  background: #15110b !important;
   border-radius: 16px !important;
 }
 .current-leader b {
-  color: var(--mz-lime) !important;
+  color: var(--mz-accent) !important;
 }
 
 /* teklif kontrolleri */
@@ -552,7 +556,7 @@ h3 {
 .online-action-stack button,
 .custom-bid-form button {
   border: 1px solid var(--mz-line-2) !important;
-  background: #0c130d !important;
+  background: #18130c !important;
   color: var(--mz-text) !important;
   border-radius: 14px !important;
   font-weight: 900 !important;
@@ -561,15 +565,15 @@ h3 {
 }
 .online-actions button:hover,
 .online-action-stack button:hover {
-  border-color: var(--mz-lime) !important;
-  color: var(--mz-lime) !important;
+  border-color: var(--mz-accent) !important;
+  color: var(--mz-accent) !important;
 }
 .online-actions .primary-action,
 .online-action-stack .primary-action {
   border: 0 !important;
-  background: linear-gradient(180deg, #dcff7d, var(--mz-lime)) !important;
-  color: #08110a !important;
-  box-shadow: 0 14px 34px rgba(201, 255, 69, 0.22) !important;
+  background: linear-gradient(180deg, #ffd79a, var(--mz-accent)) !important;
+  color: #1a1206 !important;
+  box-shadow: 0 14px 34px rgba(255, 180, 92, 0.22) !important;
   padding: 15px 24px !important;
   border-radius: 14px !important;
   font-size: 15px !important;
@@ -583,7 +587,7 @@ h3 {
   padding: 16px 18px !important;
   border: 1px solid var(--mz-line) !important;
   border-radius: 18px !important;
-  background: #0b110c !important;
+  background: #15110b !important;
 }
 .bid-summary {
   flex: 0 0 auto;
@@ -605,7 +609,7 @@ h3 {
 }
 .custom-bid-form input {
   border: 1px solid var(--mz-line-2) !important;
-  background: #0b120c !important;
+  background: #17120b !important;
   color: var(--mz-text) !important;
   border-radius: 12px !important;
 }
@@ -624,12 +628,12 @@ h3 {
   line-height: 1.5;
 }
 .online-feed p:first-child {
-  border-color: var(--mz-lime) !important;
+  border-color: var(--mz-accent) !important;
   color: var(--mz-text) !important;
 }
 .bonus-lot-alert {
-  border: 1px solid rgba(255, 180, 92, 0.45) !important;
-  background: rgba(255, 180, 92, 0.1) !important;
+  border: 1px solid rgba(255, 122, 89, 0.45) !important;
+  background: rgba(255, 122, 89, 0.1) !important;
   color: var(--mz-amber) !important;
   border-radius: 16px !important;
   font-weight: 900 !important;
@@ -637,7 +641,7 @@ h3 {
 .auto-assignment-card,
 .missed-bonus-card {
   border: 1px solid var(--mz-line) !important;
-  background: #0b110c !important;
+  background: #15110b !important;
   border-radius: 16px !important;
 }
 .online-lot-progress {
@@ -655,7 +659,7 @@ h3 {
 .online-squad-formation {
   border-radius: 16px !important;
   border: 1px solid var(--mz-line) !important;
-  background: radial-gradient(120% 90% at 50% 0%, rgba(201, 255, 69, 0.06), transparent 60%), #0a1009 !important;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(255, 180, 92, 0.06), transparent 60%), #14100a !important;
 }
 .online-halfway,
 .online-center-circle {
@@ -666,48 +670,48 @@ h3 {
   border-radius: 10px !important;
 }
 .online-formation-player.filled {
-  background: var(--mz-lime) !important;
-  color: #08110a !important;
+  background: var(--mz-accent) !important;
+  color: #1a1206 !important;
 }
 .online-squad-list article {
   border: 1px solid var(--mz-line) !important;
-  background: #0b110c !important;
+  background: #15110b !important;
   border-radius: 14px !important;
 }
 .online-squad-summary strong {
-  color: var(--mz-lime) !important;
+  color: var(--mz-accent) !important;
   font-variant-numeric: tabular-nums;
 }
 
 .manager-view-tabs button,
 .formation-picker button {
   border: 1px solid var(--mz-line) !important;
-  background: #0b110c !important;
+  background: #15110b !important;
   color: var(--mz-muted) !important;
   border-radius: 12px !important;
   font-weight: 900 !important;
 }
 .manager-view-tabs button.active,
 .formation-picker button.active {
-  background: var(--mz-lime) !important;
-  color: #08110a !important;
-  border-color: var(--mz-lime) !important;
+  background: var(--mz-accent) !important;
+  color: #1a1206 !important;
+  border-color: var(--mz-accent) !important;
 }
 
 /* sohbet, çekmece, host kontrolleri */
 .chat-fab {
   border: 1px solid var(--mz-line-2) !important;
-  background: #0b120c !important;
+  background: #17120b !important;
   color: var(--mz-text) !important;
   border-radius: 999px !important;
   box-shadow: var(--mz-shadow);
 }
 .chat-fab.has-unread {
-  border-color: var(--mz-lime) !important;
+  border-color: var(--mz-accent) !important;
 }
 .chat-fab b {
-  background: var(--mz-lime) !important;
-  color: #08110a !important;
+  background: var(--mz-accent) !important;
+  color: #1a1206 !important;
 }
 .room-chat,
 .manager-drawer,
@@ -719,15 +723,15 @@ h3 {
 }
 .host-control-dock,
 .host-controls {
-  border: 1px solid rgba(201, 255, 69, 0.25) !important;
+  border: 1px solid rgba(255, 180, 92, 0.25) !important;
   background: rgba(9, 14, 10, 0.96) !important;
   border-radius: 16px !important;
   backdrop-filter: blur(16px);
 }
 .host-primary,
 .host-controls .start {
-  background: linear-gradient(180deg, #dcff7d, var(--mz-lime)) !important;
-  color: #08110a !important;
+  background: linear-gradient(180deg, #ffd79a, var(--mz-accent)) !important;
+  color: #1a1206 !important;
 }
 .danger-action,
 .leave-room {
@@ -738,7 +742,7 @@ h3 {
 }
 .online-toast {
   border: 1px solid var(--mz-line-2) !important;
-  background: #0b120c !important;
+  background: #17120b !important;
   border-radius: 14px !important;
   box-shadow: var(--mz-shadow);
 }
@@ -751,18 +755,18 @@ h3 {
 .result-audit,
 .season-list p {
   border: 1px solid var(--mz-line) !important;
-  background: #0b110c !important;
+  background: #15110b !important;
   border-radius: 16px !important;
 }
 .online-results > div article > strong {
-  color: var(--mz-lime) !important;
+  color: var(--mz-accent) !important;
   font-variant-numeric: tabular-nums;
 }
 .share-card {
   border: 0 !important;
   border-radius: 16px !important;
-  background: linear-gradient(180deg, #dcff7d, var(--mz-lime)) !important;
-  color: #08110a !important;
+  background: linear-gradient(180deg, #ffd79a, var(--mz-accent)) !important;
+  color: #1a1206 !important;
   font-weight: 900 !important;
 }
 
@@ -830,4 +834,66 @@ h3 {
   .online-manager-card:hover {
     transform: none;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   globals.css içinde marka rengi gömülü kalan (değişken kullanmayan) kurallar.
+   --lime değişkeni yukarıda pirince çevrildi; burada yalnızca literal hex
+   kullanan ve ana ekranlarda görünen kurallar kapatılır.
+   -------------------------------------------------------------------------- */
+.online-entry h1 span,
+.connection.ok,
+.waiting,
+.online-link {
+  color: var(--mz-accent) !important;
+}
+.manager-identity {
+  border-color: var(--mz-line-2) !important;
+}
+.member-list button,
+.member-list em {
+  border-color: var(--mz-line) !important;
+  color: var(--mz-muted) !important;
+}
+.member-list em {
+  color: var(--mz-accent) !important;
+}
+.mini-squad .bench-row,
+.online-squad-list .bench-row {
+  border-color: var(--mz-line-2) !important;
+  background: rgba(255, 180, 92, 0.04) !important;
+}
+.auction-mini-formation span[data-slot='GK'] {
+  box-shadow: 0 0 0 2px rgba(255, 180, 92, 0.06) !important;
+}
+.online-auction > aside article.active {
+  border-color: rgba(255, 180, 92, 0.5) !important;
+}
+.pill,
+.rule-box,
+.resume-game,
+.rating-badge,
+.score-details summary,
+.view-toggle:hover {
+  border-color: var(--mz-line-2) !important;
+}
+.pill,
+.rating-badge {
+  color: var(--mz-accent) !important;
+}
+.mode-back,
+.brand-button {
+  border-color: var(--mz-line-2) !important;
+  color: var(--mz-muted) !important;
+}
+.sale-flash,
+.online-loading {
+  color: var(--mz-accent) !important;
+}
+.result-analysis aside,
+.result-player b,
+.slot-list .now,
+.formation-dot.active {
+  color: var(--mz-accent) !important;
+  border-color: var(--mz-line-2) !important;
 }

@@ -21,13 +21,28 @@ Karar, iki bağımsız araştırmanın (isim/marka ve rakip/benchmark) sonuçlar
 
 **Reddedilen adaylar:** `Bid XI` (Google Play'de `com.bidxi` aynı konsept + aynı geliştirici hesabında casino uygulaması; Türkçe konuşan `XI`'i okuyamaz), `Fantezi …` (TFF Fantezi Lig ile resmî çağrışım), `… Menajerlik` (Football Manager/Top Eleven + yanlış kategori), `… Lig` (TFF/Süper Lig çağrışımı), `Bonservis`/`Münadi`/`Müzayede 11` (aktif marka veya alan adı çakışması), `Kadro Mezadı` (yazım tuzağı: `mezadı`/`mezatı`).
 
+## Görsel kimlik: "Mezat Salonu" (pirinç)
+
+İlk tasarım geçişinde eski palet (lime `#c9ff45` + koyu yeşil `#070b08`) korunmuştu; bu yüzden site "eski site + yeni yüzey" gibi okundu. Palet, ürünün metaforuna (canlı mezat salonu) daha yakın olan **pirinç/amber + sıcak mürekkep** kimliğine çevrildi:
+
+| Rol                              | Token                          | Değer                       |
+| -------------------------------- | ------------------------------ | --------------------------- |
+| Zemin                            | `--mz-bg`                      | `#0c0a07` (sıcak mürekkep)  |
+| Panel                            | `--mz-panel` / `--mz-panel-2`  | `#15110b` / `#1c1710`       |
+| Çizgi                            | `--mz-line` / `--mz-line-2`    | `#2b2317` / `#3a2f1f`       |
+| Aksiyon (para, CTA, lider)       | `--mz-accent` / `--mz-accent-dim` | `#ffb45c` / `#e79a3c`    |
+| Süre baskısı (geri sayım)        | `--mz-amber`                   | `#ff7a59`                   |
+| Metin                            | `--mz-text` / `--mz-muted` / `--mz-dim` | `#f7efe2` / `#b3a795` / `#7d7364` |
+
+Kurallar: marka rengi **asla koda gömülmez**, yalnızca token üzerinden kullanılır (`app/theme-mezat.css`). Tek aksiyon rengi (pirinç), tek süre rengi (kızıl-turuncu), tek yüzey dili. Logo (`brand-mark.svg`, `favicon.svg`, `brand-mark-light.svg`, `brand-lockup.svg`, 192/512 px ikonlar) ve 1200×630 sosyal kart da aynı palete geçirildi. Alternatif olarak "Yayın Stüdyosu" (cyan) kimliği de denendi ve `mezat11-tasarim/palet-karsilastirma.png` içinde karşılaştırmalı olarak saklandı.
+
 ## Kodda uygulananlar
 
 - Tek kaynak: `lib/site.ts` (`SITE_NAME`, `SITE_TAGLINE`, `SITE_DESCRIPTOR`, `SITE_URL`, `SITE_HOST`). Alan adı değiştiğinde **yalnızca buradaki tek satır** güncellenir; `metadataBase`, canonical, sitemap, robots ve paylaşım kartı buradan okur.
 - `app/layout.tsx`: başlık `Mezat 11 — Futbol Açık Artırma Oyunu`, OG/Twitter etiketleri, `applicationName`, `siteName`.
-- `public/brand-mark.svg` + `public/favicon.svg`: "K" monogramı yerine "M" monogramı.
+- `public/brand-mark.svg` + `public/favicon.svg`: seçilen logo — **"Mezat kartonu"** (numaralı mezat kartonu: tek pirinç silüet, içinde koyu "11", sağ üstte beyaz "satıldı" etiketi). Açık zemin varyantı `brand-mark-light.svg`, yatay kullanım `brand-lockup.svg`, uygulama ikonları `icon-192.png` / `icon-512.png`.
 - `public/site.webmanifest`: ad/kısa ad + (düzeltme) artık var olan `favicon.svg`'e referans veriyor.
-- `public/og-mezat-11.jpg`: yeni 1200×630 paylaşım kartı (koyu yeşil + lime, "MEZAT 11" + slogan + kadro motifli).
+- `public/og-mezat-11.jpg`: 1200×630 paylaşım kartı (sıcak mürekkep + pirinç, logo işareti + "MEZAT 11" + slogan + kadro motifli).
 - `lib/result-card.ts`: paylaşılan sonuç kartında marka ve adres artık `lib/site.ts`'ten; dosya adı `mezat-11-sonucu.png`.
 - Görünen tüm marka metinleri (giriş ekranı, oda başlığı, lobi/alt bilgi, yasal sayfalar), `package.json` adı `mezat-11`, README ve `docs/*.md`.
 - Veri hattı model kimliği `kadro-ihalesi-signal-v1` → **`mezat11-signal-v1`**; yeniden üretilen havuzun SHA-256'sı **değişmedi** (marka değişikliği oyun verisine dokunmadı).

@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="512" height="512" role="img" aria-label="Mezat 11">
   <defs>
-    <linearGradient id="lime" x1="24" y1="16" x2="104" y2="112" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#d8ff71"/><stop offset="1" stop-color="#a9ed24"/>
+    <linearGradient id="brass" x1="24" y1="16" x2="104" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffd79a"/><stop offset="1" stop-color="#ffb45c"/>
     </linearGradient>
   </defs>
-  <rect x="3" y="3" width="122" height="122" rx="34" fill="#0b110d" stroke="#c9ff45" stroke-width="2.5"/>
-  <rect x="55" y="80" width="18" height="26" rx="8" fill="url(#lime)"/>
-  <rect x="26" y="16" width="76" height="70" rx="17" fill="url(#lime)"/>
-  <g stroke="#0b110d" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" fill="none">
+  <rect x="3" y="3" width="122" height="122" rx="34" fill="#0b0a07" stroke="#ffb45c" stroke-width="2.5"/>
+  <rect x="55" y="80" width="18" height="26" rx="8" fill="url(#brass)"/>
+  <rect x="26" y="16" width="76" height="70" rx="17" fill="url(#brass)"/>
+  <g stroke="#0b0a07" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" fill="none">
     <path d="M47 38 L56 30 L56 66"/><path d="M75 38 L84 30 L84 66"/>
   </g>
   <circle cx="95" cy="25" r="7.5" fill="#fff"/>
