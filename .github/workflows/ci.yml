@@ -13,7 +13,9 @@ concurrency:
 jobs:
   verify:
     name: Lint, typecheck, test and build
-    runs-on: ubuntu-latest
+    # Pinned instead of `ubuntu-latest`: a stable image keeps the toolchain
+    # reproducible and avoids surprise migrations of the `latest` label.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
