@@ -51,6 +51,14 @@ export type Manager = {
   isBot?: boolean;
   botStyle?: BotStyle;
 };
+/**
+ * Pool entry as shipped in `app/data/auction-pool.generated.json`.
+ *
+ * The shipped file deliberately contains only factual attributes plus the game's
+ * own scores: no third-party market valuations and no remote media URLs. `image`
+ * and `clubLogo` stay in the type so a licensed media source can be layered back
+ * in through `lib/media-rights.ts`, which gates them off by default.
+ */
 export type PoolSourceEntry = {
   id: number;
   name: string;
@@ -59,7 +67,6 @@ export type PoolSourceEntry = {
   league?: string;
   rating: number;
   price: number;
-  value: number;
   image?: string;
   clubLogo?: string;
 };
@@ -518,7 +525,7 @@ export function fillMissingSlot(
     sourcePool = tierPool.length ? tierPool : candidates;
   const lowPool = shuffleSeeded(
     [...sourcePool]
-      .sort((a, b) => a.rating - b.rating || a.value - b.value)
+      .sort((a, b) => a.rating - b.rating || a.name.localeCompare(b.name, 'tr'))
       .slice(0, Math.max(24, managers.length * 4)),
     random,
   );
@@ -589,7 +596,7 @@ export function fillMissingBenchSlot(
     sourcePool = tierPool.length ? tierPool : candidates;
   const lowPool = shuffleSeeded(
     [...sourcePool]
-      .sort((a, b) => a.rating - b.rating || a.value - b.value)
+      .sort((a, b) => a.rating - b.rating || a.name.localeCompare(b.name, 'tr'))
       .slice(0, Math.max(24, managers.length * 4)),
     random,
   );

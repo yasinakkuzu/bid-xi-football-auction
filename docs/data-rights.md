@@ -16,6 +16,41 @@ Her veri veya medya kaydı için aşağıdaki alanlar tutulmalıdır:
 
 İspat kaydı bulunmayan içerik ticari sürümde varsayılan olarak kapalı kabul edilmelidir.
 
+### Doldurulmuş envanter — oyuncu verisi (2026-10)
+
+| Alan                                                | Değer                                                                                                                                         |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `source_name`                                       | `transfermarkt-datasets` (dcaribou/transfermarkt-datasets)                                                                                    |
+| `source_url`                                        | https://github.com/dcaribou/transfermarkt-datasets                                                                                            |
+| `retrieved_at`                                      | 2026-08-05 (`dataset-manifest.json` → `retrievedAt`)                                                                                          |
+| `dataset_version`                                   | `transfermarkt-2026-08-05`                                                                                                                    |
+| `source_sha256`                                     | `dataset-manifest.json` → `sourceSha256`                                                                                                      |
+| `license_name`                                      | **CC0 1.0 Universal** (kamu malı adanması)                                                                                                    |
+| `license_url`                                       | https://creativecommons.org/publicdomain/zero/1.0/                                                                                            |
+| `evidence_url`                                      | https://raw.githubusercontent.com/dcaribou/transfermarkt-datasets/master/LICENSE                                                              |
+| `license_scope`                                     | Derleyicinin telif ve **veritabanı hakları** (EU 96/9/EC dâhil) feragat edilmiştir; ticari kullanım açıkça serbesttir, atıf zorunlu değildir. |
+| `commercial_use_allowed`                            | `true`                                                                                                                                        |
+| `attribution_required`                              | `false` (CC0) — proje yine de kaynağı `docs` ve veri sayfasında belgeler                                                                      |
+| `derivative_use_allowed` / `redistribution_allowed` | `true`                                                                                                                                        |
+| `review_status`                                     | `documented` — lisans ve yayınlanan alanlar doğrulandı                                                                                        |
+| `reviewed_by`                                       | Teknik inceleme (proje mühendisliği); **hukuk incelemesi değildir**                                                                           |
+| `takedown_status`                                   | Talep kanalı açık (`MODERATION_CONTACT`, `docs/moderation.md`)                                                                                |
+
+**Kapsam dışı bırakılan içerik (yayınlanmaz):** piyasa değerleri, oyuncu fotoğrafı URL'leri, kulüp logosu URL'leri. Bu alanlar veri hattına hiç alınmaz; `tests/media-rights.test.ts` ve `data-quality` testleri bunu zorunlu kılar.
+
+### Kalıntı risk (kayıt altında)
+
+- CC0, **derleyicinin** haklarından feragat eder; kaynak sağlayıcının (Transfermarkt) kendi kullanım koşullarından doğan talepler CC0 §4(c) gereği derleyici tarafından üstlenilmez.
+- **Azaltıcı önlemler:** (1) yalnızca olgusal alanlar yayınlanır (isim, ülke, kulüp, lig, pozisyon türevi), (2) piyasa değerleri ve medya yayınlanmaz, (3) puan/fiyat projenin kendi modeliyle üretilir ve `pool-v4` modeli hiçbir piyasa değeri okumaz, (4) oyun herhangi bir veri sağlayıcısıyla bağlantılı olduğu izlenimini vermez (`app/kullanim-kosullari`).
+- **Kalan belirsizlik:** kaynak verinin güncelliği (kaynak toplama hattı 2026-07'de durdu) ve kaynak sağlayıcının olası talebi. Ticari ölçekte yayın öncesi hukukçuya sorulacak sorular aşağıdadır.
+
+### Hukukçuya sorulacak sorular (tek sayfa)
+
+1. CC0 lisanslı bir üçüncü taraf derlemesinden yalnızca olgusal alanlar (isim, uyruk, kulüp, lig) alıp kullanmak, kaynak sağlayıcının kullanım koşulları bakımından risk doğurur mu?
+2. Projenin kendi modeliyle ürettiği puan/fiyat skorları, kaynak sağlayıcının veritabanı hakkı kapsamında "türev" sayılır mı?
+3. Ticari yayında `MODERATION_CONTACT` ve aydınlatma metni için gereken asgari kurumsal kimlik bilgisi nedir?
+4. VERBİS kayıt yükümlülüğü bu veri hacmiyle doğar mı?
+
 ## İçerik türlerine göre kontrol
 
 ### Oyuncu ve teknik direktör isimleri
@@ -26,14 +61,14 @@ Her veri veya medya kaydı için aşağıdaki alanlar tutulmalıdır:
 
 ### Oyuncu fotoğrafları
 
-- Fotoğrafın telif sahibi, lisans kapsamı ve ticari kullanım izni kayıtlı değilse gösterme.
+- **Mevcut durum: veri setine hiç alınmaz ve istemcilere gönderilmez.** Lisans kanıtı bulunan bir sağlayıcı seçilirse `lib/media-rights.ts` ikinci kapı olarak devrede kalır.
 - Kaynak sayfada görünmesi, fotoğrafı yeniden yayımlama hakkı vermez.
 - Kişilik hakkı ve bölgesel kullanım koşullarını ayrıca değerlendir.
 - İzinli görsel bulunmadığında markasız, lisansı projeye ait bir siluet/baş harf yer tutucusu kullan.
 
 ### Kulüp logoları ve lig işaretleri
 
-- Logoları marka olarak ele al; lisans veya açık kullanım dayanağı olmadan ticari arayüzde gösterme.
+- **Mevcut durum: veri setine hiç alınmaz.** Logolar marka olarak ele alınır; açık kullanım dayanağı olmadan ticari arayüzde gösterilmez.
 - Kulüple sponsorluk ya da resmî ortaklık izlenimi yaratma.
 - Metin tabanlı kulüp adı ve nötr renkli yer tutucu, güvenli varsayılan olmalıdır.
 
@@ -83,12 +118,17 @@ Ticari sürüm ancak kaynak envanteri tamamlandığında, doğrulanmamış medya
 
 ### Uygulama durumu (kod tarafı)
 
-| Kapı                                              | Durum                                                                                                                                                         |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Doğrulanmamış oyuncu fotoğrafı ve kulüp logosu    | ✅ Varsayılan olarak kapalı; yalnızca açık bayrakla açılır ve `COMMERCIAL_MODE` kaçış kapısını kapatır (`lib/media-rights.ts`, `tests/media-rights.test.ts`). |
-| Başarı tablosu rızası, takma ad ve silme          | ✅ Uygulandı ve test edildi.                                                                                                                                  |
-| Saklama süresi                                    | ✅ Oda 7 gün; başarı tablosu varsayılan 365 gün, mezar taşıyla birlikte budanır (`lib/leaderboard.ts`).                                                       |
-| Görünen ad ve sohbet moderasyonu                  | ✅ Sunucu tarafında; kaçış denemeleri normalleştirilir (`lib/moderation.ts`).                                                                                 |
-| Kaynak veri bütünlüğü ve sürüm bağı               | ✅ `npm run test:data` kapısı + manifest.                                                                                                                     |
-| Kaynak veri kümesi lisansı ve medya lisans kanıtı | ⛔ **Hukuk incelemesi bekliyor** — kod tarafında kapatılamaz.                                                                                                 |
-| Hedef pazar yaş/izin gereksinimleri               | ⛔ **Ürün kararı bekliyor.**                                                                                                                                  |
+| Kapı                                           | Durum                                                                                                                                                                                                 |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Doğrulanmamış oyuncu fotoğrafı ve kulüp logosu | ✅ Varsayılan olarak kapalı; yalnızca açık bayrakla açılır ve `COMMERCIAL_MODE` kaçış kapısını kapatır (`lib/media-rights.ts`, `tests/media-rights.test.ts`).                                         |
+| Başarı tablosu rızası, takma ad ve silme       | ✅ Uygulandı ve test edildi.                                                                                                                                                                          |
+| Saklama süresi                                 | ✅ Oda 7 gün; başarı tablosu varsayılan 365 gün, mezar taşıyla birlikte budanır (`lib/leaderboard.ts`).                                                                                               |
+| Görünen ad ve sohbet moderasyonu               | ✅ Sunucu tarafında; kaçış denemeleri normalleştirilir (`lib/moderation.ts`).                                                                                                                         |
+| Kaynak veri bütünlüğü ve sürüm bağı            | ✅ `npm run test:data` kapısı + manifest.                                                                                                                                                             |
+| Kaynak veri kümesi lisansı (CC0 1.0)           | ✅ Kanıt `dataset-manifest.json` içinde; `tests/data-quality.test.ts` kaynağın doğru adlandırılmasını zorunlu kılar.                                                                                  |
+| Piyasa değerleri ve medya                      | ✅ Veri setine alınmaz, yayınlanmaz; `tests/media-rights.test.ts` alan listesini sabitler.                                                                                                            |
+| Puan/fiyat modeli                              | ✅ `scripts/lib/pool-model.mjs` hiçbir piyasa değeri okumaz (`marketValueUsed: false`); model testleri `tests/pool-model.test.ts`.                                                                    |
+| **Yayınlanan havuzun yeniden üretimi**         | ⏳ **Bekliyor:** mevcut `app/data/auction-pool.generated.json` hâlâ `pool-v3` (piyasa değeri türevi). `players.csv` ile `npm run data:import` çalıştırılmalı; `npm run test:data` bunu zorunlu kılar. |
+| Kaynak sağlayıcının kendi kullanım koşulları   | ⛔ **Hukuk incelemesi önerilir** — kod tarafında kapatılamaz (yukarıdaki hukukçu soruları).                                                                                                           |
+| Hedef pazar yaş/izin gereksinimleri            | ✅ **Karar verildi:** 13+ beyanı, 18 altı için sohbet ve başarı tablosu kapalı, doğum yılı saklanmaz (`lib/age-policy.ts`, `docs/kvkk.md`).                                                           |
+| İlgili kişi başvuru kanalı                     | ⏳ **Operatör işi:** ticari yayın öncesi `MODERATION_CONTACT` e-postası yayımlanmalı (şu an depo üzerinden iletişim).                                                                                 |

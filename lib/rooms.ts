@@ -40,12 +40,21 @@ import {
   sanitizeChatMessage,
 } from './moderation.ts';
 import { reopenLiveLot, validateLotAction } from './room-rules.ts';
+import {
+  assessAgeDeclaration,
+  mayPublishToLeaderboard,
+  mayUseChat,
+  minorRestrictionMessage,
+  type AgeDeclaration,
+} from './age-policy.ts';
 import { auth, cleanup, code, db, digest, ensure, saveState, token } from './room-store.ts';
 import { RoomError, normalizedSettings, type RoomSettings, type RoomState } from './room-types.ts';
 
-export async function createRoom(rawName: string, settings: RoomSettings) {
+export async function createRoom(rawName: string, settings: RoomSettings, declaration: AgeDeclaration = {}) {
   const moderation = moderateDisplayName(rawName);
   if (!moderation.ok) throw new RoomError('NAME_INVALID', moderationMessage(moderation), 400);
+  const assessment = assessAgeDeclaration(declaration);
+  if (!assessment.ok) throw new RoomError(assessment.code, assessment.message, 400);
   const name = normalizeDisplayName(rawName);
   await cleanup();
   await pruneLeaderboardIfDue();
@@ -59,7 +68,17 @@ export async function createRoom(rawName: string, settings: RoomSettings) {
       code: roomCode,
       status: 'lobby',
       settings: normalizedSettings(settings),
-      members: [{ id: memberId, name, role: 'manager', approved: true, leaderboardOptIn: false }],
+      members: [
+        {
+          id: memberId,
+          name,
+          role: 'manager',
+          approved: true,
+          leaderboardOptIn: false,
+          ageBand: assessment.band,
+          consent: assessment.consent,
+        },
+      ],
       createdAt: now,
     };
     try {
@@ -78,9 +97,16 @@ export async function createRoom(rawName: string, settings: RoomSettings) {
   }
   throw new RoomError('ROOM_CREATE_FAILED', 'Oda oluşturulamadı. Lütfen tekrar deneyin.', 503);
 }
-export async function joinRoom(roomCode: string, rawName: string, role: 'manager' | 'spectator') {
+export async function joinRoom(
+  roomCode: string,
+  rawName: string,
+  role: 'manager' | 'spectator',
+  declaration: AgeDeclaration = {},
+) {
   const moderation = moderateDisplayName(rawName);
   if (!moderation.ok) throw new RoomError('NAME_INVALID', moderationMessage(moderation), 400);
+  const assessment = assessAgeDeclaration(declaration);
+  if (!assessment.ok) throw new RoomError(assessment.code, assessment.message, 400);
   const name = normalizeDisplayName(rawName);
   await ensure();
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -98,7 +124,15 @@ export async function joinRoom(roomCode: string, rawName: string, role: 'manager
     if (state.members.length >= 24) throw new RoomError('ROOM_FULL', 'Oda katılımcı sınırına ulaştı', 409);
     const memberId = crypto.randomUUID(),
       memberToken = token(),
-      member = { id: memberId, name, role, approved: false, leaderboardOptIn: false };
+      member = {
+        id: memberId,
+        name,
+        role,
+        approved: false,
+        leaderboardOptIn: false,
+        ageBand: assessment.band,
+        consent: assessment.consent,
+      };
     await db()
       .prepare('INSERT INTO room_members VALUES (?,?,?,?,?,?,?)')
       .bind(roomCode, memberId, await digest(memberToken), name, role, 0, Date.now())
@@ -123,6 +157,17 @@ async function actInternal(roomCode: string, plain: string, type: string, payloa
   const { state } = ctx;
   const requireHost = () => {
     if (!ctx.isHost) throw new RoomError('FORBIDDEN', 'Bu işlemi yalnızca oda sahibi yapabilir.', 403);
+  };
+  const actorMember = () => state.members.find((item) => item.id === ctx.member?.member_id);
+  /**
+   * Minors and undeclared ages stay out of the public leaderboard and chat. The
+   * check reads the authoritative room state, never the client payload, and it
+   * fails closed when the band is missing.
+   */
+  const requireAdult = (area: 'leaderboard' | 'chat') => {
+    const band = actorMember()?.ageBand ?? 'unknown';
+    if (area === 'chat' ? !mayUseChat(band) : !mayPublishToLeaderboard(band))
+      throw new RoomError('AGE_RESTRICTED', minorRestrictionMessage(area), 403);
   };
   try {
     validateLotAction(type, payload.lotId, state.game);
@@ -176,6 +221,7 @@ async function actInternal(roomCode: string, plain: string, type: string, payloa
   } else if (type === 'chat') {
     if (!ctx.member || !ctx.member.approved)
       throw new RoomError('FORBIDDEN', 'Sohbet için onaylı katılımcı olmalısınız.', 403);
+    requireAdult('chat');
     const text = sanitizeChatMessage(payload.text);
     if (!text) throw new Error('Mesaj boş olamaz');
     if (containsBlockedTerm(text)) throw new RoomError('MESSAGE_REJECTED', chatModerationMessage(), 400);
@@ -187,6 +233,7 @@ async function actInternal(roomCode: string, plain: string, type: string, payloa
     if (!ctx.member) throw new RoomError('AUTH_INVALID', 'Katılımcı bulunamadı', 401);
     const member = state.members.find((item) => item.id === ctx.member?.member_id);
     if (!member) throw new RoomError('AUTH_INVALID', 'Katılımcı bulunamadı', 401);
+    if (payload.optedIn === true) requireAdult('leaderboard');
     member.leaderboardOptIn = payload.optedIn === true;
     const aliasCandidate = normalizeDisplayName(payload.alias ?? member.name) || member.name;
     if (aliasCandidate !== member.name) {
@@ -516,6 +563,7 @@ export async function publicRoom(roomCode: string, plain: string) {
       revision: ctx.room.revision,
       isHost: false,
       memberId: ctx.member.member_id,
+      viewerAgeBand: ctx.state.members.find((item) => item.id === ctx.member?.member_id)?.ageBand ?? 'unknown',
       serverTime: Date.now(),
       estimatedDuration: estimateAuctionDuration(
         ctx.state.settings,
@@ -538,6 +586,7 @@ export async function publicRoom(roomCode: string, plain: string) {
     revision: ctx.room.revision,
     isHost: ctx.isHost,
     memberId: ctx.member?.member_id || null,
+    viewerAgeBand: ctx.state.members.find((item) => item.id === ctx.member?.member_id)?.ageBand ?? 'unknown',
     serverTime: Date.now(),
     estimatedDuration: estimateAuctionDuration(
       ctx.state.settings,

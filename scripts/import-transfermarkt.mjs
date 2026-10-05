@@ -1,6 +1,17 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import {
+  POOL_MODEL_VERSION,
+  POOL_SIZE,
+  CURRENT_MIN_SEASON,
+  LEGENDS_MIN_SEASON,
+  OVERLAP_LIMIT_RATIO,
+  slotFor,
+  percentileRating,
+  ratingSignals,
+  priceForRating,
+} from './lib/pool-model.mjs';
 
 const SOURCE = 'data/transfermarkt/players.csv';
 const DB_PATH = 'data/transfermarkt/players.sqlite';
@@ -37,79 +48,6 @@ function parseCsv(text) {
   return rows;
 }
 
-function toRating(value, caps, goals, legend = false) {
-  const v = Math.max(0, Number(value) || 0);
-  const international = Math.min(3, (Number(caps) || 0) / 45) + (legend ? Math.min(1.5, (Number(goals) || 0) / 35) : 0);
-  return Math.max(68, Math.min(97, Math.round((66 + Math.log10(v / 180000 + 1) * 9 + international) * 10) / 10));
-}
-function toPrice(value) {
-  return Math.max(5, Math.min(200, Math.round(((Number(value) || 0) / 1000000) * 0.64)));
-}
-function percentileRating(index, total) {
-  const p = index / Math.max(1, total - 1);
-  const bands = [
-    { end: 0.08, hi: 97, lo: 93 },
-    { end: 0.2, hi: 92.9, lo: 90 },
-    { end: 0.4, hi: 89.9, lo: 86 },
-    { end: 0.62, hi: 85.9, lo: 82 },
-    { end: 0.85, hi: 81.9, lo: 77 },
-    { end: 1, hi: 76.9, lo: 68 },
-  ];
-  let start = 0;
-  for (const b of bands) {
-    if (p <= b.end) {
-      const t = (p - start) / Math.max(0.001, b.end - start);
-      return Math.round((b.hi - (b.hi - b.lo) * t) * 10) / 10;
-    }
-    start = b.end;
-  }
-  return 68;
-}
-function normalizePrimeValue(value, lastSeason) {
-  const year = Number(lastSeason) || 2026;
-  const factor = year < 2000 ? 2.4 : year < 2010 ? 1.75 : year < 2018 ? 1.3 : 1;
-  return Math.round((Number(value) || 0) * factor);
-}
-function normalizedPosition(sub) {
-  return String(sub || '')
-    .trim()
-    .toLocaleLowerCase('tr')
-    .replaceAll('_', ' ')
-    .replaceAll('-', ' ')
-    .replace(/\s+/g, ' ');
-}
-function slotFor(sub) {
-  const value = normalizedPosition(sub),
-    exact = new Map([
-      ['goalkeeper', 'GK'],
-      ['right back', 'RB'],
-      ['centre back', 'CB'],
-      ['center back', 'CB'],
-      ['left back', 'LB'],
-      ['defensive midfield', 'DM'],
-      ['central midfield', 'CM'],
-      ['attacking midfield', 'AM'],
-      ['centre forward', 'ST'],
-      ['center forward', 'ST'],
-      ['second striker', 'ST'],
-      ['right winger', 'RW'],
-      ['right wing', 'RW'],
-      ['right midfield', 'RW'],
-      ['right midfielder', 'RW'],
-      ['rw', 'RW'],
-      ['left winger', 'LW'],
-      ['left wing', 'LW'],
-      ['left midfield', 'LW'],
-      ['left midfielder', 'LW'],
-      ['lw', 'LW'],
-      ['sağ kanat', 'RW'],
-      ['sağ açık', 'RW'],
-      ['sol kanat', 'LW'],
-      ['sol açık', 'LW'],
-    ]);
-  return exact.get(value);
-}
-
 if (!existsSync(SOURCE)) throw new Error(`Eksik kaynak: ${SOURCE}`);
 const sourceBuffer = readFileSync(SOURCE),
   rows = parseCsv(sourceBuffer.toString('utf8'));
@@ -123,12 +61,22 @@ db.exec(`CREATE TABLE players (
   player_id INTEGER PRIMARY KEY, name TEXT NOT NULL, last_season INTEGER, current_club_id INTEGER,
   current_club_name TEXT, country TEXT, date_of_birth TEXT, position TEXT, sub_position TEXT, auction_slot TEXT,
   preferred_foot TEXT, height_cm INTEGER, international_caps INTEGER, international_goals INTEGER,
-  current_value_eur INTEGER, peak_value_eur INTEGER, source_url TEXT
+  competition_id TEXT, signal_score REAL, source_url TEXT
 )`);
 const insert = db.prepare(`INSERT INTO players VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
 db.exec('BEGIN');
 for (const r of rows) {
   if (!r[ix.player_id]) continue;
+  const signal = ratingSignals(
+    {
+      internationalCaps: Number(r[ix.international_caps]) || 0,
+      internationalGoals: Number(r[ix.international_goals]) || 0,
+      dateOfBirth: r[ix.date_of_birth] || null,
+      competitionId: r[ix.current_club_domestic_competition_id] || null,
+      lastSeason: Number(r[ix.last_season]) || null,
+    },
+    { referenceYear: CURRENT_MIN_SEASON, legend: false },
+  );
   insert.run(
     Number(r[ix.player_id]),
     r[ix.name],
@@ -144,70 +92,86 @@ for (const r of rows) {
     Number(r[ix.height_in_cm]) || null,
     Number(r[ix.international_caps]) || 0,
     Number(r[ix.international_goals]) || 0,
-    Number(r[ix.market_value_in_eur]) || 0,
-    Number(r[ix.highest_market_value_in_eur]) || 0,
+    r[ix.current_club_domestic_competition_id] || null,
+    signal,
     r[ix.url] || null,
   );
 }
 db.exec('COMMIT');
 db.exec(
-  'CREATE INDEX idx_players_current_pool ON players(last_season, auction_slot, current_value_eur); CREATE INDEX idx_players_legend_pool ON players(last_season, auction_slot, peak_value_eur); PRAGMA optimize;',
+  'CREATE INDEX idx_players_era_pool ON players(last_season, auction_slot); CREATE INDEX idx_players_current_pool ON players(last_season, auction_slot, competition_id); PRAGMA optimize;',
 );
 
 const baseSlots = ['GK', 'RB', 'CB', 'LB', 'DM', 'CM', 'AM', 'RW', 'LW', 'ST'];
 const pool = { current: {}, legends: {} };
 for (const era of ['current', 'legends']) for (const slot of baseSlots) pool[era][slot] = [];
+const overlapLimit = Math.floor(POOL_SIZE * OVERLAP_LIMIT_RATIO);
+const bySignalThenName = (a, b) => b.signal - a.signal || a.name.localeCompare(b.name);
 for (const r of rows) {
   const slot = slotFor(r[ix.sub_position]);
   if (!slot) continue;
-  const clubId = Number(r[ix.current_club_id]) || 0;
+  const lastSeason = Number(r[ix.last_season]) || 0;
   const common = {
     id: Number(r[ix.player_id]),
     name: r[ix.name],
     country: r[ix.country_of_citizenship] || '',
     club: r[ix.current_club_name] || '',
     league: r[ix.current_club_domestic_competition_id] || '',
-    image: r[ix.image_url] || '',
-    clubLogo: clubId ? `https://tmssl.akamaized.net/images/wappen/head/${clubId}.png` : '',
   };
-  const currentValue = Number(r[ix.market_value_in_eur]) || 0,
-    peakValue = Number(r[ix.highest_market_value_in_eur]) || 0;
-  if (Number(r[ix.last_season]) >= 2025 && currentValue > 0)
+  const signals = {
+    internationalCaps: Number(r[ix.international_caps]) || 0,
+    internationalGoals: Number(r[ix.international_goals]) || 0,
+    dateOfBirth: r[ix.date_of_birth] || null,
+    competitionId: r[ix.current_club_domestic_competition_id] || null,
+    lastSeason: Number(r[ix.last_season]) || null,
+  };
+  if (lastSeason >= CURRENT_MIN_SEASON)
     pool.current[slot].push({
       ...common,
-      rating: toRating(currentValue, r[ix.international_caps], r[ix.international_goals]),
-      price: toPrice(currentValue),
-      value: currentValue,
+      signal: ratingSignals(signals, { referenceYear: CURRENT_MIN_SEASON, legend: false }),
     });
-  if (Number(r[ix.last_season]) >= 1996 && peakValue > 0) {
-    const normalized = normalizePrimeValue(peakValue, r[ix.last_season]);
+  if (lastSeason >= LEGENDS_MIN_SEASON)
     pool.legends[slot].push({
       ...common,
-      rating: toRating(normalized, r[ix.international_caps], r[ix.international_goals], true),
-      price: toPrice(normalized),
-      value: normalized,
+      signal: ratingSignals(signals, { referenceYear: CURRENT_MIN_SEASON, legend: true }),
     });
-  }
 }
+// The shipped entry shape is fixed: factual attributes plus our own scores.
+// `signal` and any market value stay internal and never reach the pool file.
+const finalizeSlot = (list) =>
+  list.map((p, i) => {
+    const rating = percentileRating(i, list.length);
+    return {
+      id: p.id,
+      name: p.name,
+      country: p.country,
+      club: p.club,
+      league: p.league,
+      rating,
+      price: priceForRating(rating),
+    };
+  });
 for (const slot of baseSlots) {
-  const current = pool.current[slot].sort((a, b) => b.rating - a.rating || b.value - a.value).slice(0, 240);
+  const current = pool.current[slot].sort(bySignalThenName).slice(0, POOL_SIZE);
   const currentIds = new Set(current.map((player) => player.id));
-  const legendCandidates = pool.legends[slot].sort((a, b) => b.rating - a.rating || b.value - a.value);
-  const overlapLimit = Math.floor(240 * 0.12),
-    returning = legendCandidates.filter((player) => currentIds.has(player.id)).slice(0, overlapLimit),
-    historic = legendCandidates.filter((player) => !currentIds.has(player.id)).slice(0, 240 - returning.length);
-  const legends = [...historic, ...returning].sort((a, b) => b.rating - a.rating || b.value - a.value).slice(0, 240);
-  pool.current[slot] = current.map((p, i) => ({ ...p, rating: percentileRating(i, current.length) }));
-  pool.legends[slot] = legends.map((p, i) => ({ ...p, rating: percentileRating(i, legends.length) }));
+  const legendCandidates = pool.legends[slot].sort(bySignalThenName);
+  const returning = legendCandidates.filter((player) => currentIds.has(player.id)).slice(0, overlapLimit),
+    historic = legendCandidates.filter((player) => !currentIds.has(player.id)).slice(0, POOL_SIZE - returning.length);
+  const legends = [...historic, ...returning].sort(bySignalThenName).slice(0, POOL_SIZE);
+  pool.current[slot] = finalizeSlot(current);
+  pool.legends[slot] = finalizeSlot(legends);
 }
 for (const era of ['current', 'legends']) {
   const center = pool[era].CB;
-  pool[era].CB1 = center
-    .filter((_, i) => i % 2 === 0)
-    .map((p, i, a) => ({ ...p, rating: percentileRating(i, a.length) }));
-  pool[era].CB2 = center
-    .filter((_, i) => i % 2 === 1)
-    .map((p, i, a) => ({ ...p, rating: percentileRating(i, a.length) }));
+  const split = (offset) =>
+    center
+      .filter((_, i) => i % 2 === offset)
+      .map((p, i, a) => {
+        const rating = percentileRating(i, a.length);
+        return { ...p, rating, price: priceForRating(rating) };
+      });
+  pool[era].CB1 = split(0);
+  pool[era].CB2 = split(1);
   delete pool[era].CB;
 }
 writeFileSync(POOL_PATH, JSON.stringify(pool));
@@ -228,6 +192,8 @@ const poolKeys = ['GK', 'RB', 'CB1', 'CB2', 'LB', 'DM', 'CM', 'AM', 'RW', 'LW', 
 const generatedPlayers = Object.values(pool.current).flat();
 const quality = {
   generatedAt: new Date().toISOString(),
+  poolModel: POOL_MODEL_VERSION,
+  marketValueUsed: false,
   sourceRows: Number(count),
   playableProfiles: playable,
   missingSubPosition: rows.filter((r) => !r[ix.sub_position]).length,
@@ -270,22 +236,44 @@ for (const era of ['current', 'legends'])
 writeFileSync('data/transfermarkt/data-quality.json', JSON.stringify(quality, null, 2));
 const manifest = {
   datasetVersion: `transfermarkt-${new Date(statSync(SOURCE).mtimeMs).toISOString().slice(0, 10)}`,
-  generatorVersion: 'pool-v3',
+  generatorVersion: POOL_MODEL_VERSION,
   scoreVersion: 'score-v3',
+  valuationModel: {
+    name: 'kadro-ihalesi-signal-v1',
+    version: POOL_MODEL_VERSION,
+    marketValueUsed: false,
+    inputs: ['internationalCaps', 'internationalGoals', 'dateOfBirth', 'competitionId', 'lastSeason'],
+    priceModel: 'priceForRating',
+  },
   sourceName: 'transfermarkt-datasets players.csv',
   sourceUrl: 'https://github.com/dcaribou/transfermarkt-datasets',
   retrievedAt: new Date(statSync(SOURCE).mtimeMs).toISOString(),
   generatedAt: quality.generatedAt,
   coveredSeasons: {
-    current: '2025 ve sonrası',
-    legends: '1996 ve sonrası; aktif oyuncu örtüşmesi pozisyon başına en fazla %12',
+    current: `${CURRENT_MIN_SEASON} ve sonrası`,
+    legends: `${LEGENDS_MIN_SEASON} ve sonrası; aktif oyuncu örtüşmesi pozisyon başına en fazla %${Math.round(
+      OVERLAP_LIMIT_RATIO * 100,
+    )}`,
   },
   sourceSha256: createHash('sha256').update(sourceBuffer).digest('hex'),
+  // Honest, machine-readable trace of how the published scores were produced.
+  // `generatorVersion` above tells which model produced the shipped pool, so an
+  // older pool can never masquerade as a valuation-free one.
+  scoreProvenance: `Puan ve fiyatlar ${POOL_MODEL_VERSION} modeliyle üretilir; hiçbir piyasa değeri okunmaz ve ham piyasa değerleri yayınlanmaz.`,
   rights: {
-    structuredDataset: 'Kaynak depo lisansı ayrıca doğrulanmalıdır.',
-    playerPhotos: 'Doğrulanmış ticari lisans kaydı yok.',
-    clubLogos: 'Doğrulanmış ticari lisans kaydı yok.',
-    reviewStatus: 'pending-legal-review',
+    structuredDataset:
+      'CC0 1.0 Universal (kamu malı adanması); derleyicinin telif ve veritabanı hakları feragat edilmiştir.',
+    playerPhotos: 'Veri setine alınmaz ve yayınlanmaz.',
+    clubLogos: 'Veri setine alınmaz ve yayınlanmaz.',
+    reviewStatus: 'documented',
+    datasetLicense: 'CC0-1.0',
+    datasetLicenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+    datasetLicensedBy: 'dcaribou/transfermarkt-datasets',
+    commercialUseAllowed: true,
+    evidenceUrl: 'https://raw.githubusercontent.com/dcaribou/transfermarkt-datasets/master/LICENSE',
+    marketValues: 'Veri setine alınmaz ve yayınlanmaz.',
+    reviewScope:
+      'Derleyici lisansı (CC0) ve yayınlanan alanlar doğrulandı; kaynak sağlayıcının kendi kullanım koşulları hukuk incelemesi gerektirir.',
   },
 };
 writeFileSync('data/transfermarkt/dataset-manifest.json', JSON.stringify(manifest, null, 2));

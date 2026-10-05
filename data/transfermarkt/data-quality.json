@@ -1,4 +1,6 @@
 {
+  "poolModel": "pool-v3",
+  "marketValueUsed": true,
   "generatedAt": "2026-08-29T09:52:01.823Z",
   "sourceRows": 50149,
   "playableProfiles": 4520,

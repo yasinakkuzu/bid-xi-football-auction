@@ -15,6 +15,9 @@ type CreateBody = {
   name?: string;
   role?: 'manager' | 'spectator';
   settings?: RoomSettings;
+  /** Age/consent declaration; validated server-side by `lib/age-policy.ts`. */
+  birthYear?: unknown;
+  consentAccepted?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -24,16 +27,17 @@ export async function POST(request: Request) {
     const ip = request.headers.get('cf-connecting-ip') || 'unknown';
     await rateLimit(`entry:${await digest(ip)}`, 20);
     const body = (await request.json()) as CreateBody;
+    const declaration = { birthYear: body.birthYear, consentAccepted: body.consentAccepted };
     if (body.action === 'join') {
       const code = String(body.code || '')
         .trim()
         .toUpperCase();
       if (!/^[A-Z2-9]{6}$/.test(code)) throw new RoomError('INVALID_CODE', 'Oda kodu geçersiz', 400);
       return NextResponse.json(
-        await joinRoom(code, body.name ?? '', body.role === 'spectator' ? 'spectator' : 'manager'),
+        await joinRoom(code, body.name ?? '', body.role === 'spectator' ? 'spectator' : 'manager', declaration),
       );
     }
-    return NextResponse.json(await createRoom(body.name ?? '', body.settings || defaultSettings));
+    return NextResponse.json(await createRoom(body.name ?? '', body.settings || defaultSettings, declaration));
   } catch (error) {
     const known = error instanceof RoomError;
     const headers = known && error.status === 429 ? { 'Retry-After': '30' } : undefined;

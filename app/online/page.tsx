@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   auctionOpeningPrice,
@@ -19,6 +20,7 @@ import {
   type RatingTier,
   type Slot,
 } from '../../lib/game-engine';
+import { ADULT_AGE, MIN_AGE, ageBand as bandForAge, ageFromBirthYear, type AgeBand } from '../../lib/age-policy';
 import { customPoolOptions } from '../../lib/club-leagues';
 
 import { clockOffset, remainingSeconds } from './clock';
@@ -121,6 +123,9 @@ export function OnlineGame() {
   const [screen, setScreen] = useState<'entry' | 'room'>('entry');
   const [tab, setTab] = useState<'create' | 'join'>('create');
   const [name, setName] = useState('');
+  const [birthYear, setBirthYear] = useState('');
+  const [consentAccepted, setConsentAccepted] = useState(false);
+  const [viewerBand, setViewerBand] = useState<AgeBand>('unknown');
   const [code, setCode] = useState('');
   const [role, setRole] = useState<'manager' | 'spectator'>('manager');
   const [settings, setSettings] = useState(defaults);
@@ -161,6 +166,16 @@ export function OnlineGame() {
     [poolCatalog, poolQuery],
   );
 
+  const declaredAge = ageFromBirthYear(birthYear);
+  const declaredBand: AgeBand = declaredAge === null ? 'unknown' : bandForAge(declaredAge);
+  const ageProblem =
+    birthYear.length === 4 && declaredAge === null
+      ? 'Geçerli bir doğum yılı girin.'
+      : declaredAge !== null && declaredAge < MIN_AGE
+        ? `Bu oyun ${MIN_AGE} yaş ve üzeri içindir.`
+        : null;
+  const canEnter = Boolean(name.trim()) && declaredAge !== null && declaredAge >= MIN_AGE && consentAccepted && !busy;
+
   const loadRoom = useCallback(async (s: Session) => {
     try {
       const data = await json(`/api/rooms/${s.code}`, {
@@ -171,6 +186,10 @@ export function OnlineGame() {
       if (next.game && next.game.activeTurn !== null && next.game.activeTurn < 0) next.game.activeTurn = null;
       clockOffsetRef.current = clockOffset(data.serverTime as number | undefined);
       setNow(Date.now() + clockOffsetRef.current);
+      const serverBand: AgeBand =
+        data.viewerAgeBand === 'adult' ? 'adult' : data.viewerAgeBand === 'minor' ? 'minor' : 'unknown';
+      setViewerBand(serverBand);
+      if (s.ageBand !== serverBand) saveSession({ ...s, ageBand: serverBand });
       setRoom(next);
       setIsHost(Boolean(data.isHost));
       setMemberId(data.memberId as string | null);
@@ -219,6 +238,7 @@ export function OnlineGame() {
       const saved = readSavedSession(shared || undefined);
       if (saved) {
         if (saved.name) setName(saved.name);
+        if (saved.ageBand) setViewerBand(saved.ageBand);
         setSession(saved);
         setScreen('room');
         void loadRoom(saved);
@@ -381,6 +401,14 @@ export function OnlineGame() {
       setError('İsim gerekli');
       return;
     }
+    if (declaredAge === null || declaredAge < MIN_AGE) {
+      setError(ageProblem ?? `Bu oyun ${MIN_AGE} yaş ve üzeri içindir.`);
+      return;
+    }
+    if (!consentAccepted) {
+      setError('Oyunu başlatmak için gizlilik ve veri işleme bilgilendirmesini onaylamanız gerekir.');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -398,12 +426,19 @@ export function OnlineGame() {
           ? await json('/api/rooms', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name, settings }),
+              body: JSON.stringify({ name, settings, birthYear: Number(birthYear), consentAccepted }),
             })
           : await json('/api/rooms', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'join', code, name, role }),
+              body: JSON.stringify({
+                action: 'join',
+                code,
+                name,
+                role,
+                birthYear: Number(birthYear),
+                consentAccepted,
+              }),
             });
       const nextSession: Session =
         tab === 'create'
@@ -412,8 +447,9 @@ export function OnlineGame() {
               token: String(data.hostToken),
               memberToken: String(data.memberToken),
               name: name.trim(),
+              ageBand: declaredBand,
             }
-          : { code: String(data.code), token: String(data.memberToken), name: name.trim() };
+          : { code: String(data.code), token: String(data.memberToken), name: name.trim(), ageBand: declaredBand };
       saveSession(nextSession);
       history.replaceState(null, '', `/?mode=online&room=${nextSession.code}`);
       setSession(nextSession);
@@ -671,6 +707,42 @@ export function OnlineGame() {
               onChange={(event) => setName(event.target.value)}
               placeholder="Menajer adı"
             />
+            <div className="age-gate">
+              <label className="label mt-5" htmlFor="online-birth-year">
+                Doğum yılınız
+              </label>
+              <input
+                id="online-birth-year"
+                className="online-input"
+                inputMode="numeric"
+                maxLength={4}
+                value={birthYear}
+                onChange={(event) => setBirthYear(event.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="Örn. 1995"
+                aria-describedby="online-age-note"
+                required
+              />
+              <label className="consent-check">
+                <input
+                  type="checkbox"
+                  checked={consentAccepted}
+                  onChange={(event) => setConsentAccepted(event.target.checked)}
+                />
+                <span>
+                  <Link href="/gizlilik" target="_blank" rel="noreferrer">
+                    Gizlilik ve veri işleme bilgilendirmesini
+                  </Link>{' '}
+                  okudum; oyunun çalışması için gereken verilerin bu kapsamda işlenmesini kabul ediyorum. Doğum yılım
+                  saklanmaz, yalnızca yaş aralığı tutulur.
+                </span>
+              </label>
+              <p id="online-age-note" className={ageProblem ? 'age-note warning' : 'age-note'}>
+                {ageProblem ??
+                  (declaredBand === 'minor'
+                    ? `${MIN_AGE}-${ADULT_AGE - 1} yaş aralığındasınız: oda sohbeti ve başarı tablosu yayını kapalıdır.`
+                    : `Bu oyun ${MIN_AGE} yaş ve üzeri içindir.`)}
+              </p>
+            </div>
             {tab === 'join' ? (
               <>
                 <label className="label mt-5" htmlFor="join-code">
@@ -702,7 +774,7 @@ export function OnlineGame() {
                     Seyirci
                   </button>
                 </div>
-                {role === 'manager' && (
+                {role === 'manager' && declaredBand === 'adult' && (
                   <LeaderboardOptIn
                     fallbackName={name}
                     settings={settings}
@@ -1065,11 +1137,13 @@ export function OnlineGame() {
                     )}
                   </div>
                 )}
-                <LeaderboardOptIn
-                  fallbackName={name}
-                  settings={settings}
-                  onChange={(patch) => setSettings((value) => ({ ...value, ...patch }))}
-                />
+                {declaredBand === 'adult' && (
+                  <LeaderboardOptIn
+                    fallbackName={name}
+                    settings={settings}
+                    onChange={(patch) => setSettings((value) => ({ ...value, ...patch }))}
+                  />
+                )}
                 <p className="media-rights-note">
                   Oyuncu fotoğrafları yalnız görsel zenginleştirmedir. Kaynak görüntü yüklenmez veya devre dışı
                   bırakılırsa oyun harfli kartlarla eksiksiz devam eder.
@@ -1081,7 +1155,7 @@ export function OnlineGame() {
                 {error}
               </p>
             )}
-            <button className="start mt-6 w-full" disabled={busy} onClick={enter}>
+            <button className="start mt-6 w-full" disabled={!canEnter || busy} onClick={enter}>
               {busy ? 'Bağlanıyor…' : tab === 'create' ? 'Odayı oluştur' : 'Odaya katıl'} <span>→</span>
             </button>
             {tab === 'join' && (
@@ -1649,26 +1723,28 @@ export function OnlineGame() {
         </section>
       )}
       {selected && <ManagerDrawer manager={selected} onClose={() => setSelectedManager(null)} footer={hostControls} />}
-      <button
-        ref={chatTriggerRef}
-        className={`chat-fab ${chatUnread > 0 ? 'has-unread' : ''}`}
-        onClick={() => {
-          setChatOpen((value) => !value);
-          setChatUnread(0);
-        }}
-        aria-expanded={chatOpen}
-        aria-controls="room-chat"
-        aria-label={
-          chatOpen
-            ? 'Oda sohbetini kapat'
-            : chatUnread
-              ? `Oda sohbetini aç, ${chatUnread} yeni mesaj`
-              : 'Oda sohbetini aç'
-        }
-      >
-        💬 <span>Sohbet</span>
-        {chatUnread > 0 ? <b>{chatUnread}</b> : null}
-      </button>
+      {viewerBand === 'adult' && (
+        <button
+          ref={chatTriggerRef}
+          className={`chat-fab ${chatUnread > 0 ? 'has-unread' : ''}`}
+          onClick={() => {
+            setChatOpen((value) => !value);
+            setChatUnread(0);
+          }}
+          aria-expanded={chatOpen}
+          aria-controls="room-chat"
+          aria-label={
+            chatOpen
+              ? 'Oda sohbetini kapat'
+              : chatUnread
+                ? `Oda sohbetini aç, ${chatUnread} yeni mesaj`
+                : 'Oda sohbetini aç'
+          }
+        >
+          💬 <span>Sohbet</span>
+          {chatUnread > 0 ? <b>{chatUnread}</b> : null}
+        </button>
+      )}
       {chatOpen && (
         <>
           <button className="room-chat-backdrop" aria-label="Sohbeti kapat" onClick={() => setChatOpen(false)} />

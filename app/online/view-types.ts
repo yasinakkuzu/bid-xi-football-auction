@@ -1,4 +1,5 @@
 /** Shared view models and presentation helpers for the online room UI. */
+import type { AgeBand } from '../../lib/age-policy';
 import type { CustomPoolSelection } from '../../lib/club-leagues';
 import {
   FORMATION_POSITIONS,
@@ -81,7 +82,7 @@ export type Room = {
   };
 };
 
-export type Session = { code: string; token: string; memberToken?: string; name?: string };
+export type Session = { code: string; token: string; memberToken?: string; name?: string; ageBand?: AgeBand };
 
 export const money = (n: number) => `$${n}M`;
 

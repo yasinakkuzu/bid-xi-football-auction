@@ -21,6 +21,10 @@ export type RoomMember = {
   botStyle?: BotStyle;
   leaderboardOptIn?: boolean;
   leaderboardAlias?: string;
+  /** Derived band only — the declared birth year is never stored. */
+  ageBand?: 'adult' | 'minor' | 'unknown';
+  /** Which information text was accepted and when (KVKK traceability). */
+  consent?: { policyVersion: string; acceptedAt: number; ageBand: 'adult' | 'minor' | 'unknown' };
 };
 export type RoomSettings = {
   era: Era;

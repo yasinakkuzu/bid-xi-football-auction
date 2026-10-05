@@ -66,8 +66,6 @@ const reserveCandidate = (i: number): PoolSourceEntry => ({
   club: 'Serbest',
   rating: 68 + (i % 3),
   price: 5,
-  value: 1000 + i,
-  image: `https://example.com/${i}.png`,
 });
 test('seeded shuffle is reproducible and preserves members', () => {
   const a = shuffleSeeded([1, 2, 3, 4, 5], seededRandom(hashSeed('game-1')));

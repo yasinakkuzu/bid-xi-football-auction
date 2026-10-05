@@ -5,8 +5,17 @@ export default function Terms() {
     <LegalPage eyebrow="KULLANIM KOŞULLARI" title="Adil ve güvenli oyun">
       <h2>Oyun niteliği</h2>
       <p>
-        Kadro İhalesi bağımsız bir eğlence oyunudur. Gösterilen puanlar, piyasa değerlerinden ve kariyer verilerinden
-        türetilmiş oyun içi değerlendirmelerdir; resmî performans notu veya yatırım tavsiyesi değildir.
+        Kadro İhalesi bağımsız bir eğlence oyunudur. Gösterilen puanlar ve fiyatlar, Kadro İhalesi&apos;nin kendi oyun
+        içi değerlendirme modeliyle üretilir; resmî performans notu, piyasa değeri veya yatırım tavsiyesi değildir. Oyun
+        herhangi bir kulüp, lig veya veri sağlayıcısıyla bağlantılı, onlar tarafından onaylanmış ya da sponsorlu
+        değildir.
+      </p>
+      <h2>Yaş sınırı ve genç oyuncular</h2>
+      <p>
+        Oyun <strong>13 yaş ve üzeri</strong> içindir. Katılım için doğum yılı beyanı ve gizlilik bilgilendirmesinin
+        onayı gerekir. Doğum yılı saklanmaz; yalnızca yaş aralığı tutulur.{' '}
+        <strong>18 yaş altındaki katılımcılar için oda sohbeti ve başarı tablosu yayını kapalıdır.</strong> 13 yaşından
+        küçükler oyunu kullanamaz.
       </p>
       <h2>Görünen ad ve sohbet kuralları</h2>
       <p>
@@ -21,13 +30,13 @@ export default function Terms() {
       </p>
       <h2>Markalar</h2>
       <p>
-        Futbolcu, kulüp ve lig adlarının anılması sponsorluk, onay veya resmî ortaklık anlamına gelmez. Kadro İhalesi
-        herhangi bir kulüp, lig veya veri sağlayıcısıyla bağlantılı değildir.
+        Futbolcu, kulüp ve lig adlarının anılması sponsorluk, onay veya resmî ortaklık anlamına gelmez. Oyuncu
+        fotoğrafları ve kulüp logoları oyunda kullanılmaz.
       </p>
       <h2>Başarı tablosu</h2>
       <p>
-        Katılım isteğe bağlıdır ve geri alınabilir. Yayımlanan görünen adı ve sonucu kullanıcı dilediği an silebilir;
-        ayrıntılar gizlilik metnindedir.
+        Katılım isteğe bağlıdır, yalnızca 18 yaş ve üzeri için açıktır ve geri alınabilir. Yayımlanan görünen adı ve
+        sonucu kullanıcı dilediği an silebilir; ayrıntılar gizlilik metnindedir.
       </p>
     </LegalPage>
   );

@@ -50,17 +50,17 @@ test('applyMediaPolicy strips the fields the policy denies', () => {
   assert.equal(applyMediaPolicy(source).image, undefined, 'the default policy is the secure one');
 });
 
-test('the shipped pool would leak media without the policy, which is why the default is closed', () => {
+test('the shipped pool carries no third-party media or market valuations at all', () => {
   const pool = JSON.parse(readFileSync('app/data/auction-pool.generated.json', 'utf8')) as Record<
     'current' | 'legends',
-    Record<string, Array<{ image?: string; clubLogo?: string }>>
+    Record<string, Array<Record<string, unknown>>>
   >;
   const players = Object.values(pool.current).flat();
   assert.ok(players.length > 0);
-  assert.ok(
-    players.every((player) => player.image && player.clubLogo),
-    'the raw dataset carries remote media URLs',
-  );
-  const sanitized = sanitizePool(players);
-  assert.ok(sanitized.every((player) => player.image === undefined && player.clubLogo === undefined));
+  for (const player of players) {
+    assert.equal('image' in player, false, 'no photo URLs ship in the dataset');
+    assert.equal('clubLogo' in player, false, 'no club logo URLs ship in the dataset');
+    assert.equal('value' in player, false, 'no third-party market values ship in the dataset');
+  }
+  assert.deepEqual(Object.keys(players[0]).sort(), ['club', 'country', 'id', 'league', 'name', 'price', 'rating']);
 });

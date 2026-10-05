@@ -49,6 +49,26 @@ Medya hakları **varsayılan olarak kapalıdır**: doğrulanmamış oyuncu foto�
 
 Yerel geliştirmede değişkenler `.dev.vars` dosyasına yazılabilir (git tarafından izlenmez). Hak kontrol listesi: [docs/data-rights.md](docs/data-rights.md).
 
+## Veri politikası
+
+Yayınlanan oyuncu havuzu yalnızca **olgusal alanlar** ve **oyunun kendi skorları** içerir:
+`id, name, country, club, league, rating, price`.
+
+- Piyasa değerleri, oyuncu fotoğrafları ve kulüp logoları veri setine **alınmaz ve yayınlanmaz**.
+- `rating` ve `price`, `scripts/lib/pool-model.mjs` içindeki şeffaf modele göre üretilir; model hiçbir piyasa değeri okumaz (`marketValueUsed: false`).
+- Kaynak derleme **CC0 1.0** lisanslıdır; kanıt `data/transfermarkt/dataset-manifest.json` içinde saklanır ve testle korunur.
+- Kaynağın kendi kullanım koşullarına ilişkin kalıntı risk, [docs/data-rights.md](docs/data-rights.md) içinde açıkça kayıtlıdır.
+
+> **Bekleyen iş:** yayınlanan havuz hâlâ eski modelle (`pool-v3`) üretilmiştir. `data/transfermarkt/players.csv` hazır olduğunda `npm run data:import` ile `pool-v4` üretilmeli ve `npm run test:data` yeşile alınmalıdır.
+
+## Yaş ve rıza politikası
+
+- Minimum yaş **13**; katılım için doğum yılı beyanı ve gizlilik bilgilendirmesinin onayı zorunludur.
+- **18 yaş altı** katılımcılar için oda sohbeti ve başarı tablosu yayını **sunucu tarafında kapalıdır**.
+- Doğum yılı **saklanmaz**; yalnızca yaş aralığı ve onay kaydı (politika sürümü + zaman) tutulur.
+- Yaş aralığı bilinmiyorsa katılımcı 18 altı kabul edilir (fail-closed).
+- Ayrıntı: [docs/kvkk.md](docs/kvkk.md), `lib/age-policy.ts`.
+
 ## Mimari
 
 ```
@@ -68,6 +88,7 @@ lib/
   leaderboard.ts           Başarı tablosu yazımı, sorgusu, silme ve saklama süresi
   rooms.ts                 Oda yaşam döngüsü ve eylem yönlendirmesi (HTTP katmanı)
   moderation.ts            Görünen ad ve sohbet moderasyonu
+  age-policy.ts            Yaş kapısı, rıza kaydı ve 18 altı kısıtlar
   media-rights.ts          Medya hak politikası
 db/schema.ts + drizzle/    Çalışma zamanı şeması ve D1 göçleri (testle senkron tutulur)
 tests/                     Davranış testleri; tests/integration kaynak veri kapısı

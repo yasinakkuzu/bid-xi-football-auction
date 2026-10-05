@@ -100,7 +100,9 @@ export async function persistLeaderboard(state: RoomState) {
   const statements = ranked.flatMap((manager) => {
     const member = approvedManagers[manager.id],
       entryId = `${state.code}:${round}:${manager.id}`;
-    if (!member?.leaderboardOptIn || deleted.has(entryId)) return [];
+    // Defence in depth: even if a preference slipped through, members who are
+    // not confirmed adults are never published.
+    if (!member?.leaderboardOptIn || member.ageBand !== 'adult' || deleted.has(entryId)) return [];
     const alias = (member.leaderboardAlias || manager.name).trim().slice(0, 24) || 'Anonim Menajer';
     return [
       db()

@@ -20,7 +20,22 @@ const manifest = JSON.parse(readFileSync('data/transfermarkt/dataset-manifest.js
   generatorVersion: string;
   scoreVersion: string;
   sourceSha256: string;
-  rights: { reviewStatus: string; playerPhotos: string; clubLogos: string };
+  sourceName: string;
+  sourceUrl: string;
+  scoreProvenance: string;
+  valuationModel: { name: string; version: string; marketValueUsed: boolean };
+  rights: {
+    reviewStatus: string;
+    playerPhotos: string;
+    clubLogos: string;
+    marketValues: string;
+    datasetLicense: string;
+    datasetLicenseUrl: string;
+    datasetLicensedBy: string;
+    commercialUseAllowed: boolean;
+    evidenceUrl: string;
+    reviewScope: string;
+  };
   coveredSeasons: Record<string, string>;
 };
 
@@ -72,13 +87,36 @@ test('current and last-30-year identities overlap by at most twelve percent per 
 
 test('dataset provenance binds source, score version and the rights review state', () => {
   assert.match(manifest.datasetVersion, /^transfermarkt-\d{4}-\d{2}-\d{2}$/);
-  assert.equal(manifest.generatorVersion, 'pool-v3');
+  assert.match(manifest.generatorVersion, /^pool-v\d+$/);
   assert.equal(manifest.scoreVersion, 'score-v3');
   assert.match(manifest.sourceSha256, /^[a-f0-9]{64}$/);
-  assert.equal(manifest.rights.reviewStatus, 'pending-legal-review');
+  assert.equal(manifest.rights.reviewStatus, 'documented');
+  // The published scores must never be described as valuation-free while an
+  // older, market-value based pool is still the one being shipped.
+  assert.match(manifest.scoreProvenance, /pool-v\d+/);
+  if (manifest.generatorVersion !== manifest.valuationModel.version)
+    assert.match(manifest.scoreProvenance, /piyasa değeri/i);
   assert.ok(quality.sourceRows >= 10000);
   assert.ok(quality.playableProfiles >= 1000);
   assert.ok(quality.wingMappings.right > 1000 && quality.wingMappings.left > 1000);
+});
+
+test('rights evidence is present, commercial use is allowed and the source is not misrepresented', () => {
+  const rights = manifest.rights;
+  assert.equal(rights.datasetLicense, 'CC0-1.0');
+  assert.equal(rights.datasetLicenseUrl, 'https://creativecommons.org/publicdomain/zero/1.0/');
+  assert.equal(rights.datasetLicensedBy, 'dcaribou/transfermarkt-datasets');
+  assert.equal(rights.commercialUseAllowed, true);
+  assert.match(rights.evidenceUrl, /^https:\/\/raw\.githubusercontent\.com\/dcaribou\/transfermarkt-datasets\//);
+  assert.ok(rights.reviewScope.length > 20, 'the scope of the review must be stated');
+  assert.match(rights.marketValues, /yay[ıi]nlanmaz/i);
+  assert.match(rights.playerPhotos, /yay[ıi]nlanmaz/i);
+  assert.match(rights.clubLogos, /yay[ıi]nlanmaz/i);
+  // Anti-concealment guard: the manifest must keep naming the real source. If the
+  // data ever moves to another provider, this assertion has to move with it.
+  assert.match(manifest.sourceName, /transfermarkt-datasets/);
+  assert.match(manifest.sourceUrl, /dcaribou\/transfermarkt-datasets/);
+  assert.equal(manifest.valuationModel.marketValueUsed, false);
 });
 
 test('the generated current pool keeps league metadata for custom pool search', () => {
