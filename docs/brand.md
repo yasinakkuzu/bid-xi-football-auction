@@ -25,14 +25,14 @@ Karar, iki bağımsız araştırmanın (isim/marka ve rakip/benchmark) sonuçlar
 
 İlk tasarım geçişinde eski palet (lime `#c9ff45` + koyu yeşil `#070b08`) korunmuştu; bu yüzden site "eski site + yeni yüzey" gibi okundu. Palet, ürünün metaforuna (canlı mezat salonu) daha yakın olan **pirinç/amber + sıcak mürekkep** kimliğine çevrildi:
 
-| Rol                              | Token                          | Değer                       |
-| -------------------------------- | ------------------------------ | --------------------------- |
-| Zemin                            | `--mz-bg`                      | `#0c0a07` (sıcak mürekkep)  |
-| Panel                            | `--mz-panel` / `--mz-panel-2`  | `#15110b` / `#1c1710`       |
-| Çizgi                            | `--mz-line` / `--mz-line-2`    | `#2b2317` / `#3a2f1f`       |
-| Aksiyon (para, CTA, lider)       | `--mz-accent` / `--mz-accent-dim` | `#ffb45c` / `#e79a3c`    |
-| Süre baskısı (geri sayım)        | `--mz-amber`                   | `#ff7a59`                   |
-| Metin                            | `--mz-text` / `--mz-muted` / `--mz-dim` | `#f7efe2` / `#b3a795` / `#7d7364` |
+| Rol                        | Token                                   | Değer                             |
+| -------------------------- | --------------------------------------- | --------------------------------- |
+| Zemin                      | `--mz-bg`                               | `#0c0a07` (sıcak mürekkep)        |
+| Panel                      | `--mz-panel` / `--mz-panel-2`           | `#15110b` / `#1c1710`             |
+| Çizgi                      | `--mz-line` / `--mz-line-2`             | `#2b2317` / `#3a2f1f`             |
+| Aksiyon (para, CTA, lider) | `--mz-accent` / `--mz-accent-dim`       | `#ffb45c` / `#e79a3c`             |
+| Süre baskısı (geri sayım)  | `--mz-amber`                            | `#ff7a59`                         |
+| Metin                      | `--mz-text` / `--mz-muted` / `--mz-dim` | `#f7efe2` / `#b3a795` / `#7d7364` |
 
 Kurallar: marka rengi **asla koda gömülmez**, yalnızca token üzerinden kullanılır (`app/theme-mezat.css`). Tek aksiyon rengi (pirinç), tek süre rengi (kızıl-turuncu), tek yüzey dili. Logo (`brand-mark.svg`, `favicon.svg`, `brand-mark-light.svg`, `brand-lockup.svg`, 192/512 px ikonlar) ve 1200×630 sosyal kart da aynı palete geçirildi. Alternatif olarak "Yayın Stüdyosu" (cyan) kimliği de denendi ve `mezat11-tasarim/palet-karsilastirma.png` içinde karşılaştırmalı olarak saklandı.
 
