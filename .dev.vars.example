@@ -1,0 +1,22 @@
+# Yerel geliştirme ortam değişkenleri.
+# Kullanmak için: `cp .dev.vars.example .dev.vars` (`.dev.vars` git tarafından izlenmez).
+# ÜRETİM değerleri burada değil, OpenAI Sites proje ayarlarında tanımlanır (bkz. README → Yayına çıkarma).
+
+# --- Hak kapısı -------------------------------------------------------------
+# Ticari sürümde `true` olmalıdır. Doğrulanmamış medya kaçış kapısını kapatır.
+COMMERCIAL_MODE=false
+
+# Yalnızca lisans kanıtı `docs/data-rights.md` içinde kayıtlı görseller açılır.
+# Yayınlanan veri seti hiç medya içermediği için bu bayraklar açık olsa bile
+# istemcilere görsel gitmez; yine de kapalı tutulmalıdır.
+SHOW_PLAYER_PHOTOS=false
+SHOW_CLUB_LOGOS=false
+ALLOW_UNVERIFIED_ASSETS=false
+
+# --- İletişim ve saklama ----------------------------------------------------
+# Kaldırma / moderasyon / KVKK başvuruları için yayımlanacak adres.
+# Yayın derlemesinden ÖNCE tanımlanmalıdır; yasal sayfalar bu değeri derlemede okur.
+MODERATION_CONTACT=
+
+# Başarı tablosu saklama süresi (gün). 0 = süresiz sakla (önerilmez).
+LEADERBOARD_RETENTION_DAYS=365

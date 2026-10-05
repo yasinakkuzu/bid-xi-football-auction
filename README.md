@@ -116,4 +116,40 @@ npm run test:data     # kaynak veri kümesi kapısı (SQLite bütünlüğü, kap
 
 ## Yayın
 
-`.github/workflows/ci.yml` her push ve pull request'te `npm ci` + `npm run check` adımlarını çalıştırır. Proje OpenAI Sites yapılandırmasını `.openai/hosting.json` altında içerir; D1 göçleri `drizzle/` altındadır ve `db/schema.ts` ile eşleştiği testle doğrulanır. Yeni sürüm yayımlamadan önce `npm run check` yeşil olmalıdır.
+`.github/workflows/ci.yml` her push ve pull request'te `npm ci` + `npm run check` adımlarını çalıştırır. Proje OpenAI Sites yapılandırmasını `.openai/hosting.json` altında içerir; D1 göçleri `drizzle/` altındadır ve `db/schema.ts` ile eşleştiği testle doğrulanır.
+
+Dağıtım OpenAI Sites panelinden yapılır (repoda dağıtım CLI'si veya platform kimliği yoktur; proje kimliği `appgprj_6a8d571bdeac819181f8a9c85c4e4217`).
+
+### Yayına çıkarma adımları
+
+1. **Kapı:** `npm run check` yeşil olmalı (format + lint + typecheck + test + build).
+2. **Proje değişkenleri** (OpenAI Sites → proje ayarları; yayın derlemesinden **önce** girilmeli, çünkü yasal sayfalar `MODERATION_CONTACT` değerini derleme sırasında okur):
+
+   | Değişken                                 | Üretim değeri | Neden                                           |
+   | ---------------------------------------- | ------------- | ----------------------------------------------- |
+   | `COMMERCIAL_MODE`                        | `true`        | Ticari hak kapısını kapatır.                    |
+   | `ALLOW_UNVERIFIED_ASSETS`                | `false`       | Kaçış kapısı üretimde kapalı kalmalı.           |
+   | `SHOW_PLAYER_PHOTOS` / `SHOW_CLUB_LOGOS` | `false`       | Yalnız lisans kanıtı olan görseller açılabilir. |
+   | `MODERATION_CONTACT`                     | `<e-posta>`   | Kaldırma/moderasyon/KVKK başvuru kanalı.        |
+   | `LEADERBOARD_RETENTION_DAYS`             | `365`         | Başarı tablosu saklama süresi.                  |
+
+   > Yayınlanan veri seti hiç medya içermediği için bu bayraklar açık olsa bile istemcilere görsel gitmez; bayraklar ikinci kapıdır.
+
+3. **Yayınla:** Sites panelinden yeni sürümü yayımlayın.
+4. **Yayın sonrası doğrulama** (aşağıdaki komut aynen çalıştırılabilir):
+
+   ```bash
+   BASE=https://kadro-ihalesi.yasinakkuzu.chatgpt.site
+   curl -s "$BASE/api/pool?era=current" -o /tmp/pool.json
+   node -e "const d=require('/tmp/pool.json'),a=Object.values(d).flat();
+     console.log('players',a.length,'| media',a.filter(p=>p.image||p.clubLogo).length,
+     '| marketValues',a.filter(p=>'value' in p).length,'| keys',Object.keys(a[0]).join(','))"
+   # beklenen: media 0 | marketValues 0 | keys id,name,country,club,league,rating,price
+
+   curl -s -X POST "$BASE/api/rooms" -H 'Content-Type: application/json' -d '{"name":"Test","settings":{}}'
+   # beklenen: CONSENT_REQUIRED (yaş/rıza kapısının canlı olduğunu kanıtlar)
+   ```
+
+   `media` veya `marketValues` sıfırdan büyükse **yeni sürüm canlı değildir**.
+
+5. **Bekleyen veri işi:** `app/data/auction-pool.generated.json` hâlâ `pool-v3`. Kaynak CSV elinizde olduğunda `npm run data:import && npm run test:data` ile `pool-v4` üretin; `test:data` bu işi zorunlu kılar.
