@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { SITE_DESCRIPTION, SITE_DESCRIPTOR, SITE_NAME, SITE_TAGLINE, SITE_URL } from '../lib/site';
 import './globals.css';
+/* Mezat 11 tasarım katmanı — globals.css'ten sonra yüklenir (yalnızca görsel). */
+import './theme-mezat.css';
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
 const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] });

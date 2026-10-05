@@ -1,0 +1,833 @@
+/* ============================================================================
+   Mezat 11 — "gece stadyumu" tasarım katmanı
+   ----------------------------------------------------------------------------
+   globals.css'ten SONRA yüklenir; yalnızca görsel katmanı değiştirir, oyun
+   mantığına ve mevcut akışlara dokunmaz. Amaç: mezat masası hissi (koyu zemin +
+   lime aksiyon + amber süre), skorbord tipografisi ve tutarlı yüzeyler.
+   ========================================================================== */
+
+:root {
+  --mz-bg: #070b08;
+  --mz-panel: #0d130e;
+  --mz-panel-2: #121b13;
+  --mz-line: #1e2a1f;
+  --mz-line-2: #283a2a;
+  --mz-lime: #c9ff45;
+  --mz-lime-dim: #a9ed24;
+  --mz-amber: #ffb45c;
+  --mz-text: #f5f6f4;
+  --mz-muted: #9aa39c;
+  --mz-dim: #606a62;
+  --mz-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --mz-radius: 20px;
+}
+
+/* ---------- zemin ---------- */
+body {
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(201, 255, 69, 0.07), transparent 60%),
+    radial-gradient(900px 520px at 110% 110%, rgba(201, 255, 69, 0.05), transparent 55%), var(--mz-bg) !important;
+  color: var(--mz-text);
+}
+
+.online-shell,
+.online-room {
+  position: relative;
+}
+.online-shell::before,
+.online-room::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(70% 70% at 50% 35%, #000 35%, transparent 100%);
+}
+.online-shell > *,
+.online-room > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- yüzeyler ---------- */
+.panel,
+.online-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0)), var(--mz-panel) !important;
+  border: 1px solid var(--mz-line) !important;
+  border-radius: var(--mz-radius) !important;
+  box-shadow: var(--mz-shadow);
+}
+
+.eyebrow,
+.label {
+  color: var(--mz-dim) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.18em !important;
+  font-weight: 900 !important;
+  text-transform: uppercase;
+}
+
+.mode-label,
+.connection,
+.media-rights-note,
+.session-note {
+  color: var(--mz-muted) !important;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.025em;
+}
+
+/* ---------- üst bar / marka ---------- */
+.online-nav,
+.room-header {
+  border-bottom: 1px solid var(--mz-line);
+  padding-bottom: 14px;
+}
+
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+}
+.brand-lockup b {
+  font-size: 20px !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--mz-text) !important;
+}
+.brand-lockup small {
+  color: var(--mz-dim) !important;
+  font-size: 8.5px !important;
+  letter-spacing: 0.22em !important;
+  font-weight: 800 !important;
+}
+.room-brand b {
+  color: var(--mz-text);
+}
+.room-code,
+.room-code-input {
+  border: 1px solid var(--mz-line-2) !important;
+  background: #0b120c !important;
+  border-radius: 14px !important;
+  color: var(--mz-lime) !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.12em;
+}
+.room-share,
+.invite-link {
+  border: 1px solid var(--mz-line-2) !important;
+  background: #0b120c !important;
+  color: var(--mz-muted) !important;
+  border-radius: 12px !important;
+  font-weight: 800 !important;
+}
+.room-share:hover,
+.invite-link:hover {
+  border-color: var(--mz-lime) !important;
+  color: var(--mz-lime) !important;
+}
+
+/* ---------- giriş ekranı ---------- */
+.online-entry {
+  gap: 44px;
+}
+.online-entry h1,
+.online-entry h2 {
+  font-weight: 900;
+}
+.online-tabs {
+  border: 1px solid var(--mz-line) !important;
+  background: #0b110c !important;
+  border-radius: 16px !important;
+  padding: 5px !important;
+}
+.online-tabs button {
+  border-radius: 12px !important;
+  color: var(--mz-muted) !important;
+  font-weight: 900 !important;
+}
+.online-tabs button.active {
+  background: var(--mz-lime) !important;
+  color: #08110a !important;
+}
+
+.online-input {
+  border: 1px solid var(--mz-line-2) !important;
+  background: #0b120c !important;
+  border-radius: 14px !important;
+  color: var(--mz-text) !important;
+  padding: 14px 15px !important;
+  font-weight: 700 !important;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.online-input::placeholder {
+  color: var(--mz-dim) !important;
+}
+.online-input:focus {
+  border-color: var(--mz-lime) !important;
+  box-shadow: 0 0 0 4px rgba(201, 255, 69, 0.13) !important;
+  outline: none !important;
+}
+
+/* seçenek grupları — tek "çip" dili */
+.online-settings button,
+.tier-picker button,
+.tier-tools button,
+.role-choice button,
+.auction-mode-picker button,
+.reserve-picker button,
+.pool-mode button,
+.manager-count-hint button,
+.ai-level-picker button,
+.ability-choice,
+.online-ability,
+.check-setting {
+  border: 1px solid var(--mz-line) !important;
+  background: #0b110c !important;
+  border-radius: 14px !important;
+  color: var(--mz-muted) !important;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.online-settings button.active,
+.tier-picker button.active,
+.role-choice button.active,
+.auction-mode-picker button.active,
+.reserve-picker button.active,
+.pool-mode button.active,
+.manager-count-hint button.active,
+.ai-level-picker button.active,
+.ability-choice.active,
+.online-ability.active {
+  border-color: var(--mz-lime) !important;
+  background: linear-gradient(180deg, rgba(201, 255, 69, 0.16), rgba(201, 255, 69, 0.04)) !important;
+  color: var(--mz-text) !important;
+}
+.tier-picker button span,
+.tier-tools span {
+  color: var(--mz-lime) !important;
+}
+.online-settings button strong,
+.ability-choice strong,
+.reserve-picker button b,
+.auction-mode-picker button b {
+  color: var(--mz-text) !important;
+}
+.advanced-settings select,
+.online-settings select {
+  border: 1px solid var(--mz-line-2) !important;
+  background: #0b120c !important;
+  color: var(--mz-text) !important;
+  border-radius: 12px !important;
+}
+
+.duration-estimate {
+  border: 1px solid rgba(201, 255, 69, 0.22) !important;
+  background: rgba(201, 255, 69, 0.055) !important;
+  border-radius: 16px !important;
+}
+.duration-estimate strong {
+  color: var(--mz-lime) !important;
+}
+.duration-estimate.uzun {
+  border-color: rgba(255, 180, 92, 0.4) !important;
+  background: rgba(255, 180, 92, 0.08) !important;
+}
+.duration-estimate.uzun strong {
+  color: var(--mz-amber) !important;
+}
+
+.leaderboard-opt-in,
+.consent-check {
+  border: 1px solid var(--mz-line) !important;
+  background: #0b110c !important;
+  border-radius: 14px !important;
+}
+.leaderboard-opt-in input,
+.consent-check input {
+  accent-color: var(--mz-lime) !important;
+}
+.leaderboard-opt-in b,
+.consent-check a {
+  color: var(--mz-text);
+}
+
+/* ana eylem düğmesi */
+.start {
+  border: 0 !important;
+  border-radius: 16px !important;
+  background: linear-gradient(180deg, #dcff7d, var(--mz-lime)) !important;
+  color: #08110a !important;
+  font-weight: 900 !important;
+  box-shadow: 0 14px 34px rgba(201, 255, 69, 0.22) !important;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.start:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 40px rgba(201, 255, 69, 0.3) !important;
+}
+.start:disabled {
+  background: #1a211a !important;
+  color: var(--mz-dim) !important;
+  box-shadow: none !important;
+}
+.online-error {
+  border: 1px solid rgba(252, 165, 165, 0.4) !important;
+  background: rgba(127, 29, 29, 0.18) !important;
+  color: #fca5a5 !important;
+  border-radius: 14px !important;
+}
+
+/* ---------- lobi ---------- */
+.lobby .member-list,
+.member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.member-list > * {
+  border: 1px solid transparent !important;
+  background: #0b110c !important;
+  border-radius: 14px !important;
+}
+.manager-identity {
+  color: var(--mz-text) !important;
+  font-weight: 800 !important;
+}
+.lobby-actions .start {
+  margin-top: 10px;
+}
+
+/* ---------- mezat masası ---------- */
+.online-auction {
+  display: grid !important;
+  grid-template-columns: 300px minmax(0, 1fr) !important;
+  gap: 16px !important;
+  align-items: start;
+}
+.online-auction > aside {
+  border: 1px solid var(--mz-line) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0)), var(--mz-panel) !important;
+  border-radius: var(--mz-radius) !important;
+  box-shadow: var(--mz-shadow);
+  padding: 14px !important;
+}
+.online-auction > div {
+  border: 1px solid var(--mz-line) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0)), var(--mz-panel) !important;
+  border-radius: var(--mz-radius) !important;
+  box-shadow: var(--mz-shadow);
+  padding: 18px 20px 20px !important;
+}
+
+/* menajer kartları — mezat kartonu satırları */
+.online-manager-card {
+  display: grid !important;
+  grid-template-columns: 34px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 10px !important;
+  border: 1px solid transparent !important;
+  background: #0b110c !important;
+  border-radius: 14px !important;
+  padding: 10px 12px !important;
+  margin-top: 8px !important;
+  color: var(--mz-text) !important;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.12s ease;
+}
+.online-manager-card:hover {
+  transform: translateX(2px);
+  border-color: var(--mz-line-2) !important;
+}
+.online-manager-card .avatar {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 11px !important;
+  display: grid;
+  place-items: center;
+  background: #16201651 !important;
+  border: 1px solid var(--mz-line-2) !important;
+  color: var(--mz-lime) !important;
+  font-weight: 900 !important;
+}
+.online-manager-card b {
+  font-size: 13.5px !important;
+  font-weight: 800 !important;
+}
+.online-manager-card small {
+  color: var(--mz-muted) !important;
+  font-size: 10.5px !important;
+}
+.online-manager-card em {
+  color: var(--mz-dim) !important;
+  font-style: normal;
+  font-weight: 900;
+}
+.online-manager-card.leader {
+  border-color: rgba(201, 255, 69, 0.5) !important;
+  background: linear-gradient(90deg, rgba(201, 255, 69, 0.14), rgba(201, 255, 69, 0.03)) !important;
+}
+.online-manager-card.leader em {
+  color: var(--mz-lime) !important;
+}
+.online-manager-card.passed,
+.online-manager-card.ineligible {
+  opacity: 0.55;
+}
+.online-manager-card.filled em {
+  color: var(--mz-lime-dim) !important;
+}
+.manager-lot-status {
+  color: var(--mz-dim) !important;
+  font-size: 9.5px !important;
+  letter-spacing: 0.08em;
+  font-weight: 900 !important;
+}
+
+/* lot başlığı ve geri sayım */
+.online-lot-head {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  border-bottom: 1px solid var(--mz-line) !important;
+  padding-bottom: 12px !important;
+  color: var(--mz-dim) !important;
+  font-size: 10.5px !important;
+  letter-spacing: 0.16em !important;
+  font-weight: 900 !important;
+  text-transform: uppercase;
+}
+.online-lot-head b {
+  color: var(--mz-text) !important;
+}
+.online-lot-head em {
+  margin-left: auto;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 180, 92, 0.35) !important;
+  background: rgba(255, 180, 92, 0.08) !important;
+  color: var(--mz-amber) !important;
+  border-radius: 999px !important;
+  padding: 6px 14px !important;
+  font-size: 17px !important;
+  font-weight: 900 !important;
+  font-style: normal !important;
+  font-variant-numeric: tabular-nums;
+}
+.online-lot-head em i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mz-amber);
+  animation: mz-pulse 1s ease-in-out infinite;
+}
+.online-lot-head em.countdown-critical {
+  border-color: var(--mz-amber) !important;
+  background: rgba(255, 180, 92, 0.18) !important;
+}
+@keyframes mz-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+}
+
+.online-player {
+  flex-direction: row !important;
+  align-items: flex-end !important;
+  justify-content: flex-start !important;
+  gap: 22px !important;
+  min-height: 290px !important;
+  margin-top: 14px !important;
+  padding: 26px 28px !important;
+  border: 1px solid var(--mz-line) !important;
+  border-radius: 20px !important;
+  background: radial-gradient(circle at 72% 22%, rgba(201, 255, 69, 0.14), transparent 46%), #0a1009 !important;
+}
+.online-player-copy {
+  max-width: none !important;
+  flex: 1 1 auto;
+}
+.online-player-visual {
+  position: relative;
+  flex: 0 0 auto;
+  width: 148px;
+  height: 186px;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--mz-line-2);
+  background: #0b120c;
+}
+.online-player-visual span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 54px;
+  font-weight: 900;
+  color: var(--mz-lime);
+}
+.online-player-visual img,
+.online-player-photo {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  display: block;
+}
+.player-image-placeholder {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 54px;
+  font-weight: 900;
+  color: var(--mz-lime);
+  background: #0b120c;
+}
+.auction-mini-formation {
+  left: auto !important;
+  right: 26px !important;
+  top: 24px !important;
+  width: 200px !important;
+  height: 100px !important;
+  border-color: var(--mz-line-2) !important;
+  background: linear-gradient(135deg, rgba(28, 55, 25, 0.7), rgba(8, 24, 12, 0.7)) !important;
+}
+.online-player-copy h2,
+.online-player-copy h3 {
+  font-size: clamp(26px, 3.4vw, 40px) !important;
+  font-weight: 900 !important;
+  line-height: 1.02 !important;
+  letter-spacing: -0.035em !important;
+}
+.online-points,
+.bid-summary strong,
+.current-leader b {
+  font-variant-numeric: tabular-nums;
+  font-weight: 900 !important;
+}
+.bid-summary strong {
+  font-size: clamp(34px, 5vw, 52px) !important;
+  letter-spacing: -0.03em !important;
+  color: var(--mz-lime) !important;
+}
+.current-leader {
+  border: 1px solid var(--mz-line) !important;
+  background: #0b110c !important;
+  border-radius: 16px !important;
+}
+.current-leader b {
+  color: var(--mz-lime) !important;
+}
+
+/* teklif kontrolleri */
+.online-actions,
+.online-action-stack {
+  display: grid !important;
+  gap: 8px !important;
+}
+.online-actions button,
+.online-action-stack button,
+.custom-bid-form button {
+  border: 1px solid var(--mz-line-2) !important;
+  background: #0c130d !important;
+  color: var(--mz-text) !important;
+  border-radius: 14px !important;
+  font-weight: 900 !important;
+  padding: 14px 0 !important;
+  font-variant-numeric: tabular-nums;
+}
+.online-actions button:hover,
+.online-action-stack button:hover {
+  border-color: var(--mz-lime) !important;
+  color: var(--mz-lime) !important;
+}
+.online-actions .primary-action,
+.online-action-stack .primary-action {
+  border: 0 !important;
+  background: linear-gradient(180deg, #dcff7d, var(--mz-lime)) !important;
+  color: #08110a !important;
+  box-shadow: 0 14px 34px rgba(201, 255, 69, 0.22) !important;
+  padding: 15px 24px !important;
+  border-radius: 14px !important;
+  font-size: 15px !important;
+}
+.online-bid {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 18px !important;
+  margin-top: 14px !important;
+  padding: 16px 18px !important;
+  border: 1px solid var(--mz-line) !important;
+  border-radius: 18px !important;
+  background: #0b110c !important;
+}
+.bid-summary {
+  flex: 0 0 auto;
+  min-width: 210px;
+  max-width: none !important;
+}
+.online-action-stack {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.online-actions {
+  justify-content: flex-end;
+}
+/* host kontrolleri kendi sticky panelinde kalır; bid satırı iki kolonlu akışını korur */
+.online-player-visual span,
+.player-image-placeholder {
+  font-size: 46px;
+  letter-spacing: -0.02em;
+}
+.custom-bid-form input {
+  border: 1px solid var(--mz-line-2) !important;
+  background: #0b120c !important;
+  color: var(--mz-text) !important;
+  border-radius: 12px !important;
+}
+
+/* akış + bonus uyarıları */
+.online-feed {
+  border-top: 1px solid var(--mz-line) !important;
+  margin-top: 14px;
+  padding-top: 12px;
+}
+.online-feed p {
+  border-left: 2px solid var(--mz-line-2) !important;
+  padding-left: 9px;
+  color: var(--mz-muted) !important;
+  font-size: 11.5px !important;
+  line-height: 1.5;
+}
+.online-feed p:first-child {
+  border-color: var(--mz-lime) !important;
+  color: var(--mz-text) !important;
+}
+.bonus-lot-alert {
+  border: 1px solid rgba(255, 180, 92, 0.45) !important;
+  background: rgba(255, 180, 92, 0.1) !important;
+  color: var(--mz-amber) !important;
+  border-radius: 16px !important;
+  font-weight: 900 !important;
+}
+.auto-assignment-card,
+.missed-bonus-card {
+  border: 1px solid var(--mz-line) !important;
+  background: #0b110c !important;
+  border-radius: 16px !important;
+}
+.online-lot-progress {
+  color: var(--mz-muted) !important;
+  font-size: 11.5px !important;
+}
+
+/* kadro / saha */
+.online-squad-panel {
+  border: 1px solid var(--mz-line) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0)), var(--mz-panel) !important;
+  border-radius: var(--mz-radius) !important;
+  box-shadow: var(--mz-shadow);
+}
+.online-squad-formation {
+  border-radius: 16px !important;
+  border: 1px solid var(--mz-line) !important;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(201, 255, 69, 0.06), transparent 60%), #0a1009 !important;
+}
+.online-halfway,
+.online-center-circle {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+.online-formation-player i,
+.online-formation-player span {
+  border-radius: 10px !important;
+}
+.online-formation-player.filled {
+  background: var(--mz-lime) !important;
+  color: #08110a !important;
+}
+.online-squad-list article {
+  border: 1px solid var(--mz-line) !important;
+  background: #0b110c !important;
+  border-radius: 14px !important;
+}
+.online-squad-summary strong {
+  color: var(--mz-lime) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.manager-view-tabs button,
+.formation-picker button {
+  border: 1px solid var(--mz-line) !important;
+  background: #0b110c !important;
+  color: var(--mz-muted) !important;
+  border-radius: 12px !important;
+  font-weight: 900 !important;
+}
+.manager-view-tabs button.active,
+.formation-picker button.active {
+  background: var(--mz-lime) !important;
+  color: #08110a !important;
+  border-color: var(--mz-lime) !important;
+}
+
+/* sohbet, çekmece, host kontrolleri */
+.chat-fab {
+  border: 1px solid var(--mz-line-2) !important;
+  background: #0b120c !important;
+  color: var(--mz-text) !important;
+  border-radius: 999px !important;
+  box-shadow: var(--mz-shadow);
+}
+.chat-fab.has-unread {
+  border-color: var(--mz-lime) !important;
+}
+.chat-fab b {
+  background: var(--mz-lime) !important;
+  color: #08110a !important;
+}
+.room-chat,
+.manager-drawer,
+.online-manager-drawer {
+  border: 1px solid var(--mz-line-2) !important;
+  background: var(--mz-panel) !important;
+  border-radius: var(--mz-radius) !important;
+  box-shadow: var(--mz-shadow);
+}
+.host-control-dock,
+.host-controls {
+  border: 1px solid rgba(201, 255, 69, 0.25) !important;
+  background: rgba(9, 14, 10, 0.96) !important;
+  border-radius: 16px !important;
+  backdrop-filter: blur(16px);
+}
+.host-primary,
+.host-controls .start {
+  background: linear-gradient(180deg, #dcff7d, var(--mz-lime)) !important;
+  color: #08110a !important;
+}
+.danger-action,
+.leave-room {
+  border: 1px solid rgba(252, 165, 165, 0.35) !important;
+  background: rgba(127, 29, 29, 0.16) !important;
+  color: #fca5a5 !important;
+  border-radius: 12px !important;
+}
+.online-toast {
+  border: 1px solid var(--mz-line-2) !important;
+  background: #0b120c !important;
+  border-radius: 14px !important;
+  box-shadow: var(--mz-shadow);
+}
+
+/* sonuç ekranı */
+.online-results > div article,
+.online-result-analysis,
+.result-analysis,
+.tournament,
+.result-audit,
+.season-list p {
+  border: 1px solid var(--mz-line) !important;
+  background: #0b110c !important;
+  border-radius: 16px !important;
+}
+.online-results > div article > strong {
+  color: var(--mz-lime) !important;
+  font-variant-numeric: tabular-nums;
+}
+.share-card {
+  border: 0 !important;
+  border-radius: 16px !important;
+  background: linear-gradient(180deg, #dcff7d, var(--mz-lime)) !important;
+  color: #08110a !important;
+  font-weight: 900 !important;
+}
+
+/* ---------- mobil ---------- */
+@media (max-width: 1024px) {
+  .online-auction {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .online-player-visual {
+    width: 124px;
+    height: 156px;
+  }
+}
+
+@media (max-width: 720px) {
+  .online-shell,
+  .online-room {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+  .online-entry {
+    gap: 24px;
+  }
+  .online-auction > div {
+    padding: 14px 14px 16px !important;
+  }
+  .online-player {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 14px !important;
+    min-height: 0 !important;
+    padding: 20px !important;
+  }
+  .online-player-visual {
+    width: 104px;
+    height: 130px;
+  }
+  .auction-mini-formation {
+    right: 18px !important;
+    top: 18px !important;
+    width: 150px !important;
+    height: 76px !important;
+  }
+  .online-bid {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .online-lot-head {
+    flex-wrap: wrap;
+  }
+  .online-lot-head em {
+    font-size: 16px !important;
+  }
+  .online-actions button,
+  .online-action-stack button {
+    padding: 16px 0 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .online-lot-head em i {
+    animation: none;
+  }
+  .start:hover:not(:disabled),
+  .online-manager-card:hover {
+    transform: none;
+  }
+}

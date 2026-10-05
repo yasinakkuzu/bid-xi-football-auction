@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="512" height="512" role="img" aria-label="Mezat 11 işareti">
+  <rect x="55" y="80" width="18" height="26" rx="8" fill="#a9ed24"/>
+  <rect x="26" y="16" width="76" height="70" rx="17" fill="#a9ed24"/>
+  <g stroke="#0b110d" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M47 38 L56 30 L56 66"/><path d="M75 38 L84 30 L84 66"/>
+  </g>
+  <circle cx="95" cy="25" r="8.5" fill="#0b110d"/><circle cx="95" cy="25" r="6" fill="#fff"/>
+</svg>
