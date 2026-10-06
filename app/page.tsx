@@ -2125,6 +2125,9 @@ function Setup({
         <p className="source-note">
           Oyuncu verileri: transfermarkt-datasets (CC0). Mezat 11 puanları maç istatistiklerinden türetilir.
         </p>
+        <p className="source-note">
+          İletişim, şikâyet ve kaldırma talepleri: <a href="mailto:info@mezat11.com">info@mezat11.com</a>
+        </p>
       </div>
     </section>
   );
