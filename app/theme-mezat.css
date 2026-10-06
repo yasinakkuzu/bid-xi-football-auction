@@ -897,3 +897,13 @@ h3 {
   color: var(--mz-accent) !important;
   border-color: var(--mz-line-2) !important;
 }
+
+/* globals.css'teki mavi "Geri al" düğmesi palet dışıydı (bkz. denetim notu). */
+.undo-action {
+  border-color: var(--mz-line-2) !important;
+  color: var(--mz-muted) !important;
+}
+.undo-action:hover {
+  border-color: var(--mz-accent) !important;
+  color: var(--mz-accent) !important;
+}

@@ -961,3 +961,43 @@
     box-shadow: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Lead: mobil sabit teklif çubuğu 196px yüksekti ve kaydırma başında oyuncu
+   adını örtüyordu. Çubuk ~150px'e sıkıştırıldı; rezerve edilen boşluk da yeni
+   yüksekliğe çekildi.
+   -------------------------------------------------------------------------- */
+@media (max-width: 760px) {
+  .online-room.mz-mobile-dock {
+    padding-bottom: calc(150px + env(safe-area-inset-bottom)) !important;
+  }
+  .mz-mobile-dock .mz-action-bar__dock {
+    gap: 6px 10px;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  }
+  .mz-mobile-dock .mz-action-bar__dock > .mz-timer {
+    height: 42px;
+    width: 42px;
+  }
+  .mz-mobile-dock .mz-action-bar__dock > .mz-timer .mz-timer__seconds {
+    font-size: 13px;
+  }
+  .mz-mobile-dock .mz-action-bar__dock > .mz-bid-hero strong {
+    font-size: 26px !important;
+  }
+  .mz-mobile-dock .mz-action-bar .current-leader {
+    font-size: 11.5px;
+    padding: 2px 9px !important;
+  }
+  .mz-mobile-dock .mz-action-bar__dock .online-actions button {
+    padding: 10px 4px !important;
+    font-size: 14px;
+  }
+  .mz-mobile-dock .mz-action-bar__dock .online-actions .primary-action.mz-bid-cta {
+    padding: 11px 16px !important;
+    font-size: 15px !important;
+  }
+  .online-room.mz-mobile-dock > .chat-fab {
+    bottom: calc(158px + env(safe-area-inset-bottom)) !important;
+  }
+}
