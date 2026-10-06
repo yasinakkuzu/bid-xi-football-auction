@@ -1,0 +1,104 @@
+# Mezat 11 — Yayın Öncesi Kontrol Listesi
+
+Bu liste, yayına çıkmadan önce **sırayla** yürütülmek üzere hazırlandı. Her madde ya komutla ya da panelde tek bir işlemle doğrulanabilir. Durum: `[x]` doğrulandı · `[ ]` operatörün yapacağı iş.
+
+---
+
+## 1. Kod ve kapılar
+
+- [x] `npm run check` → format + lint + typecheck + 106 test + build, **exit 0**
+- [x] `npm run test:data` → 5 entegrasyon testi (havuz/hak kapıları), **exit 0**
+- [x] CI (`main`) yeşil; çalışma ağacı temiz
+- [ ] Yayınlanacak commit'in `main` ile aynı olduğunu teyit et: `git log --oneline -1 && git status --short --branch`
+- [ ] Node sürümü 22.13+ (yerel geliştirme için `node -v`)
+
+## 2. Veri, haklar ve lisans
+
+- [x] Havuzda üçüncü taraf görsel yok: `image_url`, kulüp logosu, oyuncu fotoğrafı **hiç okunmuyor/üretilmiyor**
+- [x] Piyasa değeri alanları (`market_value_in_eur`, `highest_market_value_in_eur`) **hiç okunmuyor**
+- [x] Havuz anahtarları tam olarak `id,name,country,club,league,rating,price`
+- [x] `data/transfermarkt/*.csv|*.sqlite` gitignore'da (kaynak veri depoda değil)
+- [x] CC0 kanıtı ve alan bazlı izin/ret listesi: [`docs/data-rights.md`](data-rights.md)
+- [x] `dataset-manifest.json`: `valuationModel.marketValueUsed: false`, `performanceDataUsed: true`, hak kanıtı URL'si
+- [ ] Marka vekili ile **TÜRKPATENT** taraması (Nice 9 / 41 / 42) — bu liste hukuki görüş değildir
+
+## 3. KVKK, yaş ve moderasyon
+
+- [x] 13 yaş altı kapıda reddediliyor; 18 altı **sohbet ve liderlik tablosundan** muaf
+- [x] Doğum yılı **saklanmıyor**, yalnızca yaş bandı türetiliyor; bilinmeyen yaş fail-closed
+- [x] Onay metni oda kurma/katılma akışında zorunlu (`CONSENT_REQUIRED`)
+- [x] Aydınlatma ve işleme envanteri: [`docs/kvkk.md`](kvkk.md)
+- [x] Moderasyon ve kaldırma akışı: [`docs/moderation.md`](moderation.md)
+- [ ] `MODERATION_CONTACT` üretimde **gerçek e-posta** olarak ayarla (şu an repo kanalına düşüyor)
+
+## 4. Üretim ortam değişkenleri
+
+Panelde şu değerlerle ayarlanmalı:
+
+| Değişken                     | Değer                | Neden                                                                |
+| ---------------------------- | -------------------- | -------------------------------------------------------------------- |
+| `COMMERCIAL_MODE`            | `true`               | Ticari mod: reklam/ödül dilini kapatır, hak kurallarını sıkılaştırır |
+| `ALLOW_UNVERIFIED_ASSETS`    | `false`              | Doğrulanmamış görsel/varlık yüklenemez                               |
+| `SHOW_PLAYER_PHOTOS`         | `false`              | Oyuncu fotoğrafı yok (hak)                                           |
+| `SHOW_CLUB_LOGOS`            | `false`              | Kulüp logosu yok (hak)                                               |
+| `MODERATION_CONTACT`         | `<destek e-postası>` | Kaldırma/şikâyet kanalı                                              |
+| `LEADERBOARD_RETENTION_DAYS` | `365`                | Liderlik tablosu saklama süresi                                      |
+
+## 5. Yayın adımları
+
+- [ ] OpenAI Sites panelinden **yeni sürümü yayınla** (bu depo için CLI/credential yok; yayın panelden yapılır)
+- [ ] Yayın sonrası eski sürümün gittiğini doğrula:
+
+```bash
+BASE=https://kadro-ihalesi.yasinakkuzu.chatgpt.site
+
+# 1) Başlık ve marka
+curl -sS "$BASE/" | grep -o "<title>[^<]*</title>"
+
+# 2) Havuzda görsel/piyasa değeri kalmadı mı? (beklenen: media 0, marketValues 0)
+curl -sS "$BASE/api/pool?era=current" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const p=JSON.parse(d);const j=JSON.stringify(p);
+ console.log('bayt:',j.length,'| media:',(j.match(/image|logo|photo/gi)||[]).length,'| marketValues:',(j.match(/market_value|marketValue|highest_market/gi)||[]).length);
+ console.log('anahtarlar:',Object.keys(p.players?p.players[0]:p[0]||{}).join(','));})"
+
+# 3) Onaysız oda kurulamıyor mu? (beklenen: CONSENT_REQUIRED)
+curl -sS -X POST "$BASE/api/rooms" -H 'Content-Type: application/json' \
+  -d '{"name":"test","settings":{},"birthYear":1990}' | head -c 200
+```
+
+- [ ] Üretimde bir oda kurup uçtan uca oyna: lobi → mezat → kadro → sonuç (mobil + masaüstü)
+- [ ] Mobilde sabit teklif çubuğunun içeriği örtmediğini teyit et
+
+## 6. Marka ve operatör işleri
+
+- [ ] `mezat11.com` ve/veya `.com.tr` alan adını al, projeye bağla, 301 yönlendirme kur, `lib/site.ts` içindeki `SITE_URL`'i güncelle
+- [ ] Instagram / X / TikTok / YouTube kullanıcı adlarını al
+- [ ] Play Console'da `com.bidxi` paketinin size ait olup olmadığını doğrula (ait değilse paket kimliğini kullanma)
+- [ ] Mağaza/ilan metinlerinde `bahis, iddaa, kupon, oran, ödül, para, kazan, jackpot` kelimelerinden kaçın
+- [ ] Ayrıntılar: [`docs/brand.md`](brand.md)
+
+## 7. Doğrulananlar ve bilinen sınırlar
+
+**Doğrulandı (çalışan uygulamadan, ölçümle):**
+
+- [x] Kapılar: 106/106 test, `test:data` 5/5, CI yeşil
+- [x] Tüm ekranlar: giriş, lobi (masaüstü+mobil), mezat (masaüstü+mobil), kadro, **sunum modu**, **sonuç** (gerçek `autoComplete` aksiyonuyla)
+- [x] Canlı teklif akışı: artış düğmeleri ve birincil CTA; `LOT_ID_REQUIRED` doğrulaması çalışıyor
+- [x] **Manuel mod**: "Oyuncuyu ata" (lot ilerledi + akış satırı yazıldı), "Satılmadı · Geç" (lot ilerledi)
+- [x] Palet bütünlüğü: eski lime imzası için piksel taraması → **0 bölge** (giriş + mezat)
+- [x] Mobil denetim (ölçüm): 390×844 ve 360×640'da **yatay taşma 0 px**; sabit çubuk 196→**161 px**; 44 px altı dokunma hedefi kalmadı
+
+**Bilinen sınırlar (yayını engellemez, kayda geçti):**
+
+- **"Geri al"** yalnızca geri alınabilir bir adım varsa etkin; manuel "Geç" sonrası pasifti (uygulama davranışı)
+- **Satış fiyatı** yalnızca 8 satırlık canlı akışta tutuluyor; daha eski satışlar defterde fiyatsız görünür
+- **"SATILDI" damgasının satış-sonrası hâli** render edilmiyor (lot aynı aksiyonda ilerliyor); gerçek satışlar defterde listelenir
+- **Gizli puan plakası** sunucu değeri hiç göndermediği için bulanık yer tutucu + 🔒 gösterir (uydurma sayı yok)
+- Sunum modu gerçek tarayıcı tam ekranına bağlı; headless doğrulamada API stub'landı
+- Rakip indirme/örnek sayıları üçüncü taraf dizinlerden (araştırma raporları), mağaza resmî verisi değil
+- İsim/marka araştırması **hukuki temizlik değildir**; alan adı için NXDOMAIN "müsait" anlamına gelmez
+
+## 8. Yayın sonrası izleme ve geri alma
+
+- [ ] İlk 24 saat: oda kurma hatası, `CONSENT_REQUIRED` dışı beklenmeyen hata, D1 yazma hatası
+- [ ] Panik durumunda: panelden **önceki sürüme geri dön** (veritabanı şeması değişmedi; D1 migration yok, geri dönüş veri kaybı yaratmaz)
+- [ ] Liderlik tablosunda 18 altı kayıt görünmediğini ve `LEADERBOARD_RETENTION_DAYS` temizliğinin çalıştığını doğrula

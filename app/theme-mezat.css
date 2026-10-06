@@ -907,3 +907,45 @@ h3 {
   border-color: var(--mz-accent) !important;
   color: var(--mz-accent) !important;
 }
+
+/* ---------------------------------------------------------------------------
+   Kadro sahası: boş slotlar neredeyse görünmezdi (düşük kontrast). Boş slot
+   etiketi ve çerçevesi yükseltildi, dolu slot pirinç kaldı; saha çizgileri de
+   biraz daha okunur.
+   -------------------------------------------------------------------------- */
+.online-halfway,
+.online-center-circle {
+  border-color: rgba(247, 239, 226, 0.16) !important;
+}
+.online-formation-player i {
+  border: 1px solid var(--mz-line-2) !important;
+  background: #241d12 !important;
+  color: var(--mz-muted) !important;
+}
+.online-formation-player:not(.filled) i {
+  border-color: rgba(255, 180, 92, 0.28) !important;
+  color: #cbbfae !important;
+}
+.online-formation-player b {
+  color: var(--mz-muted) !important;
+}
+.online-formation-player.filled i {
+  border-color: var(--mz-accent) !important;
+}
+.online-formation-player.filled b {
+  color: var(--mz-text) !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Mobil denetim (ölçüm): birkaç giriş/düğme 42px yükseklikteydi — dokunma
+   hedefi alt sınırı 44px. Yalnızca dokunmatik genişliklerde yükseltilir.
+   -------------------------------------------------------------------------- */
+@media (max-width: 760px) {
+  .online-input,
+  .online-room input[type='number'],
+  .online-room select,
+  .online-room button,
+  .online-room .start {
+    min-height: 44px;
+  }
+}
