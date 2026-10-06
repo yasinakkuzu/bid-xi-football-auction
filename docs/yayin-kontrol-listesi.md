@@ -44,29 +44,37 @@ Panelde şu değerlerle ayarlanmalı:
 | `MODERATION_CONTACT`         | `<destek e-postası>` | Kaldırma/şikâyet kanalı                                              |
 | `LEADERBOARD_RETENTION_DAYS` | `365`                | Liderlik tablosu saklama süresi                                      |
 
-## 5. Yayın adımları
+## 5. Yayın — yapıldı (Cloudflare Workers + D1)
 
-- [ ] OpenAI Sites panelinden **yeni sürümü yayınla** (bu depo için CLI/credential yok; yayın panelden yapılır)
-- [ ] Yayın sonrası eski sürümün gittiğini doğrula:
+Üretim artık platform panelinde değil, **kendi Cloudflare hesabında** çalışıyor:
+
+|                    |                                                                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Alan adı           | **https://mezat11.com** (+ `www.mezat11.com`) — Workers custom domain, sertifika Cloudflare'de                                                                                             |
+| Zone               | `mezat11.com` · id `2e4679b9b9402d5d1d4a10748df20830` · Free Website                                                                                                                       |
+| Worker             | `mezat11` · `dist/server/index.js` · statik varlıklar `dist/client` · `nodejs_compat`                                                                                                      |
+| Veritabanı         | D1 `mezat11-db` · `cddfe14e-bcc0-47fc-bda6-19776105efa4` (bağlama: `DB`)                                                                                                                   |
+| Şema               | Uygulama ilk istekte kurar (`ensure()`); migration adımı yok                                                                                                                               |
+| Ortam değişkenleri | `LEADERBOARD_RETENTION_DAYS=365`, `NEXT_PUBLIC_SITE_URL=https://mezat11.com`, `COMMERCIAL_MODE=true`, `ALLOW_UNVERIFIED_ASSETS=false`, `SHOW_PLAYER_PHOTOS=false`, `SHOW_CLUB_LOGOS=false` |
+
+**Yeniden yayınlamak için:**
 
 ```bash
-BASE=https://kadro-ihalesi.yasinakkuzu.chatgpt.site
-
-# 1) Başlık ve marka
-curl -sS "$BASE/" | grep -o "<title>[^<]*</title>"
-
-# 2) Havuzda görsel/piyasa değeri kalmadı mı? (beklenen: media 0, marketValues 0)
-curl -sS "$BASE/api/pool?era=current" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const p=JSON.parse(d);const j=JSON.stringify(p);
- console.log('bayt:',j.length,'| media:',(j.match(/image|logo|photo/gi)||[]).length,'| marketValues:',(j.match(/market_value|marketValue|highest_market/gi)||[]).length);
- console.log('anahtarlar:',Object.keys(p.players?p.players[0]:p[0]||{}).join(','));})"
-
-# 3) Onaysız oda kurulamıyor mu? (beklenen: CONSENT_REQUIRED)
-curl -sS -X POST "$BASE/api/rooms" -H 'Content-Type: application/json' \
-  -d '{"name":"test","settings":{},"birthYear":1990}' | head -c 200
+CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=6c5870f4c486935454cbf21b375eed001 npm run deploy:cloudflare
 ```
 
-- [ ] Üretimde bir oda kurup uçtan uca oyna: lobi → mezat → kadro → sonuç (mobil + masaüstü)
-- [ ] Mobilde sabit teklif çubuğunun içeriği örtmediğini teyit et
+Betik D1'i bulur/oluşturur, `NEXT_PUBLIC_SITE_URL` ile derler, yapılandırmayı yamalar ve `wrangler deploy` çalıştırır. Kök dizine wrangler yapılandırması yazmaz (yerel D1'i bozmamak için).
+
+**Yayın sonrası doğrulandı (canlıdan ölçüm):**
+
+- [x] `https://mezat11.com` → **HTTP 200**, Cloudflare proxy IP'leri, geçerli sertifika
+- [x] `<title>Mezat 11 — Futbol Açık Artırma Oyunu`, `og:site_name=Mezat 11`, `og:image=https://mezat11.com/og-mezat-11.jpg`
+- [x] Havuz: 293 KB, pozisyon anahtarları (`GK…CB2`), kayıtlarda yalnızca `id,name,country,club,league,rating,price`; **piyasa değeri 0**, **gerçek görsel 0** (tek "logo" eşleşmesi bir kulüp adının içindeydi: "Syllo**gos**")
+- [x] Onaysız oda → `CONSENT_REQUIRED` (KVKK kapısı üretimde çalışıyor)
+- [x] Canlıda oda kuruldu, bot eklendi, açık artırma başlatıldı ve teklif verildi → **D1 üretimde çalışıyor**
+- [x] Canlı alan adından masaüstü (1440×980) ve mobil (390×844) ekran görüntüleri alındı
+
+**Kalan tek ortam değişkeni:** `MODERATION_CONTACT` (yasal sayfada iletişim adresi; boşken repo kanalına düşer). Betik bu değişkeni `MODERATION_CONTACT=... npm run deploy:cloudflare` ile alır.
 
 ## 6. Marka ve operatör işleri
 

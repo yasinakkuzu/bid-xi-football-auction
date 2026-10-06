@@ -17,7 +17,8 @@
     "test:data": "node --experimental-strip-types --test tests/integration/*.test.ts",
     "test:all": "npm test && npm run test:data",
     "typecheck": "tsc --noEmit --incremental false",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build"
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build",
+    "deploy:cloudflare": "node scripts/deploy-cloudflare.mjs"
   },
   "dependencies": {
     "next": "16.3.3",
