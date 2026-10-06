@@ -37,7 +37,15 @@ export const viewport = { themeColor: '#090c0a', colorScheme: 'dark' };
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="tr">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>{children}</body>
+      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+        {children}
+        <footer className="site-contact">
+          <span>Mezat 11 · Futbol Açık Artırma Oyunu</span>
+          <span>
+            İletişim, şikâyet ve kaldırma talepleri: <a href="mailto:info@mezat11.com">info@mezat11.com</a>
+          </span>
+        </footer>
+      </body>
     </html>
   );
 }
