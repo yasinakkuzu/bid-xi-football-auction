@@ -27,7 +27,7 @@ Bu belge, Mezat 11'nde kişisel verilerin nasıl işlendiğini, hangi teknik ön
 | Önlem                                                                                         | Nerede                                                |
 | --------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | Doğum yılı istemciden alınır, sunucuda yalnızca yaş aralığına indirgenir ve **saklanmaz**     | `lib/age-policy.ts`, `RoomMember.ageBand`             |
-| 13 yaş altı reddedilir; 18 yaş altı için **başarı tablosu ve sohbet sunucu tarafında kapalı** | `lib/rooms.ts` (`requireAdult`), `lib/leaderboard.ts` |
+| 15 yaş altı reddedilir; 18 yaş altı için **başarı tablosu ve sohbet sunucu tarafında kapalı** | `lib/rooms.ts` (`requireAdult`), `lib/leaderboard.ts` |
 | Bilinmeyen yaş **fail-closed** (minor sayılır)                                                | `lib/age-policy.ts`                                   |
 | Onay kaydı sürüm + zaman damgasıyla tutulur                                                   | `RoomMember.consent`                                  |
 | Ham IP saklanmaz, yalnızca kısaltılmış özet 10 dakika tutulur                                 | `lib/room-store.ts` (`digest`, `rateLimit`)           |
@@ -51,3 +51,13 @@ Kullanıcılar; verilerinin işlenip işlenmediğini öğrenme, düzeltme, silin
 - [ ] Cloudflare ile veri işleyen sözleşmesi (DPA) ve yurt dışı aktarım değerlendirmesi.
 - [ ] Aydınlatma metnini her veri kategorisi değişiminde sürümlemek (`CONSENT_POLICY_VERSION`).
 - [ ] Ticari yayın öncesi hedef pazar hukuk incelemesi.
+
+## 6. Ölçüm (analitik)
+
+Oyunun kaç oda kurulduğunu, kaç oyunun tamamlandığını ve davetin paylaşıldığını görebilmek için çerezsiz, toplulaştırılmış sayaçlar tutulur (`lib/analytics.ts`, `app/api/analytics/route.ts`).
+
+- **Saklanan:** yalnızca olay adı (izinli liste: `room_created`, `room_joined`, `auction_started`, `game_completed`, `invite_shared`, `result_shared`), UTC gün (`YYYY-MM-DD`) ve bir tam sayı sayaç. `event_counts` tablosunda `(event, day)` başına tek satır vardır; tablo günde en fazla 6 satır büyür.
+- **Kasten saklanmayan:** oda kodu, görünen ad, ham veya özetlenmiş IP adresi, kullanıcı aracısı, oturum/cihaz kimliği, çerez, yönlendiren adres ve günden daha ince zaman damgası. Üçüncü taraf analitik sağlayıcı, izleme pikseli veya cihaz parmak izi kullanılmaz; istemci kendi `/api/analytics` uç noktamıza istek atar ve veri odalarla aynı D1 veritabanında kalır.
+- **Neden onay banner'ı gerekmez:** satırlar tek bir kişiyle ilişkilendirilemediği için KVKK anlamında kişisel veri işlenmez; çerez veya benzeri teknoloji kullanılmadığı için 5809 sayılı Kanun kapsamındaki çerez/aydınlatma yükümlülüğü doğmaz. `navigator.sendBeacon` ile gönderilen gövde yalnızca olay adını taşır.
+- **Saklama beklentisi:** sayaçlar kişisel veri içermediği için sabit bir silme süresi yoktur; toplulaştırılmış istatistik olarak süresiz tutulur ve günlük en fazla 6 satır eklenir. Oda, üye, sohbet ve başarı tablosu kayıtlarının 7 günlük saklama süresi (§2) bu tablodan bağımsızdır.
+- **Kötüye kullanım sınırı:** sayaçların şişirilmesini önlemek için `/api/analytics` yazma istekleri mevcut kısa ömürlü istek sayacıyla sınırlanır (§2, ~10 dakika). Bu sayaç analitik verisinin parçası değildir ve `event_counts` tablosuna hiçbir istek meta verisi yazılmaz.

@@ -129,6 +129,9 @@ export async function shareResultCard(ranked: ScoreBreakdown[]) {
     70,
     1860,
   );
+  ctx.fillStyle = '#c9ff45';
+  ctx.font = '900 24px system-ui';
+  ctx.fillText(`Yeni oda kur: ${SITE_HOST}`, 70, 1902);
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) return;

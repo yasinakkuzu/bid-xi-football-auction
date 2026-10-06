@@ -21,7 +21,9 @@ import {
   type Slot,
 } from '../../lib/game-engine';
 import { ADULT_AGE, MIN_AGE, ageBand as bandForAge, ageFromBirthYear, type AgeBand } from '../../lib/age-policy';
+import type { AnalyticsEvent } from '../../lib/analytics';
 import { customPoolOptions } from '../../lib/club-leagues';
+import { SITE_URL } from '../../lib/site';
 
 import { AuctionActionBar } from './bid-bar';
 import { clockOffset, remainingSeconds } from './clock';
@@ -120,6 +122,28 @@ async function json(url: string, options?: RequestInit) {
   return data;
 }
 
+/**
+ * Fire-and-forget measurement ping: the allowlisted event name and nothing else — no room code,
+ * no name, no identifier (see `lib/analytics.ts`). It prefers `sendBeacon` so a navigation or a
+ * closed tab cannot lose it, falls back to a `keepalive` fetch, never throws, never blocks the UI
+ * and no-ops on the server.
+ */
+function track(event: AnalyticsEvent) {
+  if (typeof navigator === 'undefined') return;
+  const body = JSON.stringify({ event });
+  try {
+    if (navigator.sendBeacon?.('/api/analytics', new Blob([body], { type: 'application/json' }))) return;
+  } catch {}
+  try {
+    void fetch('/api/analytics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      keepalive: true,
+    }).catch(() => {});
+  } catch {}
+}
+
 /* The request lock intentionally uses a ref so two taps in the same render frame cannot dispatch twice. */
 export function OnlineGame() {
   const router = useRouter();
@@ -161,6 +185,8 @@ export function OnlineGame() {
   const chatInputRef = useRef<HTMLInputElement>(null);
   const chatTriggerRef = useRef<HTMLButtonElement>(null);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
+  /** One entry per measurement event already sent for this session/room, so a re-render cannot double count. */
+  const trackedEventsRef = useRef<Set<string>>(new Set());
   const poolOptions = useMemo(
     () =>
       customPoolOptions(
@@ -169,6 +195,13 @@ export function OnlineGame() {
       ),
     [poolCatalog, poolQuery],
   );
+  /** Fires an event at most once per `key`; user-driven shares intentionally use `track()` directly. */
+  const trackOnce = useCallback((key: string, event: AnalyticsEvent) => {
+    const id = `${event}:${key}`;
+    if (trackedEventsRef.current.has(id)) return;
+    trackedEventsRef.current.add(id);
+    track(event);
+  }, []);
 
   const declaredAge = ageFromBirthYear(birthYear);
   const declaredBand: AgeBand = declaredAge === null ? 'unknown' : bandForAge(declaredAge);
@@ -308,6 +341,23 @@ export function OnlineGame() {
       cancelled = true;
     };
   }, [screen, tab, settings.poolMode, settings.era]);
+  /** Counts the moment the results screen is first painted, once per room round on this device. */
+  useEffect(() => {
+    if (screen !== 'room' || room?.status !== 'results' || !session) return;
+    trackOnce(`${session.code}:${room.season?.round ?? 0}`, 'game_completed');
+  }, [screen, room?.status, room?.season?.round, session, trackOnce]);
+  /**
+   * The share button lives in `online-results.tsx`, which is owned elsewhere, so the click is
+   * observed instead of wrapped: every real press on the result-card button is one share.
+   */
+  useEffect(() => {
+    if (screen !== 'room' || room?.status !== 'results') return;
+    const onClick = (event: MouseEvent) => {
+      if ((event.target as Element | null)?.closest?.('.share-card')) track('result_shared');
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, [screen, room?.status]);
   useEffect(() => {
     chatInitializedRef.current = false;
     seenChatIdsRef.current.clear();
@@ -455,6 +505,7 @@ export function OnlineGame() {
             }
           : { code: String(data.code), token: String(data.memberToken), name: name.trim(), ageBand: declaredBand };
       saveSession(nextSession);
+      trackOnce(nextSession.code, tab === 'create' ? 'room_created' : 'room_joined');
       history.replaceState(null, '', `/?mode=online&room=${nextSession.code}`);
       setSession(nextSession);
       setScreen('room');
@@ -532,6 +583,13 @@ export function OnlineGame() {
     }
   }
 
+  /** Every host entry point that really puts the room into a live auction counts as one start. */
+  async function startAuction(type: 'start' | 'restart' | 'rematch') {
+    const started = await action(type);
+    if (started) track('auction_started');
+    return started;
+  }
+
   async function leave(preserveSession = room?.status !== 'lobby') {
     if (session && room?.status === 'lobby' && !isHost)
       try {
@@ -596,15 +654,25 @@ export function OnlineGame() {
       setError('Oda kodu kopyalanamadı.');
     }
   }
+  /**
+   * One-tap invite: the link carries the room code and WhatsApp campaign tags, the message is
+   * plain Turkish, and the copy-to-clipboard fallback stays available on every path.
+   */
   async function invite() {
     if (!room) return;
-    const url = `${location.origin}/?mode=online&room=${room.code}`;
+    const url = `${SITE_URL}/?mode=online&room=${room.code}&utm_source=whatsapp&utm_medium=invite&utm_campaign=oda_daveti`;
+    const message = `Mezat 11'de odam açık — 6 haneli kod: ${room.code}. Tarayıcıdan katıl (uygulama indirmek yok): ${url}`;
     try {
-      if (navigator.share)
-        await navigator.share({ title: 'Mezat 11 odasına katıl', text: `${room.code} kodlu odaya katıl`, url });
-      else await navigator.clipboard.writeText(url);
+      if (navigator.share) await navigator.share({ title: 'Mezat 11 odasına katıl', text: message, url });
+      else {
+        try {
+          await navigator.clipboard.writeText(url);
+        } catch {}
+        window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
+      track('invite_shared');
     } catch (error) {
       if ((error as DOMException).name !== 'AbortError') setError('Davet bağlantısı paylaşılamadı.');
     }
@@ -1422,7 +1490,11 @@ export function OnlineGame() {
                     <small>Değerli lotları zorlar</small>
                   </button>
                 </div>
-                <button className="start" disabled={busy || managers.length < 2} onClick={() => action('start')}>
+                <button
+                  className="start"
+                  disabled={busy || managers.length < 2}
+                  onClick={() => void startAuction('start')}
+                >
                   Oyunu başlat <span>→</span>
                 </button>
               </div>
@@ -1450,7 +1522,9 @@ export function OnlineGame() {
           audit={game.audit || []}
           season={room.season}
           onRematch={
-            isHost && (!room.season || room.season.round < room.season.length) ? () => action('rematch') : undefined
+            isHost && (!room.season || room.season.round < room.season.length)
+              ? () => startAuction('rematch')
+              : undefined
           }
         />
       ) : view === 'squad' && myManager ? (
@@ -1738,7 +1812,7 @@ export function OnlineGame() {
                   'Açık artırma en baştan yeniden başlatılsın mı? Tüm mevcut kadrolar, teklifler ve bütçeler sıfırlanacak.',
                 )
               )
-                void action('restart');
+                void startAuction('restart');
             }}
           >
             <b>Yeniden başlat</b>
