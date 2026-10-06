@@ -1001,3 +1001,69 @@
     bottom: calc(158px + env(safe-area-inset-bottom)) !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Lead (a)+(b): mobil sabit çubuk 161px -> ~130px ve mobil lot kartı ~40px daha
+   kompakt; böylece oyuncu adı kaydırmadan çubuğun üstünde görünür.
+   -------------------------------------------------------------------------- */
+@media (max-width: 760px) {
+  .online-room.mz-mobile-dock {
+    padding-bottom: calc(122px + env(safe-area-inset-bottom)) !important;
+  }
+  .mz-mobile-dock .mz-action-bar__dock {
+    gap: 4px 8px;
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+  }
+  .mz-mobile-dock .mz-action-bar__dock > .mz-timer {
+    height: 36px;
+    width: 36px;
+  }
+  .mz-mobile-dock .mz-action-bar__dock > .mz-timer .mz-timer__seconds {
+    font-size: 12px;
+  }
+  .mz-mobile-dock .mz-action-bar__dock > .mz-bid-hero strong {
+    font-size: 23px !important;
+  }
+  .mz-mobile-dock .mz-action-bar .current-leader {
+    font-size: 11px;
+    padding: 1px 8px !important;
+  }
+  .mz-mobile-dock .mz-action-bar__dock .online-actions button {
+    padding: 8px 4px !important;
+    font-size: 13.5px;
+  }
+  .mz-mobile-dock .mz-action-bar__dock .online-actions .primary-action.mz-bid-cta {
+    padding: 9px 14px !important;
+    font-size: 14.5px !important;
+  }
+  .online-room.mz-mobile-dock > .chat-fab {
+    bottom: calc(128px + env(safe-area-inset-bottom)) !important;
+  }
+  /* lot kartı: daha az dikey alan, ad ve meta daha erken görünür */
+  .online-player.mz-lot-card,
+  .online-player {
+    gap: 10px !important;
+    padding: 16px !important;
+    min-height: 0 !important;
+  }
+  .online-player-copy h1 {
+    font-size: 24px !important;
+    line-height: 1.05 !important;
+  }
+  .online-player-visual {
+    width: 84px !important;
+    height: 104px !important;
+  }
+  .auction-mini-formation {
+    right: 14px !important;
+    top: 14px !important;
+    width: 132px !important;
+    height: 66px !important;
+  }
+  .mz-lot-plates {
+    margin-top: 4px !important;
+  }
+  .online-lot-head.mz-lot-head {
+    padding-bottom: 6px !important;
+  }
+}
