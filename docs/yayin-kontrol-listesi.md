@@ -70,7 +70,16 @@ curl -sS -X POST "$BASE/api/rooms" -H 'Content-Type: application/json' \
 
 ## 6. Marka ve operatör işleri
 
-- [ ] `mezat11.com` ve/veya `.com.tr` alan adını al, projeye bağla, 301 yönlendirme kur, `lib/site.ts` içindeki `SITE_URL`'i güncelle
+- [x] Alan adı alındı: **mezat11.com** — Cloudflare Registrar, isim sunucuları `ulla.ns.cloudflare.com` / `clyde.ns.cloudflare.com` (zone aktif)
+- [ ] Alan adını uygulamaya bağla. **Ölçülen kısıt:** uygulamanın barındığı uç, tanımadığı `Host` başlığını **403** ile reddediyor (`Host: mezat11.com` → HTTP 403), bu yüzden düz bir CNAME yetmez. Öncelik sırası:
+  1. **Platformun kendi "özel alan adı" akışı** (yayın paneli) — en temiz yol; panel host'u tanır ve sertifikayı kendisi kurar. Panel böyle bir akış sunuyorsa DNS kaydı oradan verilir.
+  2. Panel desteklemiyorsa **Cloudflare tarafında** (zone: mezat11.com):
+     - DNS → `CNAME` · ad `@` · hedef `kadro-ihalesi.yasinakkuzu.chatgpt.site` · **Proxied (turuncu bulut)**
+     - DNS → `CNAME` · ad `www` · aynı hedef · **Proxied**
+     - Rules → **Origin Rules** → yeni kural: "Host header" → **Rewrite** → `kadro-ihalesi.yasinakkuzu.chatgpt.site` (403'ün tek nedeni Host eşleşmesi)
+     - SSL/TLS → mode **Full (strict)** (origin sertifikası hedef hostname için geçerli)
+     - Doğrulama: `curl -sSI https://mezat11.com | head -1` → `200`; `curl -sS https://mezat11.com | grep -o "<title>[^<]*</title>"`
+- [ ] Alan adı çalıştıktan **sonra** panelde `NEXT_PUBLIC_SITE_URL=https://mezat11.com` ayarla ve yeniden yayınla (canonical/OG/sitemap/paylaşım kartı buradan okur; kod değişikliği gerekmez)
 - [ ] Instagram / X / TikTok / YouTube kullanıcı adlarını al
 - [ ] Play Console'da `com.bidxi` paketinin size ait olup olmadığını doğrula (ait değilse paket kimliğini kullanma)
 - [ ] Mağaza/ilan metinlerinde `bahis, iddaa, kupon, oran, ödül, para, kazan, jackpot` kelimelerinden kaçın

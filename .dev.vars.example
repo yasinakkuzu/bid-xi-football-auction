@@ -20,3 +20,6 @@ MODERATION_CONTACT=
 
 # Başarı tablosu saklama süresi (gün). 0 = süresiz sakla (önerilmez).
 LEADERBOARD_RETENTION_DAYS=365
+
+# Alan adı geçişi (panelden ayarlanır; boşsa varsayılan adres kullanılır)
+NEXT_PUBLIC_SITE_URL=https://mezat11.com
