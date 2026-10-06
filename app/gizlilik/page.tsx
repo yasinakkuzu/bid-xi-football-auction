@@ -24,9 +24,10 @@ export default function Privacy() {
       </p>
       <h2>Yaş politikası ve çocuklar</h2>
       <p>
-        Oyun <strong>13 yaş ve üzeri</strong> içindir. 18 yaş altındaki katılımcılar için oda sohbeti ve başarı tablosu
-        yayını <strong>kapalıdır</strong>; bu kısıt sunucu tarafında uygulanır. Yaş aralığı bilinmiyorsa katılımcı 18
-        altı kabul edilir.
+        Oyun <strong>15 yaş ve üzeri</strong> içindir. 15 yaş altındaki kullanıcı kabul edilmez; ileride ücretli bir
+        özellik eklenirse 18 yaş altı için ebeveyn onayı aranır. 18 yaş altındaki katılımcılar için oda sohbeti ve
+        başarı tablosu yayını <strong>kapalıdır</strong>; bu kısıt sunucu tarafında uygulanır. Yaş aralığı bilinmiyorsa
+        katılımcı 18 altı kabul edilir.
       </p>
       <h2>Saklama süreleri</h2>
       <p>

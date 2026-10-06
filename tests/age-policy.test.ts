@@ -28,11 +28,12 @@ test('age is derived from the birth year without storing the birth year itself',
 });
 
 test('play, chat and publication thresholds follow the documented policy', () => {
-  assert.equal(MIN_AGE, 13);
+  assert.equal(MIN_AGE, 15);
   assert.equal(ADULT_AGE, 18);
-  assert.equal(mayPlay(12), false);
-  assert.equal(mayPlay(13), true);
-  for (const age of [13, 15, 17]) {
+  assert.equal(mayPlay(13), false);
+  assert.equal(mayPlay(14), false);
+  assert.equal(mayPlay(15), true);
+  for (const age of [15, 16, 17]) {
     const band = ageBand(age);
     assert.equal(band, 'minor');
     assert.equal(mayUseChat(band), false);

@@ -2,7 +2,9 @@
  * Age and consent policy (KVKK-oriented).
  *
  * Decisions encoded here:
- *  - Minimum age to play: 13.
+ *  - Minimum age to play: 15 (the 5651 regime requires an age rating and
+ *    parental-control posture for game platforms; 15+ is the defensible floor
+ *    while there is no official rating).
  *  - Public leaderboard publication and free-text chat require 18+.
  *  - The declared birth year is **never stored**: only the derived band
  *    (`adult` / `minor` / `unknown`) and the consent record are kept, which keeps
@@ -10,7 +12,7 @@
  *  - Anything unknown fails closed: an unknown age is treated as a minor.
  */
 
-export const MIN_AGE = 13;
+export const MIN_AGE = 15;
 export const ADULT_AGE = 18;
 /** Bump when the information text changes so stored consents stay traceable. */
 export const CONSENT_POLICY_VERSION = 'kvkk-2026-10';

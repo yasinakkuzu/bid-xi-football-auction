@@ -12,9 +12,10 @@ export default function Terms() {
       </p>
       <h2>Yaş sınırı ve genç oyuncular</h2>
       <p>
-        Oyun <strong>13 yaş ve üzeri</strong> içindir. Katılım için doğum yılı beyanı ve gizlilik bilgilendirmesinin
-        onayı gerekir. Doğum yılı saklanmaz; yalnızca yaş aralığı tutulur.{' '}
-        <strong>18 yaş altındaki katılımcılar için oda sohbeti ve başarı tablosu yayını kapalıdır.</strong> 13 yaşından
+        Oyun <strong>15 yaş ve üzeri</strong> içindir. 15 yaş altındaki kullanıcı kabul edilmez; ileride ücretli bir
+        özellik eklenirse 18 yaş altı için ebeveyn onayı aranır. Katılım için doğum yılı beyanı ve gizlilik
+        bilgilendirmesinin onayı gerekir. Doğum yılı saklanmaz; yalnızca yaş aralığı tutulur.{' '}
+        <strong>18 yaş altındaki katılımcılar için oda sohbeti ve başarı tablosu yayını kapalıdır.</strong> 15 yaşından
         küçükler oyunu kullanamaz.
       </p>
       <h2>Görünen ad ve sohbet kuralları</h2>
