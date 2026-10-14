@@ -12,6 +12,7 @@ import {
   record,
   rematchAuction,
   restartAuction,
+  restoreUndo,
   settleBot,
   settleExpired,
   startAuction,
@@ -133,22 +134,17 @@ export async function joinRoom(
         ageBand: assessment.band,
         consent: assessment.consent,
       };
+    state.members.push(member);
+    const updated = await db()
+      .prepare('UPDATE rooms SET state_json=?,revision=revision+1 WHERE code=? AND revision=?')
+      .bind(JSON.stringify(state), roomCode, row.revision)
+      .run();
+    if (!updated.meta.changes) continue;
     await db()
       .prepare('INSERT INTO room_members VALUES (?,?,?,?,?,?,?)')
       .bind(roomCode, memberId, await digest(memberToken), name, role, 0, Date.now())
       .run();
-    state.members.push(member);
-    try {
-      const updated = await db()
-        .prepare('UPDATE rooms SET state_json=?,revision=revision+1 WHERE code=? AND revision=?')
-        .bind(JSON.stringify(state), roomCode, row.revision)
-        .run();
-      if (updated.meta.changes) return { code: roomCode, memberToken, memberId };
-    } catch (error) {
-      await db().prepare('DELETE FROM room_members WHERE room_code=? AND member_id=?').bind(roomCode, memberId).run();
-      throw error;
-    }
-    await db().prepare('DELETE FROM room_members WHERE room_code=? AND member_id=?').bind(roomCode, memberId).run();
+    return { code: roomCode, memberToken, memberId };
   }
   throw new RoomError('REVISION_CONFLICT', 'Oda aynı anda güncellendi. Tekrar deneyin.', 409);
 }
@@ -285,28 +281,7 @@ async function actInternal(roomCode: string, plain: string, type: string, payloa
   } else {
     if (type === 'undo' && state.game) {
       requireHost();
-      const serialized = state.game.undo;
-      if (!serialized) throw new Error('Geri alınacak işlem yok');
-      const parsed = JSON.parse(serialized) as {
-        version?: number;
-        game?: NonNullable<RoomState['game']>;
-        status?: RoomState['status'];
-        season?: RoomState['season'];
-        completedAt?: number;
-        autoCompleted?: boolean;
-      };
-      if (parsed.version === 2 && parsed.game) {
-        state.game = parsed.game;
-        state.status = parsed.status || 'auction';
-        state.season = parsed.season;
-        state.completedAt = parsed.completedAt;
-        state.autoCompleted = parsed.autoCompleted;
-      } else {
-        state.game = parsed as unknown as NonNullable<RoomState['game']>;
-        state.status = 'auction';
-        state.completedAt = undefined;
-        state.autoCompleted = false;
-      }
+      if (!restoreUndo(state)) throw new Error('Geri alınacak işlem yok');
       record(state, 'Oda sahibi son açık artırma işlemini geri aldı.');
       await saveState(roomCode, state, ctx.room.revision);
       await removeRoundLeaderboard(roomCode, state.season?.round || 1);
@@ -531,7 +506,7 @@ export async function act(
         if (
           !(error instanceof RoomError) ||
           error.code !== 'REVISION_CONFLICT' ||
-          !['chat', 'pass', 'formation', 'leaderboardPreference'].includes(type) ||
+          !['bid', 'chat', 'pass', 'formation', 'leaderboardPreference'].includes(type) ||
           attempt === 2
         )
           throw error;
@@ -605,6 +580,7 @@ export {
   awardCurrentLot,
   captureUndo,
   publicStateView,
+  restoreUndo,
   settleBot,
   settleExpired,
 } from './auction-runtime.ts';

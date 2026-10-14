@@ -39,7 +39,30 @@ export async function cleanup() {
     .run();
   lastMaintenance = now;
 }
+const pollWindowCache = new Map<string, { windowStart: number; count: number }>();
+
+export function checkMemoryRateLimit(key: string, max = 40, windowMs = 60000, now = Date.now()): number {
+  const start = now - windowMs;
+  if (pollWindowCache.size > 5000) {
+    for (const [k, v] of pollWindowCache) {
+      if (v.windowStart < start) pollWindowCache.delete(k);
+    }
+  }
+  const existing = pollWindowCache.get(key);
+  if (!existing || existing.windowStart < start) {
+    pollWindowCache.set(key, { windowStart: now, count: 1 });
+    return 1;
+  }
+  existing.count += 1;
+  return existing.count;
+}
+
 export async function rateLimit(key: string, max = 40, windowMs = 60000) {
+  if (key.startsWith('poll:')) {
+    if (checkMemoryRateLimit(key, max, windowMs) > max)
+      throw new RoomError('RATE_LIMITED', 'Çok fazla istek gönderildi. Lütfen kısa süre sonra tekrar deneyin.', 429);
+    return;
+  }
   await ensure();
   const now = Date.now(),
     start = now - windowMs;
@@ -73,17 +96,32 @@ export async function auth(roomCode: string, plain: string) {
   if (!room) throw new RoomError('ROOM_EXPIRED', 'Oda bulunamadı veya süresi doldu', 410);
   const state = JSON.parse(room.state_json) as RoomState;
   if (room.host_token_hash === hash) {
-    const projected = await db()
-        .prepare(
-          "SELECT member_id,name,role,approved FROM room_members WHERE room_code=? AND role='manager' ORDER BY rowid LIMIT 1",
-        )
-        .bind(roomCode)
-        .first<{ member_id: string; name: string; role: 'manager'; approved: number }>(),
-      authoritative = state.members.find((item) => item.id === projected?.member_id);
+    const hostId = state.members[0]?.id,
+      projected = hostId
+        ? await db()
+            .prepare(
+              "SELECT member_id,name,role,approved FROM room_members WHERE room_code=? AND member_id=? AND role='manager' LIMIT 1",
+            )
+            .bind(roomCode, hostId)
+            .first<{ member_id: string; name: string; role: 'manager'; approved: number }>()
+        : await db()
+            .prepare(
+              "SELECT member_id,name,role,approved FROM room_members WHERE room_code=? AND role='manager' ORDER BY rowid LIMIT 1",
+            )
+            .bind(roomCode)
+            .first<{ member_id: string; name: string; role: 'manager'; approved: number }>(),
+      authoritative = state.members.find((item) => item.id === projected?.member_id) ?? state.members[0];
     const member =
       projected && authoritative
         ? { ...projected, name: authoritative.name, role: authoritative.role, approved: Number(authoritative.approved) }
-        : projected;
+        : authoritative
+          ? {
+              member_id: authoritative.id,
+              name: authoritative.name,
+              role: 'manager' as const,
+              approved: Number(authoritative.approved),
+            }
+          : projected;
     return { room, state, isHost: true, member };
   }
   const projected = await db()

@@ -22,6 +22,7 @@ import {
   rankManagers,
   ratingLevel,
   seededRandom,
+  selectStarsAndScrubs,
   shuffleSeeded,
   standardLeaderboardEligibility,
   type AuctionLot,
@@ -197,19 +198,9 @@ export function buildPool(settings: RoomSettings, count: number, seed: string, e
     const window = settings.quality === 'best' ? candidates.slice(0, Math.max(160, (count + 1) * 12)) : candidates,
       rest = window.filter((player) => !preferredLots.some((favorite) => favorite.id === player.id));
     if (settings.scenarioId === 'stars-and-scrubs' && !preferredLots.length && rest.length) {
-      const sorted = [...rest].sort((a, b) => b.rating - a.rating),
-        band = Math.max(count + 1, Math.ceil(sorted.length * 0.3)),
-        stars = sorted.slice(0, band),
-        scrubs = sorted.slice(-band),
-        picked: Footballer[] = [];
-      while (picked.length < count + 1 && (stars.length || scrubs.length)) {
-        const sourceList = picked.length % 2 === 0 ? stars : scrubs;
-        const fresh = sourceList.filter((player) => !excluded.has(player.id));
-        const candidatesList = fresh.length ? fresh : sourceList;
-        if (candidatesList.length)
-          picked.push(candidatesList.splice(Math.floor(random() * candidatesList.length), 1)[0]);
-      }
-      return shuffleSeeded(picked, random);
+      const freshRest = rest.filter((player) => !excluded.has(player.id)),
+        sourcePool = freshRest.length >= count + 1 ? freshRest : rest;
+      return shuffleSeeded(selectStarsAndScrubs(sourcePool, settings.selectedTiers, count + 1, random), random);
     }
     return shuffleSeeded(
       [
@@ -376,18 +367,73 @@ export function record(state: RoomState, message: string) {
   g.feed = [message, ...g.feed].slice(0, 8);
   g.audit = [...(g.audit || []), message].slice(-80);
 }
+type UndoEnvelope = {
+  version: 2;
+  game: Omit<NonNullable<RoomState['game']>, 'pool' | 'undo' | 'undoStatus'> & { pool?: AuctionLot[] };
+  poolIds?: string[];
+  poolPaidPrices?: Record<number, number>;
+  status?: RoomState['status'];
+  season?: RoomState['season'];
+  completedAt?: number;
+  autoCompleted?: boolean;
+};
 export function captureUndo(state: RoomState) {
   const g = state.game;
   if (!g) return;
-  g.undo = JSON.stringify({
+  const poolPaidPrices: Record<number, number> = {};
+  g.pool.forEach((lot, index) => {
+    if (typeof lot.paidPrice === 'number') poolPaidPrices[index] = lot.paidPrice;
+  });
+  const envelope: UndoEnvelope = {
     version: 2,
-    game: { ...g, undo: undefined, undoStatus: undefined },
+    game: { ...g, pool: undefined, undo: undefined, undoStatus: undefined },
+    poolIds: g.pool.map((lot) => lot.id),
+    poolPaidPrices,
     status: state.status,
     season: state.season,
     completedAt: state.completedAt,
     autoCompleted: state.autoCompleted,
-  });
+  };
+  g.undo = JSON.stringify(envelope);
   g.undoStatus = state.status === 'results' ? 'results' : 'auction';
+}
+export function restoreUndo(state: RoomState): boolean {
+  const g = state.game;
+  if (!g?.undo) return false;
+  const currentPool = g.pool;
+  const parsed = JSON.parse(g.undo) as UndoEnvelope;
+  if (parsed.version === 2 && parsed.game) {
+    let restoredPool: AuctionLot[];
+    if (Array.isArray(parsed.game.pool)) {
+      restoredPool = parsed.game.pool;
+    } else if (Array.isArray(parsed.poolIds)) {
+      const byId = new Map(currentPool.map((lot) => [lot.id, lot]));
+      restoredPool = parsed.poolIds
+        .map((id, index) => {
+          const base = byId.get(id) ?? byId.get(id.replace(/-r2$/, ''));
+          if (!base) return undefined;
+          const paidPrice = parsed.poolPaidPrices?.[index];
+          const copy: AuctionLot = { ...base };
+          if (typeof paidPrice === 'number') copy.paidPrice = paidPrice;
+          else delete copy.paidPrice;
+          return copy;
+        })
+        .filter((lot): lot is AuctionLot => Boolean(lot));
+    } else {
+      restoredPool = currentPool;
+    }
+    state.game = { ...parsed.game, pool: restoredPool, undo: undefined, undoStatus: undefined };
+    state.status = parsed.status || 'auction';
+    state.season = parsed.season;
+    state.completedAt = parsed.completedAt;
+    state.autoCompleted = parsed.autoCompleted;
+  } else {
+    state.game = parsed as unknown as NonNullable<RoomState['game']>;
+    state.status = 'auction';
+    state.completedAt = undefined;
+    state.autoCompleted = false;
+  }
+  return true;
 }
 export function advanceLot(state: RoomState) {
   const g = state.game;
@@ -478,11 +524,22 @@ export function awardCurrentLot(state: RoomState, managerIndex: number, amount: 
     winner = g.managers[managerIndex];
   if (!winner) throw new Error('Menajer bulunamadı');
   if (!canPlaceLotBid(winner, lot, amount, managerIndex)) throw new Error('Tutar veya kadro uygun değil');
-  if (isCoach(lot)) winner.coach = lot;
-  else if (lot.benchSlot) winner.bench = { ...(winner.bench || {}), [lot.benchSlot]: lot };
-  else winner.squad[lot.slot] = lot;
+  const awarded: AuctionLot = { ...lot, paidPrice: amount };
+  g.pool[g.index] = awarded;
+  if (isCoach(awarded)) winner.coach = awarded;
+  else if (awarded.benchSlot) winner.bench = { ...(winner.bench || {}), [awarded.benchSlot]: awarded };
+  else winner.squad[awarded.slot] = awarded;
   winner.budget -= amount;
   winner.spent += amount;
+  g.lastSold = {
+    lotId: lot.id,
+    playerName: lot.name,
+    role: lot.role,
+    managerId: winner.id,
+    managerName: winner.name,
+    amount,
+    at: Date.now(),
+  };
   record(state, `${lot.name}, ${winner.name} takımına $${amount}M karşılığında katıldı.`);
   completeCurrentGroupIfLeaving(state);
   advanceLot(state);
@@ -685,4 +742,57 @@ export async function restartAuction(state: RoomState, roomCode: string) {
   state.season = { round: 1, length: state.settings.seasonLength || 1, standings: {} };
   state.completedAt = undefined;
   openAuction(state, pool, 'Açık artırma oda sahibi onayıyla en baştan yeniden başlatıldı.');
+}
+
+export type RecentSale = { key: string; playerName: string; managerName: string; amount?: number };
+
+const saleLine = /^(.+?), (.+) takımına \$(\d+)M karşılığında katıldı\.$/;
+
+function paidAmountsFromFeed(feed: string[] = []) {
+  const amounts = new Map<string, number>();
+  for (const line of feed) {
+    const match = saleLine.exec(line);
+    if (!match) continue;
+    const key = `${match[1]}|${match[2]}`;
+    if (!amounts.has(key)) amounts.set(key, Number(match[3]));
+  }
+  return amounts;
+}
+
+type LedgerGame = Pick<NonNullable<RoomState['game']>, 'managers' | 'pool' | 'index' | 'feed' | 'publicMeta'>;
+
+function lotOwners(game: LedgerGame) {
+  const owners = new Map<string, { managerName: string; paidPrice?: number }>();
+  for (const manager of game.managers) {
+    const lots = [
+      ...Object.values(manager.squad || {}),
+      ...Object.values(manager.bench || {}),
+      ...(manager.coach ? [manager.coach] : []),
+    ].filter((lot): lot is AuctionLot => Boolean(lot));
+    for (const lot of lots) owners.set(lot.id, { managerName: manager.name, paidPrice: lot.paidPrice });
+  }
+  return owners;
+}
+
+export function lotOwnerName(game: LedgerGame, lotId: string) {
+  return lotOwners(game).get(lotId)?.managerName;
+}
+
+export function recentSales(game: LedgerGame, limit = 6): RecentSale[] {
+  const amounts = paidAmountsFromFeed(game.feed),
+    owners = lotOwners(game),
+    sales: RecentSale[] = [];
+  for (let index = Math.min(game.index, game.pool.length) - 1; index >= 0 && sales.length < limit; index -= 1) {
+    const lot = game.pool[index],
+      owned = owners.get(lot.id);
+    if (!owned) continue;
+    const amount = owned.paidPrice ?? lot.paidPrice ?? amounts.get(`${lot.name}|${owned.managerName}`);
+    sales.push({ key: lot.id, playerName: lot.name, managerName: owned.managerName, amount });
+  }
+  return sales;
+}
+
+export function remainingLotCount(game: LedgerGame) {
+  const total = game.publicMeta?.totalLots ?? game.pool.length;
+  return Math.max(0, total - game.index - 1);
 }

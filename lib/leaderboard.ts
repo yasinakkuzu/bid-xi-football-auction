@@ -3,14 +3,13 @@ import { standardEligibility } from './auction-runtime.ts';
 import { auth, db, digest, ensure, saveState } from './room-store.ts';
 import { RoomError, type RoomState } from './room-types.ts';
 
-let lastLeaderboardRepair = 0;
 let lastLeaderboardPrune = 0;
 
 /**
  * Public leaderboard rows are personal data (display name + full squad). The
  * privacy page promises a bounded retention window, so entries older than this
- * many days are purged. Deleted ids are tombstoned first, otherwise
- * `backfillLeaderboard()` would recreate them from the room snapshot.
+ * many days are purged. Deleted ids are tombstoned first so a re-persisted
+ * room snapshot cannot recreate a deleted entry.
  * Set to 0 to keep entries indefinitely (not recommended).
  */
 export const LEADERBOARD_RETENTION_DAYS = Number(process.env.LEADERBOARD_RETENTION_DAYS ?? 365);
@@ -34,10 +33,6 @@ export type LeaderboardEntry = {
 };
 export async function leaderboard(limit = 10, filter: 'standard' | 'all' = 'standard') {
   await ensure();
-  if (Date.now() - lastLeaderboardRepair > 5 * 60000) {
-    await backfillLeaderboard();
-    lastLeaderboardRepair = Date.now();
-  }
   await pruneLeaderboardIfDue();
   const where = filter === 'standard' ? 'WHERE standard_eligible=1' : '',
     rows = await db()
@@ -131,17 +126,6 @@ export async function persistLeaderboard(state: RoomState) {
     ];
   });
   if (statements.length) await db().batch(statements);
-}
-async function backfillLeaderboard() {
-  const rows = await db()
-    .prepare(
-      "SELECT state_json FROM rooms WHERE json_extract(state_json,'$.status')='results' ORDER BY created_at DESC LIMIT 200",
-    )
-    .all<{ state_json: string }>();
-  for (const row of rows.results || [])
-    try {
-      await persistLeaderboard(JSON.parse(row.state_json) as RoomState);
-    } catch {}
 }
 export async function removeMemberLeaderboard(roomCode: string, memberId: string) {
   const entries = await db()

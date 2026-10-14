@@ -13,6 +13,7 @@ export type Footballer = {
   role: string;
   rating: number;
   price: number;
+  paidPrice?: number;
   nation: string;
   club?: string;
   league?: string;
@@ -29,6 +30,7 @@ export type Coach = {
   role: 'Teknik Direktör';
   rating: number;
   price: number;
+  paidPrice?: number;
   nation: string;
   tactics: number;
   motivation: number;
@@ -558,6 +560,7 @@ export function fillMissingSlot(
       role: `${role} · Otomatik ${ratingLevel(rating)}`,
       rating,
       price: 5,
+      paidPrice: fee,
       nation: (source?.country || 'Bilinmiyor').slice(0, 3).toUpperCase(),
       club: source?.club || 'Serbest oyuncu',
       image: source?.image,
@@ -631,6 +634,7 @@ export function fillMissingBenchSlot(
       role: `${role} · Otomatik ${ratingLevel(rating)}`,
       rating,
       price: 5,
+      paidPrice: fee,
       nation: (source?.country || 'Bilinmiyor').slice(0, 3).toUpperCase(),
       club: source?.club || 'Serbest oyuncu',
       image: source?.image,
@@ -673,6 +677,7 @@ export function fillMissingCoaches(managers: Manager[], coaches: Coach[], seed: 
           adaptability: Math.min(70, source.adaptability),
           development: Math.min(68, source.development),
           price: 5,
+          paidPrice: fee,
         }
       : {
           kind: 'coach',
@@ -682,6 +687,7 @@ export function fillMissingCoaches(managers: Manager[], coaches: Coach[], seed: 
           role: 'Teknik Direktör',
           rating: 68,
           price: 5,
+          paidPrice: fee,
           nation: '—',
           tactics: 66,
           motivation: 70,

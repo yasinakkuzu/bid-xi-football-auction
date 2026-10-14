@@ -15,13 +15,13 @@ export async function shareResultCard(ranked: ScoreBreakdown[]) {
   if (!ctx) return;
 
   const gradient = ctx.createLinearGradient(0, 0, CARD_WIDTH, CARD_HEIGHT);
-  gradient.addColorStop(0, '#182518');
-  gradient.addColorStop(0.45, '#09100b');
-  gradient.addColorStop(1, '#050806');
+  gradient.addColorStop(0, '#1c1710');
+  gradient.addColorStop(0.45, '#15110b');
+  gradient.addColorStop(1, '#0c0a07');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
 
-  ctx.strokeStyle = 'rgba(201,255,69,.16)';
+  ctx.strokeStyle = 'rgba(255,180,92,.14)';
   ctx.lineWidth = 1;
   for (let x = 0; x <= CARD_WIDTH; x += 72) {
     ctx.beginPath();
@@ -36,29 +36,29 @@ export async function shareResultCard(ranked: ScoreBreakdown[]) {
     ctx.stroke();
   }
 
-  ctx.fillStyle = '#c9ff45';
+  ctx.fillStyle = '#ffb45c';
   ctx.font = '900 28px system-ui';
   ctx.letterSpacing = '6px';
   ctx.fillText('MEZAT TAMAMLANDI', 70, 90);
   ctx.letterSpacing = '0px';
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = '#f7efe2';
   ctx.font = '950 76px system-ui';
   ctx.fillText('Gecenin şampiyonu', 70, 185);
-  ctx.fillStyle = '#c9ff45';
+  ctx.fillStyle = '#ffb45c';
   ctx.font = '950 92px system-ui';
   ctx.fillText(winner.name.slice(0, 20), 70, 290);
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = '#f7efe2';
   ctx.font = '900 46px system-ui';
   ctx.fillText(`${winner.score.toFixed(2)} TAKIM PUANI`, 72, 365);
 
-  ctx.fillStyle = 'rgba(255,255,255,.08)';
+  ctx.fillStyle = 'rgba(255,180,92,.06)';
   ctx.fillRect(58, 415, 964, 300);
-  ctx.fillStyle = '#a1a1aa';
+  ctx.fillStyle = '#b3a795';
   ctx.font = '800 24px system-ui';
   ctx.fillText('SONUÇ SIRALAMASI', 88, 465);
   ranked.slice(0, 5).forEach((team, index) => {
     const y = 525 + index * 47;
-    ctx.fillStyle = index === 0 ? '#c9ff45' : '#f4f4f5';
+    ctx.fillStyle = index === 0 ? '#ffb45c' : '#f7efe2';
     ctx.font = index === 0 ? '900 30px system-ui' : '750 27px system-ui';
     ctx.fillText(`${index + 1}. ${team.name.slice(0, 23)}`, 88, y);
     ctx.textAlign = 'right';
@@ -66,30 +66,30 @@ export async function shareResultCard(ranked: ScoreBreakdown[]) {
     ctx.textAlign = 'left';
   });
 
-  ctx.fillStyle = '#c9ff45';
+  ctx.fillStyle = '#ffb45c';
   ctx.fillRect(0, 760, CARD_WIDTH, 150);
-  ctx.fillStyle = '#09100b';
+  ctx.fillStyle = '#0c0a07';
   ctx.beginPath();
   ctx.arc(95, 835, 48, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#c9ff45';
+  ctx.fillStyle = '#ffb45c';
   ctx.font = '950 64px system-ui';
   ctx.textAlign = 'center';
   ctx.fillText('M', 95, 858);
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#09100b';
+  ctx.fillStyle = '#0c0a07';
   ctx.font = '950 42px system-ui';
   ctx.fillText(SITE_NAME.toLocaleUpperCase('tr'), 165, 825);
   ctx.font = '750 24px system-ui';
   ctx.fillText(SITE_HOST, 165, 865);
 
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = '#f7efe2';
   ctx.font = '900 36px system-ui';
   ctx.fillText(`ŞAMPİYON İLK 11 · ${winner.formation || '4-2-3-1'}`, 70, 980);
   const pitch = { x: 70, y: 1030, w: 940, h: 770 };
-  ctx.fillStyle = '#102512';
+  ctx.fillStyle = '#14100a';
   ctx.fillRect(pitch.x, pitch.y, pitch.w, pitch.h);
-  ctx.strokeStyle = 'rgba(255,255,255,.32)';
+  ctx.strokeStyle = 'rgba(247,239,226,.22)';
   ctx.lineWidth = 3;
   ctx.strokeRect(pitch.x + 18, pitch.y + 18, pitch.w - 36, pitch.h - 36);
   ctx.beginPath();
@@ -106,30 +106,30 @@ export async function shareResultCard(ranked: ScoreBreakdown[]) {
       point = formation[slot],
       x = pitch.x + (Number.parseFloat(point.left) / 100) * pitch.w,
       y = pitch.y + (Number.parseFloat(point.top) / 100) * pitch.h;
-    ctx.fillStyle = '#c9ff45';
+    ctx.fillStyle = '#ffb45c';
     ctx.beginPath();
     ctx.arc(x, y, 29, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#09100b';
+    ctx.fillStyle = '#0c0a07';
     ctx.font = '950 18px system-ui';
     ctx.textAlign = 'center';
     ctx.fillText(player ? player.rating.toFixed(0) : slot, x, y + 6);
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = '#f7efe2';
     ctx.font = '800 18px system-ui';
     ctx.fillText((player?.name || slot).slice(0, 16), x, y + 53);
-    ctx.fillStyle = '#c9ff45';
+    ctx.fillStyle = '#ffb45c';
     ctx.font = '800 14px system-ui';
     ctx.fillText(slot, x, y + 72);
   });
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#a1a1aa';
+  ctx.fillStyle = '#b3a795';
   ctx.font = '700 20px system-ui';
   ctx.fillText(
     `İlk 11 ${winner.starterImpact.toFixed(1)} · Yedek +${winner.benchDepth.toFixed(1)} · Teknik direktör +${winner.coachBoost.toFixed(1)}`,
     70,
     1860,
   );
-  ctx.fillStyle = '#c9ff45';
+  ctx.fillStyle = '#ffb45c';
   ctx.font = '900 24px system-ui';
   ctx.fillText(`Yeni oda kur: ${SITE_HOST}`, 70, 1902);
 

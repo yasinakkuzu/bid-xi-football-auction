@@ -57,6 +57,15 @@ export type Game = {
   audit?: string[];
   undo?: string;
   bonusReveal?: { name: string; rating: number; role: string; image?: string };
+  lastSold?: {
+    lotId: string;
+    playerName: string;
+    role: string;
+    managerId: number;
+    managerName: string;
+    amount: number;
+    at: number;
+  };
   autoAssignments?: Array<{ managerName: string; player: Footballer; fee: number }>;
   pausedRemainingMs?: number;
   publicMeta?: {

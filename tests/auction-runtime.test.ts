@@ -227,18 +227,67 @@ test('settleExpired skips an unsold lot and awards a lot that has a leader', () 
   assert.equal(sold.game!.managers[0].budget, 975);
   assert.equal(sold.game!.managers[0].spent, 25);
   assert.equal(sold.game!.managers[0].squad[awarded.slot]?.id, lotId);
+  assert.equal(sold.game!.managers[0].squad[awarded.slot]?.paidPrice, 25);
+  assert.equal(sold.game!.pool[0].paidPrice, 25);
   assert.notEqual(sold.game!.pool[sold.game!.index].id, lotId, 'the auction moved on to the next lot');
 });
 
-test('captureUndo stores a restorable v2 snapshot without nesting the previous undo', () => {
+test('awardCurrentLot and recentSales keep paidPrice even after the feed rotates out', async () => {
+  const { awardCurrentLot, recentSales } = await import('../lib/auction-runtime.ts');
   const state = stateWith({ members: members(2, [1]) });
   startAuction(state);
+  const firstLot = state.game!.pool[0] as Footballer;
+  awardCurrentLot(state, 0, 40);
+  // Simulate feed rotation where the sale line has scrolled out of the 8-item feed
+  state.game!.feed = ['Sohbet 1', 'Sohbet 2', 'Sohbet 3', 'Sohbet 4', 'Sohbet 5', 'Sohbet 6', 'Sohbet 7', 'Sohbet 8'];
+  const sales = recentSales(publicStateView(state).game!);
+  assert.equal(sales.length, 1);
+  assert.equal(sales[0].playerName, firstLot.name);
+  assert.equal(sales[0].managerName, 'Menajer 0');
+  assert.equal(sales[0].amount, 40);
+});
+
+test('stars-and-scrubs scenario pool respects selected tiers and avoids excluded lots', () => {
+  const settings = normalizedSettings({
+    ...defaultSettings,
+    scenarioId: 'stars-and-scrubs',
+    selectedTiers: ['Süperstar', 'Standart'],
+  });
+  const first = buildPool(settings, 2, 'stars-seed', new Set());
+  const coaches = first.filter(isCoach);
+  const players = first.filter((entry): entry is Footballer => !isCoach(entry));
+  assert.equal(coaches.length, 3);
+  assert.equal(players.length, 33);
+});
+
+test('captureUndo stores a restorable v2 snapshot without nesting the previous undo', async () => {
+  const { awardCurrentLot, restoreUndo } = await import('../lib/auction-runtime.ts');
+  const state = stateWith({ members: members(2, [1]) });
+  startAuction(state);
+  const firstLotId = state.game!.pool[0].id;
   captureUndo(state);
-  const snapshot = JSON.parse(state.game!.undo!) as { version: number; status: string; game: { undo?: string } };
+  const snapshot = JSON.parse(state.game!.undo!) as {
+    version: number;
+    status: string;
+    poolIds?: string[];
+    game: { undo?: string; pool?: unknown };
+  };
   assert.equal(snapshot.version, 2);
   assert.equal(snapshot.status, 'auction');
   assert.equal(snapshot.game.undo, undefined);
+  assert.equal(snapshot.game.pool, undefined, 'pool objects are omitted from undo payload');
+  assert.equal(snapshot.poolIds?.length, 36);
   assert.equal(state.game!.undoStatus, 'auction');
+
+  awardCurrentLot(state, 0, 35);
+  assert.equal(state.game!.lastSold?.lotId, firstLotId);
+  assert.equal(state.game!.lastSold?.amount, 35);
+  assert.equal(state.game!.index, 1);
+
+  assert.equal(restoreUndo(state), true);
+  assert.equal(state.game!.index, 0);
+  assert.equal(state.game!.managers[0].budget, 1000);
+  assert.equal(state.game!.pool[0].paidPrice, undefined);
 });
 
 test('autoCompleteAuction finishes the board, keeps budgets non-negative and records an audit trail', () => {

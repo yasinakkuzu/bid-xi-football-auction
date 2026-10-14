@@ -24,7 +24,7 @@ Bu liste, yayına çıkmadan önce **sırayla** yürütülmek üzere hazırland�
 
 ## 3. KVKK, yaş ve moderasyon
 
-- [x] 13 yaş altı kapıda reddediliyor; 18 altı **sohbet ve liderlik tablosundan** muaf
+- [x] 15 yaş altı kapıda reddediliyor; 18 altı **sohbet ve liderlik tablosundan** muaf
 - [x] Doğum yılı **saklanmıyor**, yalnızca yaş bandı türetiliyor; bilinmeyen yaş fail-closed
 - [x] Onay metni oda kurma/katılma akışında zorunlu (`CONSENT_REQUIRED`)
 - [x] Aydınlatma ve işleme envanteri: [`docs/kvkk.md`](kvkk.md)

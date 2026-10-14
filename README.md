@@ -66,7 +66,7 @@ Yayınlanan oyuncu havuzu yalnızca **olgusal alanlar** ve **oyunun kendi skorla
 
 ## Yaş ve rıza politikası
 
-- Minimum yaş **13**; katılım için doğum yılı beyanı ve gizlilik bilgilendirmesinin onayı zorunludur.
+- Minimum yaş **15**; katılım için doğum yılı beyanı ve gizlilik bilgilendirmesinin onayı zorunludur.
 - **18 yaş altı** katılımcılar için oda sohbeti ve başarı tablosu yayını **sunucu tarafında kapalıdır**.
 - Doğum yılı **saklanmaz**; yalnızca yaş aralığı ve onay kaydı (politika sürümü + zaman) tutulur.
 - Yaş aralığı bilinmiyorsa katılımcı 18 altı kabul edilir (fail-closed).

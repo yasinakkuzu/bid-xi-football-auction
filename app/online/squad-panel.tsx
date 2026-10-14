@@ -34,7 +34,10 @@ export function SquadPanel({ manager, compact = false }: { manager: Manager; com
                   <PlayerImage player={player} className="squad-list-photo" />
                   <div>
                     <b>{player.name}</b>
-                    <small>{player.club || player.role}</small>
+                    <small>
+                      {player.club || player.role}
+                      {typeof player.paidPrice === 'number' ? ` · ${money(player.paidPrice)}` : ''}
+                    </small>
                   </div>
                   <em>{player.rating}</em>
                 </>
@@ -60,6 +63,7 @@ export function SquadPanel({ manager, compact = false }: { manager: Manager; com
                       <b>{player.name}</b>
                       <small>
                         {group.label} · {player.club || player.role}
+                        {typeof player.paidPrice === 'number' ? ` · ${money(player.paidPrice)}` : ''}
                       </small>
                     </div>
                     <em>{player.rating}</em>
@@ -81,6 +85,7 @@ export function SquadPanel({ manager, compact = false }: { manager: Manager; com
               <small>
                 {manager.coach.preferredFormation} · Taktik {manager.coach.tactics} · Motivasyon{' '}
                 {manager.coach.motivation}
+                {typeof manager.coach.paidPrice === 'number' ? ` · ${money(manager.coach.paidPrice)}` : ''}
               </small>
             </div>
             <em>{manager.coach.rating}</em>

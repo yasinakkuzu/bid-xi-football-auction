@@ -61,7 +61,11 @@ export function ManualControls({
       <button disabled={busy} onClick={() => onAction('manualSkip')}>
         {triggersFallback ? 'Geç · eksikleri otomatik tamamla' : 'Satılmadı · Geç'}
       </button>
-      <button className="undo-action" disabled={busy || !game.undo} onClick={() => onAction('undo')}>
+      <button
+        className="undo-action"
+        disabled={busy || !(game.publicMeta?.canUndo ?? Boolean(game.undo))}
+        onClick={() => onAction('undo')}
+      >
         ↶ Geri al
       </button>
     </div>
