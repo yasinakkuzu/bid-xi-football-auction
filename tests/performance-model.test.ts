@@ -66,6 +66,23 @@ test('seasonPerformance grows monotonically with weighted minutes, goals and ass
   const elite = seasonPerformance(season({ weightedMinutes: 900 * competitionWeight('CL') }));
   const cup = seasonPerformance(season({ weightedMinutes: 900 * competitionWeight('CDR') }));
   assert.ok(elite > cup, `competition ${cup} -> ${elite}`);
+
+  // Position-aware profile prevents fluke defender goals from eclipsing full-season CL starters.
+  const starterCb = seasonPerformance({
+    minutes: 3150,
+    weightedMinutes: 3150 * competitionWeight('CL'),
+    goals: 0,
+    assists: 1,
+    slot: 'CB',
+  });
+  const cameoCbWithGoals = seasonPerformance({
+    minutes: 1100,
+    weightedMinutes: 1100 * competitionWeight('TR1'),
+    goals: 5,
+    assists: 0,
+    slot: 'CB',
+  });
+  assert.ok(starterCb > cameoCbWithGoals, `CB starter ${starterCb} should beat cameo scorer ${cameoCbWithGoals}`);
 });
 
 test('competitionWeight covers the ids that occur in the appearances dump', () => {

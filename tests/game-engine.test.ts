@@ -7,6 +7,7 @@ import {
   auctionPassIsSafe,
   auctionProgressLabel,
   botMaximumBid,
+  botThinkDelayMs,
   calculateStartingBudget,
   canPlaceBid,
   canPlaceLotBid,
@@ -376,6 +377,19 @@ test('AI difficulty creates ordered bidding pressure', () => {
     expert = botMaximumBid({ ...base, botStyle: 'aggressive' }, lot, 'difficulty');
   assert.ok(beginner < average);
   assert.ok(average < expert);
+});
+test('expert and average bots cap their ceiling when rivals are budget-constrained and use deterministic think delays', () => {
+  const lot = player('ST', 94, 45, 9),
+    bot: Manager = { id: 2, name: 'AI', budget: 400, squad: {}, spent: 0, isBot: true, botStyle: 'aggressive' },
+    uncapped = botMaximumBid(bot, lot, 'rival-cap', true),
+    capped = botMaximumBid(bot, lot, 'rival-cap', true, { maxRivalLimit: 50 });
+  assert.ok(uncapped > 55);
+  assert.equal(capped, 55, 'bot caps at maxRivalLimit + 5 instead of bidding against itself');
+
+  const delay1 = botThinkDelayMs('turn-1', 'expert'),
+    delay2 = botThinkDelayMs('turn-1', 'expert');
+  assert.equal(delay1, delay2);
+  assert.ok(delay1 >= 520 && delay1 <= 1100);
 });
 test('AI pressure is ordered across a fixed-seed simulation and never breaks reserve safety', () => {
   const lot = player('ST', 91, 35, 8),

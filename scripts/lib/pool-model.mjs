@@ -333,14 +333,53 @@ function recencyWeight(offset) {
  *   over the season's appearances.
  * @returns {number} Season score; `0` when there are no minutes.
  */
-export function seasonPerformance({ minutes, weightedMinutes, goals, assists } = {}) {
+const POSITION_PROFILES = Object.freeze({
+  GK: Object.freeze({ attackWeight: 0.15, assistWeight: 0.4, consistencyWeight: 0.25 }),
+  CB: Object.freeze({ attackWeight: 0.55, assistWeight: 0.5, consistencyWeight: 0.2 }),
+  CB1: Object.freeze({ attackWeight: 0.55, assistWeight: 0.5, consistencyWeight: 0.2 }),
+  CB2: Object.freeze({ attackWeight: 0.55, assistWeight: 0.5, consistencyWeight: 0.2 }),
+  RB: Object.freeze({ attackWeight: 1.1, assistWeight: 0.85, consistencyWeight: 0.12 }),
+  LB: Object.freeze({ attackWeight: 1.1, assistWeight: 0.85, consistencyWeight: 0.12 }),
+  DM: Object.freeze({ attackWeight: 0.85, assistWeight: 0.75, consistencyWeight: 0.18 }),
+  CM: Object.freeze({ attackWeight: 1.35, assistWeight: 0.8, consistencyWeight: 0.1 }),
+  AM: Object.freeze({ attackWeight: 1.85, assistWeight: 0.75, consistencyWeight: 0.05 }),
+  RW: Object.freeze({ attackWeight: 1.9, assistWeight: 0.7, consistencyWeight: 0.04 }),
+  LW: Object.freeze({ attackWeight: 1.9, assistWeight: 0.7, consistencyWeight: 0.04 }),
+  ST: Object.freeze({ attackWeight: 2.15, assistWeight: 0.55, consistencyWeight: 0 }),
+});
+
+const DEFAULT_POSITION_PROFILE = Object.freeze({
+  attackWeight: ATTACK_RATE_WEIGHT,
+  assistWeight: ASSIST_WEIGHT,
+  consistencyWeight: 0,
+});
+
+/**
+ * Position-specific scoring weights so defenders and goalkeepers are evaluated
+ * primarily on starter consistency in strong competitions rather than fluke
+ * set-piece goals, while preserving the baseline weights when `slot` is omitted.
+ *
+ * @param {unknown} slot
+ * @returns {{ attackWeight: number, assistWeight: number, consistencyWeight: number }}
+ */
+export function positionProfile(slot) {
+  const key = String(slot ?? '')
+    .trim()
+    .toUpperCase();
+  if (!key) return DEFAULT_POSITION_PROFILE;
+  return POSITION_PROFILES[key] ?? DEFAULT_POSITION_PROFILE;
+}
+
+export function seasonPerformance({ minutes, weightedMinutes, goals, assists, slot } = {}) {
   const safeMinutes = nonNegative(minutes);
   const safeWeightedMinutes = nonNegative(weightedMinutes);
   const safeGoals = nonNegative(goals);
   const safeAssists = nonNegative(assists);
+  const profile = positionProfile(slot);
   const volume = safeWeightedMinutes / MINUTES_PER_VOLUME_UNIT;
-  const attackRate = (safeGoals + ASSIST_WEIGHT * safeAssists) / Math.max(1, safeMinutes / 90);
-  const score = volume * (1 + ATTACK_RATE_WEIGHT * Math.max(0, attackRate - ATTACK_RATE_BASELINE));
+  const attackRate = (safeGoals + profile.assistWeight * safeAssists) / Math.max(1, safeMinutes / 90);
+  const consistency = Math.min(1, safeMinutes / 2700) * profile.consistencyWeight;
+  const score = volume * (1 + consistency + profile.attackWeight * Math.max(0, attackRate - ATTACK_RATE_BASELINE));
   return Number.isFinite(score) && score > 0 ? score : 0;
 }
 
@@ -362,8 +401,9 @@ export function seasonPerformance({ minutes, weightedMinutes, goals, assists } =
  *   weightedMinutes?: number,
  *   goals?: number,
  *   assists?: number,
+ *   slot?: string|null,
  * }>} rows
- * @param {{ referenceSeason?: number }} [options]
+ * @param {{ referenceSeason?: number, slot?: string|null }} [options]
  * @returns {{
  *   peak: { score: number, season: number|null },
  *   recent: number,
@@ -372,7 +412,7 @@ export function seasonPerformance({ minutes, weightedMinutes, goals, assists } =
  *   minutes: number,
  * }} Totals; `peak.season` is `null` when no row carried a usable season.
  */
-export function aggregatePerformance(rows, { referenceSeason = REFERENCE_SEASON } = {}) {
+export function aggregatePerformance(rows, { referenceSeason = REFERENCE_SEASON, slot } = {}) {
   const reference = Number.isFinite(Number(referenceSeason)) ? Number(referenceSeason) : REFERENCE_SEASON;
   let recent = 0,
     career = 0,
@@ -383,7 +423,9 @@ export function aggregatePerformance(rows, { referenceSeason = REFERENCE_SEASON 
   const seenSeasons = new Set();
   for (const row of rows ?? []) {
     const season = toSeason(row?.season);
-    const score = seasonPerformance(row ?? {});
+    const score = seasonPerformance(
+      slot !== undefined && row?.slot === undefined ? { ...(row ?? {}), slot } : (row ?? {}),
+    );
     minutes += nonNegative(row?.minutes);
     career += score;
     if (season !== null) {

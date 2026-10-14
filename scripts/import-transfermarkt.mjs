@@ -93,6 +93,11 @@ const ix = Object.fromEntries(headers.map((h, i) => [h, i]));
 // than a cup minute in the same season. Only player ids that exist in
 // players.csv are accumulated, which bounds memory by the published universe.
 const playerIds = new Set(rows.map((r) => Number(r[ix.player_id])).filter((id) => Number.isFinite(id) && id > 0));
+const playerSlotById = new Map(
+  rows
+    .map((r) => [Number(r[ix.player_id]), slotFor(r[ix.sub_position])])
+    .filter(([id, slot]) => Number.isFinite(id) && id > 0 && Boolean(slot)),
+);
 const performanceByPlayer = new Map();
 let appearanceRows = 0;
 const appearancesAvailable = existsSync(APPEARANCES_SOURCE);
@@ -132,6 +137,7 @@ for (const [playerId, seasons] of performanceByPlayer) {
         goals: bucket.goals,
         assists: bucket.assists,
       })),
+      { slot: playerSlotById.get(playerId) },
     ),
   );
 }

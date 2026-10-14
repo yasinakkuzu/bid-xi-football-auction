@@ -95,6 +95,7 @@ export type BotDecisionContext = {
   totalLots?: number;
   remainingLotsInGroup?: number;
   managersMissingGroup?: number;
+  maxRivalLimit?: number;
 };
 export type AuctionEstimateInput = {
   managerCount: number;
@@ -403,8 +404,18 @@ export function botMaximumBid(
       stageFactor *
       (0.9 + reserveRatio * 0.1) *
       (0.94 + random() * 0.12),
-    rounded = Math.round(utility / 5) * 5;
-  return Math.max(5, Math.min(limit, rounded));
+    rounded = Math.round(utility / 5) * 5,
+    rivalCap =
+      typeof context.maxRivalLimit === 'number' && Number.isFinite(context.maxRivalLimit) && difficulty !== 'beginner'
+        ? Math.max(lot.price, Math.round((context.maxRivalLimit + 5) / 5) * 5)
+        : rounded;
+  return Math.max(5, Math.min(limit, rounded, rivalCap));
+}
+export function botThinkDelayMs(seed: string, difficulty: BotDifficulty = 'average'): number {
+  const random = seededRandom(hashSeed(`bot-delay-${seed}`));
+  const base = difficulty === 'expert' ? 520 : difficulty === 'average' ? 620 : 740;
+  const jitter = Math.floor(random() * 580);
+  return base + jitter;
 }
 export function chooseBotFormation(manager: Manager): Formation {
   const r = (slot: Slot) => manager.squad[slot]?.rating || 0;

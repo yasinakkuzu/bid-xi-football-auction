@@ -5,6 +5,7 @@ import {
   auctionPassIsSafe,
   BENCH_SLOTS,
   botMaximumBid,
+  botThinkDelayMs,
   calculateStartingBudget,
   canPlaceLotBid,
   chooseBotFormation,
@@ -588,13 +589,22 @@ export function settleBot(state: RoomState) {
     managersMissingGroup = g.managers.filter((manager) => !lotFilled(manager, lot)).length,
     context = { lotIndex: g.index, totalLots: g.pool.length, remainingLotsInGroup, managersMissingGroup };
   const options = g.managers
-    .map((manager, index) => ({
-      manager,
-      index,
-      max: manager.isBot
-        ? botMaximumBid(manager, lot, `${state.code}-${g.index}-${g.bid}`, state.settings.revealRatings, context)
-        : 0,
-    }))
+    .map((manager, index) => {
+      const rivalLimits = g.managers
+        .filter((other, otherIndex) => otherIndex !== index && !lotFilled(other, lot) && !g.passed.includes(otherIndex))
+        .map((other) => auctionLimit(other, lot));
+      const maxRivalLimit = rivalLimits.length ? Math.max(...rivalLimits) : 0;
+      return {
+        manager,
+        index,
+        max: manager.isBot
+          ? botMaximumBid(manager, lot, `${state.code}-${g.index}-${g.bid}`, state.settings.revealRatings, {
+              ...context,
+              maxRivalLimit,
+            })
+          : 0,
+      };
+    })
     .filter(
       (item) =>
         item.index !== g.leader && canPlaceLotBid(item.manager, lot, offer, item.index, g.passed) && item.max >= offer,
@@ -610,7 +620,13 @@ export function settleBot(state: RoomState) {
   g.leader = choice.index;
   g.activeTurn = choice.index;
   g.deadline = deadlineFor(state);
-  g.nextBotAt = now + 650;
+  const difficulty =
+    choice.manager.botStyle === 'aggressive'
+      ? 'expert'
+      : choice.manager.botStyle === 'value'
+        ? 'beginner'
+        : 'average';
+  g.nextBotAt = now + botThinkDelayMs(`${state.code}-${g.index}-${offer}`, difficulty);
   record(state, `${choice.manager.name} (AI), $${offer}M teklif verdi.`);
   return true;
 }
