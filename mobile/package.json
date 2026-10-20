@@ -1,0 +1,28 @@
+{
+  "name": "mezat11-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo start --ios",
+    "android": "expo start --android",
+    "build:ios": "eas build --platform ios",
+    "build:android": "eas build --platform android"
+  },
+  "dependencies": {
+    "@mezat11/core": "file:../packages/core",
+    "expo": "~52.0.0",
+    "expo-haptics": "~14.0.0",
+    "expo-linking": "~7.0.0",
+    "expo-status-bar": "~2.0.0",
+    "react": "19.0.0",
+    "react-native": "0.76.6",
+    "react-native-svg": "15.8.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}

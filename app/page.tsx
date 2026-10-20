@@ -54,6 +54,7 @@ import {
   scoutHintForLot,
 } from '../lib/player-card-flair';
 import { shareResultCard } from '../lib/result-card';
+import { buildSoloManagerNames, decideSoloBotTurn, SOLO_BOT_PROFILES, soloBotStyleForIndex } from '../lib/solo-ai';
 import { OnlineGame } from './online/page';
 import { ThemeSwitcher } from './theme-switcher';
 
@@ -75,6 +76,7 @@ type GameSnapshot = {
   includeBench: boolean;
   count: number;
   names: string[];
+  soloBotMode?: boolean;
   bonusReveal?: BonusReveal;
   autoAssignments?: ForcedAssignment[];
 };
@@ -455,11 +457,18 @@ function buildPool(
 
 export default function Home() {
   const [mode, setMode] = useState<'choose' | 'local' | 'online'>('choose');
+  const [initialSoloBot, setInitialSoloBot] = useState(false);
   useEffect(() => {
     const id = setTimeout(() => {
       const params = new URLSearchParams(location.search);
       if (params.get('mode') === 'online' || params.has('room')) setMode('online');
-      else if (params.get('mode') === 'local') setMode('local');
+      else if (params.get('mode') === 'solo') {
+        setInitialSoloBot(true);
+        setMode('local');
+      } else if (params.get('mode') === 'local') {
+        setInitialSoloBot(false);
+        setMode('local');
+      }
     }, 0);
     return () => clearTimeout(id);
   }, []);
@@ -467,8 +476,9 @@ export default function Home() {
     history.replaceState(null, '', '/?mode=online');
     setMode('online');
   };
-  const showLocal = () => {
-    history.replaceState(null, '', '/?mode=local');
+  const showLocal = (soloBot = false) => {
+    setInitialSoloBot(soloBot);
+    history.replaceState(null, '', soloBot ? '/?mode=solo' : '/?mode=local');
     setMode('local');
   };
   const showHome = () => {
@@ -476,24 +486,56 @@ export default function Home() {
     setMode('choose');
   };
   return mode === 'choose' ? (
-    <ModeChooser onLocal={showLocal} onOnline={showOnline} />
+    <ModeChooser onLocal={() => showLocal(false)} onSolo={() => showLocal(true)} onOnline={showOnline} />
   ) : mode === 'online' ? (
     <OnlineGame />
   ) : (
-    <LocalGame onHome={showHome} />
+    <LocalGame onHome={showHome} initialSoloBot={initialSoloBot} />
   );
 }
 
-function ModeChooser({ onLocal, onOnline }: { onLocal: () => void; onOnline: () => void }) {
+function ModeChooser({ onLocal, onSolo, onOnline }: { onLocal: () => void; onSolo: () => void; onOnline: () => void }) {
+  const [resetNotice, setResetNotice] = useState('');
+  const resetDeviceData = () => {
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm('Bu cihazdaki tüm kayıtlı oyun oturumları ve tercihler sıfırlansın mı?')
+    )
+      return;
+    try {
+      const keys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('bidxi-') || key.startsWith('mezat11-'))) keys.push(key);
+      }
+      keys.forEach((key) => localStorage.removeItem(key));
+      sessionStorage.clear();
+      setResetNotice('Cihazdaki oyun ve oturum verileri temizlendi.');
+      setTimeout(() => setResetNotice(''), 3000);
+    } catch {}
+  };
   return (
     <main className="mode-home">
       <nav>
         <Brand />
         <div className="flex items-center gap-3">
           <ThemeSwitcher />
+          <button
+            type="button"
+            className="tool-btn text-xs"
+            onClick={resetDeviceData}
+            title="Cihazdaki yerel oturum ve oyun verilerini temizle"
+          >
+            Verileri sıfırla
+          </button>
           <span>ÜCRETSİZ · KAYIT GEREKTİRMEZ</span>
         </div>
       </nav>
+      {resetNotice && (
+        <p className="online-toast success" role="status" aria-live="polite">
+          {resetNotice}
+        </p>
+      )}
       <section className="home-hero">
         <div className="home-copy">
           <p className="eyebrow">CANLI FUTBOL AÇIK ARTIRMASI</p>
@@ -534,9 +576,17 @@ function ModeChooser({ onLocal, onOnline }: { onLocal: () => void; onOnline: () 
           <button className="featured" onClick={onOnline}>
             <span>ÖNERİLEN · CANLI</span>
             <h2>Arkadaşlarla online</h2>
-            <p>Oda kodunu paylaş; herkes kendi telefonundan teklif versin. İstersen AI menajerlerle masayı doldur.</p>
+            <p>Oda kodunu veya QR kodu paylaş; herkes kendi telefonundan teklif versin.</p>
             <b>
               Oda oluştur veya katıl <i>→</i>
+            </b>
+          </button>
+          <button onClick={onSolo}>
+            <span>ÇEVRİMDIŞI · SOLO</span>
+            <h2>AI Botlara Karşı Solo</h2>
+            <p>İnternet veya oda kurmadan anında 1–7 akıllı AI menajere karşı tek başına açık artırmaya gir.</p>
+            <b>
+              Solo mezata başla <i>→</i>
             </b>
           </button>
           <button onClick={onLocal}>
@@ -837,15 +887,18 @@ function LocalPlayerImage({ player }: { player: AuctionLot }) {
   );
 }
 
-function LocalGame({ onHome }: { onHome: () => void }) {
+function LocalGame({ onHome, initialSoloBot = false }: { onHome: () => void; initialSoloBot?: boolean }) {
   const [stage, setStage] = useState<Stage>('setup');
   const [count, setCount] = useState(3);
+  const [soloBotMode, setSoloBotMode] = useState(initialSoloBot);
   const [era, setEra] = useState<Era>('current');
   const [quality, setQuality] = useState<QualityMode>('all');
   const [revealRatings, setRevealRatings] = useState(false);
   const [selectedTiers, setSelectedTiers] = useState<RatingTier[]>(RATING_TIERS);
   const [includeBench, setIncludeBench] = useState(false);
-  const [names, setNames] = useState<string[]>(DEFAULT_MANAGER_NAMES.slice(0, 3));
+  const [names, setNames] = useState<string[]>(() =>
+    initialSoloBot ? buildSoloManagerNames(DEFAULT_MANAGER_NAMES[0], 3) : DEFAULT_MANAGER_NAMES.slice(0, 3),
+  );
   const [managers, setManagers] = useState<Manager[]>([]);
   const [pool, setPool] = useState<AuctionLot[]>([]);
   const [index, setIndex] = useState(0);
@@ -870,6 +923,7 @@ function LocalGame({ onHome }: { onHome: () => void }) {
   const [deadline, setDeadline] = useState<number | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
   const timeoutActionRef = useRef<() => void>(() => {});
+  const botActionRef = useRef<() => void>(() => {});
   const current = pool[index];
   const auctionGroups = useMemo(() => {
     const seen = new Set<string>();
@@ -933,6 +987,7 @@ function LocalGame({ onHome }: { onHome: () => void }) {
       includeBench,
       count,
       names,
+      soloBotMode,
       paused,
       soundOn,
       remainingMs: deadline ? Math.max(0, deadline - Date.now()) : 20000,
@@ -958,6 +1013,7 @@ function LocalGame({ onHome }: { onHome: () => void }) {
     includeBench,
     count,
     names,
+    soloBotMode,
     current,
     paused,
     soundOn,
@@ -981,6 +1037,21 @@ function LocalGame({ onHome }: { onHome: () => void }) {
     const timer = setInterval(tick, 250);
     return () => clearInterval(timer);
   }, [stage, paused, activeTurn, deadline]);
+  useEffect(() => {
+    if (stage !== 'auction' || !soloBotMode || paused || !current) return;
+    if (activeTurn !== null && activeTurn > 0) {
+      const timer = setTimeout(() => {
+        botActionRef.current();
+      }, 520);
+      return () => clearTimeout(timer);
+    }
+    if (activeTurn === null && leader !== null) {
+      const timer = setTimeout(() => {
+        botActionRef.current();
+      }, 650);
+      return () => clearTimeout(timer);
+    }
+  }, [stage, soloBotMode, paused, current, activeTurn, leader, bid, index]);
   useEffect(
     () => () => {
       void audioRef.current?.close();
@@ -996,6 +1067,25 @@ function LocalGame({ onHome }: { onHome: () => void }) {
     : 0;
   const passIsSafe = auctionPassIsSafe(pool, index, managers);
   timeoutActionRef.current = passTurn;
+  botActionRef.current = () => {
+    if (stage !== 'auction' || !soloBotMode || paused || !current) return;
+    if (activeTurn !== null && activeTurn > 0) {
+      const decision = decideSoloBotTurn({
+        managers,
+        pool,
+        index,
+        bid,
+        leader,
+        passed,
+        botIndex: activeTurn,
+        style: soloBotStyleForIndex(activeTurn),
+      });
+      if (decision.action === 'bid') placeBid(decision.increment);
+      else passTurn();
+    } else if (activeTurn === null && leader !== null) {
+      sell();
+    }
+  };
   const resetClock = () => {
     setTimeLeft(20);
     setDeadline(Date.now() + 20000);
@@ -1296,6 +1386,7 @@ function LocalGame({ onHome }: { onHome: () => void }) {
       includeBench,
       count,
       names,
+      soloBotMode,
       bonusReveal,
       autoAssignments,
     });
@@ -1365,6 +1456,7 @@ function LocalGame({ onHome }: { onHome: () => void }) {
     setIncludeBench(Boolean(s.includeBench));
     setCount(s.count);
     setNames(s.names);
+    setSoloBotMode(Boolean(s.soloBotMode));
     setBonusReveal(s.bonusReveal);
     setAutoAssignments(s.autoAssignments || []);
     setUndoSnapshot(null);
@@ -1404,6 +1496,7 @@ function LocalGame({ onHome }: { onHome: () => void }) {
       setIncludeBench(Boolean(s.includeBench));
       setCount(s.count);
       setNames(s.names);
+      setSoloBotMode(Boolean(s.soloBotMode));
       setBonusReveal(s.bonusReveal);
       setAutoAssignments(s.autoAssignments || []);
       setGameId(s.gameId);
@@ -1447,7 +1540,19 @@ function LocalGame({ onHome }: { onHome: () => void }) {
   }
   function changeCount(n: number) {
     setCount(n);
-    setNames((old) => Array.from({ length: n }, (_, i) => old[i] || DEFAULT_MANAGER_NAMES[i] || `Menajer ${i + 1}`));
+    setNames((old) =>
+      soloBotMode
+        ? buildSoloManagerNames(old[0] || DEFAULT_MANAGER_NAMES[0], n)
+        : Array.from({ length: n }, (_, i) => old[i] || DEFAULT_MANAGER_NAMES[i] || `Menajer ${i + 1}`),
+    );
+  }
+  function changeSoloBotMode(nextSolo: boolean) {
+    setSoloBotMode(nextSolo);
+    setNames((old) =>
+      nextSolo
+        ? buildSoloManagerNames(old[0] || DEFAULT_MANAGER_NAMES[0], count)
+        : Array.from({ length: count }, (_, i) => (i === 0 ? old[0] : DEFAULT_MANAGER_NAMES[i]) || `Menajer ${i + 1}`),
+    );
   }
   function goHome() {
     if (
@@ -1468,6 +1573,8 @@ function LocalGame({ onHome }: { onHome: () => void }) {
         <Setup
           count={count}
           setCount={changeCount}
+          soloBotMode={soloBotMode}
+          setSoloBotMode={changeSoloBotMode}
           era={era}
           setEra={setEra}
           setQuality={setQuality}
@@ -1492,6 +1599,7 @@ function LocalGame({ onHome }: { onHome: () => void }) {
           source={poolSource}
           names={names}
           setNames={setNames}
+          soloBotMode={soloBotMode}
           era={era}
           revealRatings={revealRatings}
           selectedTiers={selectedTiers}
@@ -1702,15 +1810,24 @@ function LocalGame({ onHome }: { onHome: () => void }) {
                   {paused
                     ? 'DURAKLATILDI'
                     : activeTurn === null
-                      ? 'TEKLİFLER BİTTİ'
-                      : `SIRA: ${managers[activeTurn].name}`}
+                      ? soloBotMode && leader !== null
+                        ? '🤖 SATIŞ ONAYLANIYOR…'
+                        : 'TEKLİFLER BİTTİ'
+                      : soloBotMode && activeTurn > 0
+                        ? `🤖 AI DÜŞÜNÜYOR: ${managers[activeTurn].name}`
+                        : `SIRA: ${managers[activeTurn].name}`}
                 </span>
                 <b>{activeTurn === null ? '—' : `${timeLeft}s`}</b>
               </div>
               <div className="flex flex-wrap gap-2">
                 {leader === null ? (
                   <button
-                    disabled={activeTurn === null || paused || !canBid(managers[activeTurn], openingPrice)}
+                    disabled={
+                      activeTurn === null ||
+                      paused ||
+                      (soloBotMode && activeTurn > 0) ||
+                      !canBid(managers[activeTurn], openingPrice)
+                    }
                     onClick={() => placeBid(0)}
                     className="increment primary"
                   >
@@ -1720,7 +1837,12 @@ function LocalGame({ onHome }: { onHome: () => void }) {
                   [5, 10, 25].map((n) => (
                     <button
                       key={n}
-                      disabled={activeTurn === null || paused || !canBid(managers[activeTurn], bid + n)}
+                      disabled={
+                        activeTurn === null ||
+                        paused ||
+                        (soloBotMode && activeTurn > 0) ||
+                        !canBid(managers[activeTurn], bid + n)
+                      }
                       onClick={() => placeBid(n)}
                       className="increment"
                     >
@@ -1728,7 +1850,11 @@ function LocalGame({ onHome }: { onHome: () => void }) {
                     </button>
                   ))
                 )}
-                <button disabled={activeTurn === null || paused} onClick={passTurn} className="pass">
+                <button
+                  disabled={activeTurn === null || paused || (soloBotMode && activeTurn > 0)}
+                  onClick={passTurn}
+                  className="pass"
+                >
                   Pas
                 </button>
                 <button disabled={leader === null || activeTurn !== null || paused} onClick={sell} className="sell">
@@ -1916,6 +2042,8 @@ function Shell({ children, onHome }: { children: React.ReactNode; compact?: bool
 function Setup({
   count,
   setCount,
+  soloBotMode,
+  setSoloBotMode,
   era,
   setEra,
   setQuality,
@@ -1933,6 +2061,8 @@ function Setup({
 }: {
   count: number;
   setCount: (n: number) => void;
+  soloBotMode: boolean;
+  setSoloBotMode: (v: boolean) => void;
   era: Era;
   setEra: (e: Era) => void;
   setQuality: (q: QualityMode) => void;
@@ -1995,8 +2125,31 @@ function Setup({
             <span>Kaldığın lota dön →</span>
           </button>
         )}
+        <span id="local-opponent-label" className="label">
+          Oyun modu
+        </span>
+        <div className="grid grid-cols-2 gap-3 mb-7" role="radiogroup" aria-labelledby="local-opponent-label">
+          <button
+            role="radio"
+            aria-checked={soloBotMode}
+            onClick={() => setSoloBotMode(true)}
+            className={`ability-choice ${soloBotMode ? 'active' : ''}`}
+          >
+            <strong>🤖 AI Botlara Karşı</strong>
+            <span>Tek başına akıllı AI menajerlerle yarış</span>
+          </button>
+          <button
+            role="radio"
+            aria-checked={!soloBotMode}
+            onClick={() => setSoloBotMode(false)}
+            className={`ability-choice ${!soloBotMode ? 'active' : ''}`}
+          >
+            <strong>👥 Aynı Cihazda</strong>
+            <span>Arkadaşlarla sırayla teklif ver</span>
+          </button>
+        </div>
         <span id="local-count-label" className="label">
-          Kaç menajer oynayacak?
+          {soloBotMode ? 'Masadaki toplam menajer (1 Siz + AI)' : 'Kaç menajer oynayacak?'}
         </span>
         <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-labelledby="local-count-label">
           {[2, 3, 4, 5, 6, 7, 8].map((n) => (
@@ -2149,6 +2302,7 @@ function Names({
   source,
   names,
   setNames,
+  soloBotMode,
   era,
   revealRatings,
   selectedTiers,
@@ -2159,6 +2313,7 @@ function Names({
   source: PoolSource;
   names: string[];
   setNames: (v: string[]) => void;
+  soloBotMode: boolean;
   era: Era;
   revealRatings: boolean;
   selectedTiers: RatingTier[];
@@ -2196,27 +2351,34 @@ function Names({
       </button>
       <div className="panel rounded-[28px] p-6 sm:p-10">
         <p className="eyebrow">MASA KURULUMU · 02</p>
-        <h1 className="mt-3 text-4xl font-black">Menajerler kim?</h1>
+        <h1 className="mt-3 text-4xl font-black">
+          {soloBotMode ? 'Adınızı girin ve AI rakipleri tanıyın' : 'Menajerler kim?'}
+        </h1>
         <p className="mt-3 text-zinc-400">
           Başlangıç bütçesi seçilen havuz seviyesine göre kişi başı $750M–$1000M arasında otomatik dengelenir; dört
           yedek seçildiyse +$250M eklenir. Pozisyon sırası her yeni oyunda rastgele belirlenir.
         </p>
         <div className="my-8 grid gap-3 sm:grid-cols-2">
-          {names.map((n, i) => (
-            <label key={i} className="name-field">
-              <span>{i + 1}</span>
-              <input
-                maxLength={24}
-                aria-invalid={
-                  !n.trim() ||
-                  names.some((x, j) => j !== i && x.trim().toLocaleLowerCase('tr') === n.trim().toLocaleLowerCase('tr'))
-                }
-                aria-label={`${i + 1}. menajer`}
-                value={n}
-                onChange={(e) => setNames(names.map((x, j) => (j === i ? e.target.value : x)))}
-              />
-            </label>
-          ))}
+          {names.map((n, i) => {
+            const botProfile = soloBotMode && i > 0 ? SOLO_BOT_PROFILES[(i - 1) % SOLO_BOT_PROFILES.length] : null;
+            return (
+              <label key={i} className="name-field">
+                <span>{botProfile ? '🤖' : i + 1}</span>
+                <input
+                  maxLength={24}
+                  aria-invalid={
+                    !n.trim() ||
+                    names.some(
+                      (x, j) => j !== i && x.trim().toLocaleLowerCase('tr') === n.trim().toLocaleLowerCase('tr'),
+                    )
+                  }
+                  aria-label={botProfile ? `${i + 1}. AI menajer (${botProfile.badge})` : `${i + 1}. menajer`}
+                  value={n}
+                  onChange={(e) => setNames(names.map((x, j) => (j === i ? e.target.value : x)))}
+                />
+              </label>
+            );
+          })}
         </div>
         {!namesValid && (
           <p className="form-error" role="alert">

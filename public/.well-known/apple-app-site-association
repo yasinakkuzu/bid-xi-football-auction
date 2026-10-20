@@ -1,0 +1,21 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["TEAMID.com.mezat11.app"],
+        "components": [
+          {
+            "/": "/online*",
+            "comment": "Mezat 11 online room Universal Link"
+          },
+          {
+            "/": "/",
+            "?": { "room": "?*" },
+            "comment": "Mezat 11 room invite Universal Link"
+          }
+        ]
+      }
+    ]
+  }
+}

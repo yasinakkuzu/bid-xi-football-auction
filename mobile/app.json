@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Mezat 11",
+    "slug": "mezat11",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "mezat11",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#07090e",
+    "primaryColor": "#d8ff3e",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mezat11.app",
+      "associatedDomains": ["applinks:mezat11.com"],
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.mezat11.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "mezat11.com",
+              "pathPrefix": "/online"
+            },
+            {
+              "scheme": "mezat11",
+              "host": "room"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    }
+  }
+}

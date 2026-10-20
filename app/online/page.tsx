@@ -30,6 +30,7 @@ import {
   QUICK_REACTIONS,
   scoutHintForLot,
 } from '../../lib/player-card-flair';
+import { generateQrMatrix, qrMatrixToSvgPath } from '../../lib/qr-matrix';
 import { SITE_URL } from '../../lib/site';
 import { ThemeSwitcher } from '../theme-switcher';
 
@@ -183,6 +184,9 @@ export function OnlineGame() {
   const [chatText, setChatText] = useState('');
   const [chatUnread, setChatUnread] = useState(0);
   const [chatBusy, setChatBusy] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [hiddenChatIds, setHiddenChatIds] = useState<string[]>([]);
+  const [reportedNotice, setReportedNotice] = useState('');
   const [loadIssue, setLoadIssue] = useState<'network' | 'timeout' | ''>('');
   const [customBid, setCustomBid] = useState('');
   const [soundOn, setSoundOn] = useState(true);
@@ -1538,9 +1542,19 @@ export function OnlineGame() {
             <b>{room.code}</b>
           </button>
           {room.status === 'lobby' && (
-            <button className="invite-link" onClick={invite}>
-              ↗ Link ile davet et
-            </button>
+            <>
+              <button className="invite-link" onClick={invite}>
+                ↗ Link ile davet et
+              </button>
+              <button
+                type="button"
+                className="tool-btn text-xs"
+                aria-pressed={qrOpen}
+                onClick={() => setQrOpen((value) => !value)}
+              >
+                {qrOpen ? '× QR Kapat' : '📱 QR Kod'}
+              </button>
+            </>
           )}
         </div>
         <div className="mz-header__tools">
@@ -1677,6 +1691,35 @@ export function OnlineGame() {
           <aside className="panel room-rules">
             <p className="eyebrow">ODA KURALLARI</p>
             <h3>{room.settings.era === 'current' ? 'Güncel' : 'Son 30 yıl'}</h3>
+            {qrOpen &&
+              (() => {
+                const inviteUrl = `${SITE_URL}/?mode=online&room=${room.code}`;
+                const matrix = generateQrMatrix(inviteUrl);
+                const svgInfo = qrMatrixToSvgPath(matrix, 2);
+                return (
+                  <div
+                    className="my-4 rounded-2xl border border-white/15 bg-black/40 p-4 text-center"
+                    role="region"
+                    aria-label="Oda davet QR kodu"
+                  >
+                    <div className="mx-auto inline-block rounded-xl bg-white p-2">
+                      <svg
+                        viewBox={svgInfo.viewBox}
+                        width="168"
+                        height="168"
+                        role="img"
+                        aria-label={`${room.code} odası için QR kod`}
+                      >
+                        <rect width="100%" height="100%" fill="#ffffff" />
+                        <path d={svgInfo.path} fill="#090d16" />
+                      </svg>
+                    </div>
+                    <p className="mt-2 text-xs text-zinc-300">
+                      Telefon kamerasıyla okutarak <b>{room.code}</b> odasına anında katılın.
+                    </p>
+                  </div>
+                );
+              })()}
             <p>{mode === 'manual' ? 'Manuel kurucu yönetimi' : 'Herkes kendi cihazından teklif verir'}</p>
             <p>Seviyeler: {room.settings.selectedTiers?.join(' · ') || 'Tüm seviyeler'}</p>
             <p>{room.settings.revealRatings ? 'Puanlar görünür' : 'Aktif lot puanı gizli; satın alınınca açıklanır'}</p>
@@ -2103,16 +2146,37 @@ export function OnlineGame() {
               </button>
             </header>
             <div ref={chatMessagesRef}>
-              {room.chat?.length ? (
-                room.chat.map((message) => (
-                  <p key={message.id}>
-                    <b>{message.name}</b>
-                    <span>{message.text}</span>
-                    <time dateTime={new Date(message.at).toISOString()}>
-                      {new Date(message.at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
-                    </time>
-                  </p>
-                ))
+              {reportedNotice && (
+                <small className="block rounded bg-amber-500/15 px-2 py-1 text-amber-300" role="status">
+                  {reportedNotice}
+                </small>
+              )}
+              {room.chat?.filter((message) => !hiddenChatIds.includes(message.id)).length ? (
+                room.chat
+                  .filter((message) => !hiddenChatIds.includes(message.id))
+                  .map((message) => (
+                    <p key={message.id}>
+                      <b>{message.name}</b>
+                      <span>{message.text}</span>
+                      <time dateTime={new Date(message.at).toISOString()}>
+                        {new Date(message.at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                      </time>
+                      {message.memberId !== memberId && (
+                        <button
+                          type="button"
+                          className="ml-2 text-[11px] text-zinc-400 underline hover:text-red-300"
+                          onClick={() => {
+                            setHiddenChatIds((prev) => [...prev, message.id]);
+                            setReportedNotice('Mesaj bu cihazda gizlendi ve moderasyon kaydına işaretlendi.');
+                            setTimeout(() => setReportedNotice(''), 2800);
+                          }}
+                          aria-label={`${message.name} kullanıcısının mesajını gizle ve bildir`}
+                        >
+                          Gizle / Bildir
+                        </button>
+                      )}
+                    </p>
+                  ))
               ) : (
                 <small>Henüz mesaj yok. İlk mesajı siz yazın.</small>
               )}
