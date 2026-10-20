@@ -69,3 +69,21 @@ test('reopening fails closed when there is no eligible challenger', () => {
   assert.equal(reopenLiveLot(game, 20, 1_000), false);
   assert.equal(game.activeTurn, null);
 });
+
+test('reopening checks bidIncrement when the only remaining challenger is a bot', () => {
+  const bot: Manager = { ...manager(1, 78), isBot: true };
+  // Reserve for 10 remaining starter slots (50) + coach (5) = 55, so auctionLimit = 78 - 55 = 23.
+  // Current bid is 20: bot can afford +1 (21 <= 23), but cannot afford bidIncrement=5 (25 > 23).
+  const game = {
+    managers: [manager(0), bot],
+    pool: [lot],
+    index: 0,
+    bid: 20,
+    leader: 0,
+    passed: [],
+    activeTurn: null,
+    paused: false,
+    deadline: null,
+  };
+  assert.equal(reopenLiveLot(game, 20, 1_000, 5), false);
+});

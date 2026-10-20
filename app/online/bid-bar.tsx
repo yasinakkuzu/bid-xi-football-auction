@@ -35,10 +35,13 @@ export function BidTimerRing({
     <div
       className={`mz-timer ${critical ? 'is-critical' : ''} ${expired ? 'is-expired' : ''} ${paused ? 'is-paused' : ''}`}
       role="timer"
-      aria-live="polite"
+      aria-live="off"
       aria-label={showSeconds ? `Teklif süresi: ${remaining} saniye` : 'Teklif süresi kapalı'}
       style={{ '--mz-ring-ratio': ratio } as CSSProperties}
     >
+      <span className="sr-only" aria-live="polite">
+        {paused ? 'Açık artırma duraklatıldı' : expired ? 'Teklif süresi doldu' : remaining === 5 ? 'Son 5 saniye' : ''}
+      </span>
       <svg viewBox="0 0 44 44" aria-hidden="true" focusable="false">
         <circle className="mz-timer__track" cx="22" cy="22" r="19" />
         <circle className="mz-timer__value" cx="22" cy="22" r="19" />

@@ -44,8 +44,18 @@ import {
   type Slot,
 } from '../lib/game-engine';
 import { COACHES } from '../lib/coaches';
+import { applyMediaPolicy } from '../lib/media-rights';
+import { moderateDisplayName } from '../lib/moderation';
+import {
+  cardRarityClass,
+  computeNightAwards,
+  computePitchChemistry,
+  nationFlag,
+  scoutHintForLot,
+} from '../lib/player-card-flair';
 import { shareResultCard } from '../lib/result-card';
 import { OnlineGame } from './online/page';
+import { ThemeSwitcher } from './theme-switcher';
 
 type Stage = 'setup' | 'names' | 'auction' | 'results';
 type BonusReveal = { name: string; rating: number; role: string; image?: string };
@@ -365,20 +375,19 @@ function buildPool(
       candidates = selected;
     if (candidates.length) {
       const needed = count + 1;
-      const mapped = candidates.map(
-        (p) =>
-          ({
-            id: `tm-${p.id}-${s.key}`,
-            name: p.name,
-            slot: s.key,
-            role: s.label,
-            rating: p.rating,
-            price: p.price,
-            nation: p.country.slice(0, 3).toUpperCase(),
-            club: p.club,
-            image: p.image,
-            clubLogo: p.clubLogo,
-          }) satisfies Footballer,
+      const mapped = candidates.map((p) =>
+        applyMediaPolicy({
+          id: `tm-${p.id}-${s.key}`,
+          name: p.name,
+          slot: s.key,
+          role: s.label,
+          rating: p.rating,
+          price: p.price,
+          nation: p.country.slice(0, 3).toUpperCase(),
+          club: p.club,
+          image: p.image,
+          clubLogo: p.clubLogo,
+        } satisfies Footballer),
       );
       const window = quality === 'best' ? mapped.slice(0, Math.max(96, needed * 10)) : mapped;
       return positionAuctionLots(
@@ -418,21 +427,20 @@ function buildPool(
           .flatMap((slot) =>
             (generated[era]?.[slot] || [])
               .filter((p) => selectedTiers.includes(ratingLevel(p.rating) as RatingTier))
-              .map(
-                (p) =>
-                  ({
-                    id: `tm-${p.id}-${group.key}`,
-                    name: p.name,
-                    slot,
-                    benchSlot: group.key,
-                    role: group.label,
-                    rating: p.rating,
-                    price: p.price,
-                    nation: p.country.slice(0, 3).toUpperCase(),
-                    club: p.club,
-                    image: p.image,
-                    clubLogo: p.clubLogo,
-                  }) satisfies Footballer,
+              .map((p) =>
+                applyMediaPolicy({
+                  id: `tm-${p.id}-${group.key}`,
+                  name: p.name,
+                  slot,
+                  benchSlot: group.key,
+                  role: group.label,
+                  rating: p.rating,
+                  price: p.price,
+                  nation: p.country.slice(0, 3).toUpperCase(),
+                  club: p.club,
+                  image: p.image,
+                  clubLogo: p.clubLogo,
+                } satisfies Footballer),
               ),
           )
           .filter((player) => !starterNames.has(player.name))
@@ -441,7 +449,8 @@ function buildPool(
         return positionAuctionLots(window, excluded, count + 1, random, 0.45, 3);
       })
     : [];
-  return [...footballers, ...bench, ...mixedAuctionLots(COACHES, excluded, count + 1, random)];
+  const coaches = COACHES.map((coach) => applyMediaPolicy(coach));
+  return [...footballers, ...bench, ...mixedAuctionLots(coaches, excluded, count + 1, random)];
 }
 
 export default function Home() {
@@ -480,7 +489,10 @@ function ModeChooser({ onLocal, onOnline }: { onLocal: () => void; onOnline: () 
     <main className="mode-home">
       <nav>
         <Brand />
-        <span>ÜCRETSİZ · KAYIT GEREKTİRMEZ</span>
+        <div className="flex items-center gap-3">
+          <ThemeSwitcher />
+          <span>ÜCRETSİZ · KAYIT GEREKTİRMEZ</span>
+        </div>
       </nav>
       <section className="home-hero">
         <div className="home-copy">
@@ -538,14 +550,6 @@ function ModeChooser({ onLocal, onOnline }: { onLocal: () => void; onOnline: () 
         </div>
       </section>
       <Leaderboard />
-      <footer className="home-footer">
-        <span>Mezat 11 · Her oyun yeni bir transfer hikâyesi</span>
-        <nav aria-label="Yasal ve veri bağlantıları">
-          <a href="/gizlilik">Gizlilik</a>
-          <a href="/kullanim-kosullari">Kullanım koşulları</a>
-          <a href="/veri-ve-haklar">Veri ve haklar</a>
-        </nav>
-      </footer>
     </main>
   );
 }
@@ -1451,7 +1455,7 @@ function LocalGame({ onHome }: { onHome: () => void }) {
       !window.confirm('Oyundan çıkıp ana sayfaya dönmek istediğinize emin misiniz?')
     )
       return;
-    if (stage === 'auction' || stage === 'results') {
+    if (stage === 'results') {
       localStorage.removeItem('bidxi-game');
       setHasSaved(false);
     }
@@ -1511,7 +1515,7 @@ function LocalGame({ onHome }: { onHome: () => void }) {
         </div>
       )}
       <div className="auction-grid mx-auto max-w-7xl py-5">
-        <aside className="order-2 lg:order-1">
+        <aside>
           <p className="eyebrow">MASA DURUMU</p>
           <h2 className="mb-5 mt-2 text-xl font-bold">Menajerler</h2>
           <div className="space-y-2">
@@ -1534,10 +1538,10 @@ function LocalGame({ onHome }: { onHome: () => void }) {
             ))}
           </div>
           <p className="mt-4 text-xs leading-5 text-zinc-600">
-            Menajere dokunarak kadrosunu aç. Yeşil çerçeve teklif sırasını gösterir.
+            Menajere dokunarak kadrosunu aç. Vurgulu çerçeve teklif sırasını gösterir.
           </p>
         </aside>
-        <section className="order-1 lg:order-2">
+        <section>
           <div className="auction-toolbar mb-4 flex items-center justify-between">
             <div className="flex gap-2">
               <span className="pill">{isCoach(current) ? 'TEKNİK DİREKTÖR' : `LOT ${index + 1}/${pool.length}`}</span>
@@ -1593,7 +1597,9 @@ function LocalGame({ onHome }: { onHome: () => void }) {
               <span>Bu pozisyonun son açık artırması. Ardından {nextGroupLabel} başlayacak.</span>
             </div>
           )}
-          <div className={`player-card ${bonusLot ? 'bonus-lot-card' : ''}`}>
+          <div
+            className={`player-card ${cardRarityClass(current, revealRatings || isCoach(current), era)} ${bonusLot ? 'bonus-lot-card' : ''}`}
+          >
             <div className="pitch-lines" />
             <div className="player-top">
               <span className="position">
@@ -1610,7 +1616,9 @@ function LocalGame({ onHome }: { onHome: () => void }) {
                     <small>{isCoach(current) ? 'TEKNİK DİREKTÖR' : ratingLevel(current.rating)}</small>
                   </span>
                 )}
-                <span className="nation">{current.nation}</span>
+                <span className="nation">
+                  <i aria-hidden="true">{nationFlag(current.nation)}</i> {current.nation}
+                </span>
               </div>
             </div>
             <LocalPlayerImage player={current} />
@@ -1638,7 +1646,7 @@ function LocalGame({ onHome }: { onHome: () => void }) {
               <FormationMap active={current.slot} />
             )}
             <div className="relative">
-              <p className="mb-2 text-xs font-bold uppercase tracking-[.18em] text-lime-300">{current.role}</p>
+              <p className="mb-2 text-xs font-bold uppercase tracking-[.18em] text-[var(--lime)]">{current.role}</p>
               <h1 className="text-4xl font-black tracking-tight sm:text-5xl">{current.name}</h1>
               {isCoach(current) ? (
                 <div className="mt-3 text-sm text-zinc-400">
@@ -1672,6 +1680,10 @@ function LocalGame({ onHome }: { onHome: () => void }) {
                   </span>
                 </div>
               )}
+              <div className="mz-scout-hint mt-3">
+                <b>{scoutHintForLot(current, revealRatings || isCoach(current)).badge}</b>
+                <small>{scoutHintForLot(current, revealRatings || isCoach(current)).detail}</small>
+              </div>
             </div>
           </div>
           <div className="bid-panel">
@@ -1679,7 +1691,7 @@ function LocalGame({ onHome }: { onHome: () => void }) {
               <p className="text-xs uppercase tracking-widest text-zinc-500">
                 {leader === null ? 'Açılış fiyatı' : 'Mevcut teklif'}
               </p>
-              <p className="mt-1 text-4xl font-black text-lime-300">{money(visibleBid)}</p>
+              <p className="mt-1 text-4xl font-black text-[var(--lime)]">{money(visibleBid)}</p>
               <p className="mt-1 text-sm text-zinc-400">
                 {leader === null ? 'İlk teklif bu tutardan başlar' : `Lider: ${managers[leader].name}`}
               </p>
@@ -1735,7 +1747,7 @@ function LocalGame({ onHome }: { onHome: () => void }) {
             </div>
           </div>
         </section>
-        <aside className="order-3">
+        <aside>
           <p className="eyebrow">4-2-3-1 PLANI</p>
           <h2 className="mb-5 mt-2 text-xl font-bold">Karışık açık artırma sırası</h2>
           <div className="slot-list">
@@ -1891,7 +1903,10 @@ function Shell({ children, onHome }: { children: React.ReactNode; compact?: bool
     <main className="site-shell min-h-screen px-5 py-6 md:px-10 md:py-8">
       <nav className="mx-auto flex max-w-7xl items-center justify-between">
         <Brand onClick={onHome} />
-        <span className="mode-label">Tek cihaz</span>
+        <div className="flex items-center gap-3">
+          <ThemeSwitcher />
+          <span className="mode-label">Tek cihaz</span>
+        </div>
       </nav>
       {children}
     </main>
@@ -1954,7 +1969,7 @@ function Setup({
         <h1 className="hero">
           Bütçeni yönet,
           <br />
-          <span className="text-lime-300">kusursuz kadronu</span> kur.
+          <span className="text-[var(--lime)]">kusursuz kadronu</span> kur.
         </h1>
         <p className="mt-7 max-w-xl leading-7 text-zinc-400">
           Futbolcular sırayla açıklanır. 4-2-3-1 kadronu dilersen dört yedekle tamamlar, kalan bütçenle teknik
@@ -2125,9 +2140,6 @@ function Setup({
         <p className="source-note">
           Oyuncu verileri: transfermarkt-datasets (CC0). Mezat 11 puanları maç istatistiklerinden türetilir.
         </p>
-        <p className="source-note">
-          İletişim, şikâyet ve kaldırma talepleri: <a href="mailto:info@mezat11.com">info@mezat11.com</a>
-        </p>
       </div>
     </section>
   );
@@ -2156,7 +2168,15 @@ function Names({
 }) {
   const [query, setQuery] = useState('');
   const [slot, setSlot] = useState<Slot | 'all'>('all');
+  const [consentAccepted, setConsentAccepted] = useState(() => {
+    try {
+      return typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mezat11-local-consent') === '1';
+    } catch {
+      return false;
+    }
+  });
   const namesValid = validManagerNames(names);
+  const blockedName = names.some((n) => n.trim().length > 0 && !moderateDisplayName(n).ok);
   const matches = useMemo(() => {
     const seen = new Set<number>();
     return Object.entries(source[era] || {})
@@ -2178,8 +2198,8 @@ function Names({
         <p className="eyebrow">MASA KURULUMU · 02</p>
         <h1 className="mt-3 text-4xl font-black">Menajerler kim?</h1>
         <p className="mt-3 text-zinc-400">
-          Başlangıç bütçesi kişi başı $1 milyardır; dört yedek seçildiyse $250M eklenir. Pozisyon sırası her yeni oyunda
-          rastgele belirlenir.
+          Başlangıç bütçesi seçilen havuz seviyesine göre kişi başı $750M–$1000M arasında otomatik dengelenir; dört
+          yedek seçildiyse +$250M eklenir. Pozisyon sırası her yeni oyunda rastgele belirlenir.
         </p>
         <div className="my-8 grid gap-3 sm:grid-cols-2">
           {names.map((n, i) => (
@@ -2200,9 +2220,29 @@ function Names({
         </div>
         {!namesValid && (
           <p className="form-error" role="alert">
-            Adlar boş veya aynı olamaz; en fazla 24 karakter kullanın.
+            {blockedName
+              ? 'Görünen adlar küfür, hakaret veya resmî unvan içeremez.'
+              : 'Adlar boş veya aynı olamaz; en fazla 24 karakter kullanın.'}
           </p>
         )}
+        <label className="consent-check mt-4 flex items-start gap-3 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={consentAccepted}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setConsentAccepted(checked);
+              try {
+                if (checked) sessionStorage.setItem('mezat11-local-consent', '1');
+                else sessionStorage.removeItem('mezat11-local-consent');
+              } catch {}
+            }}
+          />
+          <span>
+            Katılımcıların <b>15 yaş ve üzeri</b> olduğunu, <a href="/gizlilik">Gizlilik</a> ve{' '}
+            <a href="/kullanim-kosullari">Kullanım Koşulları</a> metinlerini okuduğumu onaylıyorum.
+          </span>
+        </label>
         <details className="pool-browser">
           <summary>Havuzu incele ve filtrele</summary>
           <div className="pool-search">
@@ -2267,7 +2307,7 @@ function Names({
             {includeBench ? '11 oyuncu + 4 yedek (+$250M)' : '11 oyuncu'} · pozisyon başına {names.length + 1} aday
           </span>
         </div>
-        <button disabled={!namesValid} onClick={onBegin} className="start mt-6 w-full">
+        <button disabled={!namesValid || !consentAccepted} onClick={onBegin} className="start mt-6 w-full">
           Açık artırmayı başlat <span>→</span>
         </button>
       </div>
@@ -2279,6 +2319,7 @@ function Results({ managers, onReset }: { managers: Manager[]; onReset: () => vo
   const [formationViews, setFormationViews] = useState<Record<number, boolean>>({});
   const ranked = useMemo(() => rankManagers(managers), [managers]);
   const insights = useMemo(() => resultInsights(ranked), [ranked]);
+  const awards = useMemo(() => computeNightAwards(ranked), [ranked]);
   function exportCsv() {
     const lines = ['Sıra,Menajer,Puan,Pozisyon,Futbolcu veya TD,Puan,Kalan Bütçe'];
     ranked.forEach((m, i) => {
@@ -2324,7 +2365,7 @@ function Results({ managers, onReset }: { managers: Manager[]; onReset: () => vo
     const url = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'bid-xi-sonuclari.csv';
+    a.download = 'mezat-11-sonuclari.csv';
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -2339,7 +2380,7 @@ function Results({ managers, onReset }: { managers: Manager[]; onReset: () => vo
   return (
     <section className="mx-auto max-w-6xl py-12">
       <div className="text-center">
-        <p className="eyebrow">İHALE TAMAMLANDI</p>
+        <p className="eyebrow">MEZAT TAMAMLANDI</p>
         <h1 className="mt-3 text-5xl font-black">Gecenin şampiyonu</h1>
         <p className="mt-3 text-zinc-400">Kadro gücü, denge, bütçe verimliliği ve teknik direktör uyumuna göre.</p>
       </div>
@@ -2365,6 +2406,26 @@ function Results({ managers, onReset }: { managers: Manager[]; onReset: () => vo
             <strong>{insights.match.scoreLine}</strong>
             <p>{insights.match.summary}</p>
           </aside>
+        </section>
+      )}
+      {awards.length > 0 && (
+        <section className="mz-awards-section my-6" aria-label="Gecenin özel ödülleri">
+          <p className="eyebrow">GECENİN ÖZEL ÖDÜLLERİ</p>
+          <div className="mz-awards-grid">
+            {awards.map((award) => (
+              <div key={award.id} className="mz-award-card">
+                <span className="mz-award-icon" aria-hidden="true">
+                  {award.icon}
+                </span>
+                <div>
+                  <small>{award.title}</small>
+                  <b>{award.winnerName}</b>
+                  <strong>{award.stat}</strong>
+                  <p>{award.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </section>
       )}
       <div className="result-grid">
@@ -2485,10 +2546,28 @@ function Results({ managers, onReset }: { managers: Manager[]; onReset: () => vo
 }
 
 function ResultFormation({ squad }: { squad: Partial<Record<Slot, Footballer>> }) {
+  const chemistry = computePitchChemistry(squad, '4-2-3-1');
   return (
     <div className="result-formation">
       <div className="result-halfway" />
       <div className="result-center-circle" />
+      {chemistry.links.length > 0 && (
+        <svg className="mz-chemistry-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          {chemistry.links.map((link) => (
+            <line
+              key={`${link.from}-${link.to}`}
+              x1={link.x1}
+              y1={link.y1}
+              x2={link.x2}
+              y2={link.y2}
+              className={`mz-chem-line mz-chem-line--${link.strength}`}
+            />
+          ))}
+        </svg>
+      )}
+      <div className="mz-chemistry-badge">
+        <span>⚡ KİMYA %{chemistry.score}</span>
+      </div>
       {SLOTS.map((s) => {
         const player = squad[s.key];
         return (

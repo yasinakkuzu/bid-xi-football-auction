@@ -9,8 +9,13 @@
  * poll and renders the timer on the server timeline.
  */
 
-export function clockOffset(serverTime: number | null | undefined, clientNow = Date.now()) {
-  return typeof serverTime === 'number' && Number.isFinite(serverTime) ? serverTime - clientNow : 0;
+export function clockOffset(serverTime: number | null | undefined, clientNow = Date.now(), requestStart?: number) {
+  if (typeof serverTime !== 'number' || !Number.isFinite(serverTime)) return 0;
+  const reference =
+    typeof requestStart === 'number' && Number.isFinite(requestStart) && requestStart <= clientNow
+      ? Math.round((requestStart + clientNow) / 2)
+      : clientNow;
+  return serverTime - reference;
 }
 
 export function remainingSeconds(deadline: number | null | undefined, clientNow: number, offset = 0) {

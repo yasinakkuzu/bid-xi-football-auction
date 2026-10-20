@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { POOL_MODEL_VERSION } from '../scripts/lib/pool-model.mjs';
 
 type PoolPlayer = { id: number; name: string; rating: number; price: number; league?: string };
 type Quality = {
@@ -87,7 +88,8 @@ test('current and last-30-year identities overlap by at most twelve percent per 
 
 test('dataset provenance binds source, score version and the rights review state', () => {
   assert.match(manifest.datasetVersion, /^transfermarkt-\d{4}-\d{2}-\d{2}$/);
-  assert.match(manifest.generatorVersion, /^pool-v\d+$/);
+  assert.equal(manifest.generatorVersion, POOL_MODEL_VERSION);
+  assert.equal(manifest.valuationModel.version, POOL_MODEL_VERSION);
   assert.equal(manifest.scoreVersion, 'score-v3');
   assert.match(manifest.sourceSha256, /^[a-f0-9]{64}$/);
   assert.equal(manifest.rights.reviewStatus, 'documented');

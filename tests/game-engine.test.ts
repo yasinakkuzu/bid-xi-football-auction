@@ -548,6 +548,7 @@ test('custom pool search uses dataset league codes beyond the static club catalo
     [
       { club: 'Seattle Sounders FC', league: 'MLS1' },
       { club: 'Inter Miami CF', league: 'MLS1' },
+      { club: 'SE Palmeiras', league: 'BR1' },
     ],
     'Seattle',
   );
@@ -556,4 +557,51 @@ test('custom pool search uses dataset league codes beyond the static club catalo
   const league = results.find((result) => result.type === 'league');
   assert.equal(league?.code, 'MLS1');
   assert.equal(matchesCustomPool('Inter Miami CF', [league!], 'MLS1'), true);
+  assert.equal(matchesCustomPool('Fenerbahçe', [{ type: 'league', name: 'Türkiye Ligi' }]), true);
+  const brResults = customPoolOptions([{ club: 'SE Palmeiras', league: 'BR1' }], 'Palmeiras');
+  assert.equal(brResults[0]?.league, 'Brezilya Série A');
+});
+test('optimizeStartingEleven fills an empty starter slot from bench before swapping filled slots', () => {
+  const partialSquad = Object.fromEntries(
+    slots.filter((s) => s !== 'RB').map((slot, i) => [slot, player(slot, 88, 10, i)]),
+  );
+  const manager: Manager = {
+    id: 0,
+    name: 'M0',
+    budget: 50,
+    spent: 100,
+    squad: partialSquad,
+    bench: {
+      BDEF: { ...player('CB1', 79, 5, 99), benchSlot: 'BDEF' },
+    },
+  };
+  const optimized = optimizeStartingEleven(manager);
+  assert.equal(optimized.squad.RB?.rating, 79, 'reserve promoted into missing RB slot even though rating < 88');
+  assert.equal(optimized.bench?.BDEF, undefined);
+});
+test('canonicalFormation maps tactical variants and motivation specialty contributes distinctly', async () => {
+  const { canonicalFormation, coachImpact } = await import('../lib/game-engine.ts');
+  assert.equal(canonicalFormation('3-4-2-1'), '4-2-3-1');
+  assert.equal(canonicalFormation('3-4-3'), '4-3-3');
+  assert.equal(canonicalFormation('4-4-2'), '4-1-4-1');
+  const simeone = COACHES.find((c) => c.name === 'Diego Simeone')!;
+  const mMatched: Manager = {
+    id: 0,
+    name: 'A',
+    budget: 50,
+    spent: 100,
+    squad: {},
+    formation: '4-1-4-1',
+    coach: simeone,
+  };
+  const mUnmatched: Manager = {
+    id: 0,
+    name: 'A',
+    budget: 50,
+    spent: 100,
+    squad: {},
+    formation: '4-3-3',
+    coach: simeone,
+  };
+  assert.ok(coachImpact(mMatched, 90, 85, 85).coachFit > coachImpact(mUnmatched, 90, 85, 85).coachFit);
 });

@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   manifest: '/site.webmanifest',
 };
 
-export const viewport = { themeColor: '#090c0a', colorScheme: 'dark' };
+export const viewport = { themeColor: '#0c0a07', colorScheme: 'dark' };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
@@ -41,6 +41,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         <footer className="site-contact">
           <span>Mezat 11 · Futbol Açık Artırma Oyunu</span>
+          <nav aria-label="Yasal ve veri bağlantıları">
+            <a href="/gizlilik">Gizlilik</a>
+            <a href="/kullanim-kosullari">Kullanım koşulları</a>
+            <a href="/veri-ve-haklar">Veri ve haklar</a>
+          </nav>
           <span>
             İletişim, şikâyet ve kaldırma talepleri: <a href="mailto:info@mezat11.com">info@mezat11.com</a>
           </span>

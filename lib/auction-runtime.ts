@@ -37,6 +37,7 @@ import {
 import { COACHES } from './coaches.ts';
 import { matchesCustomPool } from './club-leagues.ts';
 import { applyMediaPolicy } from './media-rights.ts';
+import { type AgeBand } from './age-policy.ts';
 import generated from '../app/data/auction-pool.generated.json' with { type: 'json' };
 import datasetManifest from '../data/transfermarkt/dataset-manifest.json' with { type: 'json' };
 import { RoomError, type RoomSettings, type RoomState } from './room-types.ts';
@@ -111,21 +112,30 @@ export function standardEligibility(state: RoomState) {
     rulesFingerprint: evaluation.fingerprint,
   };
 }
-export function publicStateView(state: RoomState) {
+export function publicStateView(state: RoomState, viewerAgeBand: AgeBand = 'adult') {
   const view = structuredClone(state),
     sourceGame = state.game;
+  if (viewerAgeBand !== 'adult') delete view.chat;
   if (!view.game || !sourceGame) return view;
   const current = sourceGame.pool[sourceGame.index],
     key = current ? auctionGroupKey(current) : '',
     groupOrdinal = current
       ? sourceGame.pool.slice(0, sourceGame.index + 1).filter((lot) => auctionGroupKey(lot) === key).length
-      : 0;
+      : 0,
+    currentIsBonus = Boolean(
+      current && isBonusPlayerLot(sourceGame.pool, sourceGame.index, sourceGame.managers.length),
+    ),
+    nextDiffLot =
+      current && currentIsBonus
+        ? sourceGame.pool.slice(sourceGame.index + 1).find((lot) => auctionGroupKey(lot) !== key)
+        : undefined;
   view.game.publicMeta = {
-    currentIsBonus: Boolean(current && isBonusPlayerLot(sourceGame.pool, sourceGame.index, sourceGame.managers.length)),
+    currentIsBonus,
     currentPassIsSafe: Boolean(current && auctionPassIsSafe(sourceGame.pool, sourceGame.index, sourceGame.managers)),
     groupOrdinal,
     totalLots: sourceGame.pool.length,
     canUndo: Boolean(sourceGame.undo),
+    ...(nextDiffLot ? { nextGroupLabel: nextDiffLot.role } : {}),
   };
   view.game.undo = undefined;
   view.game.undoStatus = undefined;
@@ -336,11 +346,18 @@ function completeGroup(state: RoomState, lot: AuctionLot) {
 export function completeCurrentGroupIfLeaving(state: RoomState) {
   const g = state.game;
   if (!g) return;
+  if (state.settings.secondChance && g.stage === 'primary') return;
   const current = g.pool[g.index];
   let next = g.index + 1;
   while (next < g.pool.length && g.managers.every((manager) => lotFilled(manager, g.pool[next]))) next++;
   if (next >= g.pool.length || auctionGroupKey(g.pool[next]) !== auctionGroupKey(current))
     completeGroup(state, current);
+}
+export function recordUnsoldLot(state: RoomState, lot: AuctionLot) {
+  const g = state.game;
+  if (!g || !state.settings.secondChance || g.stage !== 'primary' || isCoach(lot)) return;
+  const existing = g.unsold || [];
+  if (!existing.some((item) => item.id === lot.id)) g.unsold = [...existing, lot];
 }
 function completePlayers(state: RoomState) {
   for (const item of slots) completeSlot(state, item.key);
@@ -385,9 +402,13 @@ export function captureUndo(state: RoomState) {
   g.pool.forEach((lot, index) => {
     if (typeof lot.paidPrice === 'number') poolPaidPrices[index] = lot.paidPrice;
   });
+  const { pool: _pool, undo: _undo, undoStatus: _undoStatus, ...gameWithoutPoolAndUndo } = g;
+  void _pool;
+  void _undo;
+  void _undoStatus;
   const envelope: UndoEnvelope = {
     version: 2,
-    game: { ...g, pool: undefined, undo: undefined, undoStatus: undefined },
+    game: gameWithoutPoolAndUndo,
     poolIds: g.pool.map((lot) => lot.id),
     poolPaidPrices,
     status: state.status,
@@ -411,10 +432,15 @@ export function restoreUndo(state: RoomState): boolean {
       const byId = new Map(currentPool.map((lot) => [lot.id, lot]));
       restoredPool = parsed.poolIds
         .map((id, index) => {
+          const hadExact = byId.has(id);
           const base = byId.get(id) ?? byId.get(id.replace(/-r2$/, ''));
           if (!base) return undefined;
           const paidPrice = parsed.poolPaidPrices?.[index];
-          const copy: AuctionLot = { ...base };
+          const copy: AuctionLot = {
+            ...base,
+            id,
+            ...(!hadExact && id.endsWith('-r2') ? { price: Math.max(5, Math.floor((base.price * 0.7) / 5) * 5) } : {}),
+          };
           if (typeof paidPrice === 'number') copy.paidPrice = paidPrice;
           else delete copy.paidPrice;
           return copy;
@@ -457,11 +483,14 @@ export function advanceLot(state: RoomState) {
   }
   next = g.index + 1;
   while (next < g.pool.length && g.managers.every((m) => lotFilled(m, g.pool[next]))) next++;
-  const missed = [...g.pool.slice(g.index + 1, next)]
-    .reverse()
-    .find(
-      (lot): lot is Footballer => !isCoach(lot) && isBonusPlayerLot(g.pool, g.pool.indexOf(lot), g.managers.length),
-    );
+  let missed: Footballer | undefined;
+  for (let idx = next - 1; idx > g.index; idx--) {
+    const candidate = g.pool[idx];
+    if (candidate && !isCoach(candidate) && isBonusPlayerLot(g.pool, idx, g.managers.length)) {
+      missed = candidate;
+      break;
+    }
+  }
   g.bonusReveal = missed
     ? { name: missed.name, rating: missed.rating, role: missed.role, image: missed.image }
     : undefined;
@@ -542,7 +571,6 @@ export function awardCurrentLot(state: RoomState, managerIndex: number, amount: 
     at: Date.now(),
   };
   record(state, `${lot.name}, ${winner.name} takımına $${amount}M karşılığında katıldı.`);
-  completeCurrentGroupIfLeaving(state);
   advanceLot(state);
 }
 export function settleExpired(state: RoomState) {
@@ -562,8 +590,8 @@ export function settleExpired(state: RoomState) {
   if (g.leader === null) {
     g.autoAssignments = undefined;
     const lot = g.pool[g.index];
+    recordUnsoldLot(state, lot);
     record(state, `${lot.name} için süre doldu ve teklif gelmedi.`);
-    completeCurrentGroupIfLeaving(state);
     advanceLot(state);
   } else {
     record(state, 'Süre doldu; en yüksek teklif otomatik olarak kabul edildi.');
@@ -576,18 +604,23 @@ export function settleBot(state: RoomState) {
     now = Date.now();
   if (state.status !== 'auction' || !g || auctionMode(state) !== 'live' || g.paused || g.activeTurn === null)
     return false;
-  if (g.nextBotAt === undefined) {
-    g.nextBotAt = now + 650;
-    return true;
+  if (!g.managers.some((manager) => manager.isBot)) {
+    g.nextBotAt = undefined;
+    return false;
   }
-  if (g.nextBotAt > now) return false;
   const lot = g.pool[g.index],
     increment = state.settings.bidIncrement || 5,
     offer = g.leader === null ? auctionOpeningPrice(lot, g.managers) : g.bid + increment,
     group = auctionGroupKey(lot),
     remainingLotsInGroup = g.pool.slice(g.index).filter((candidate) => auctionGroupKey(candidate) === group).length,
     managersMissingGroup = g.managers.filter((manager) => !lotFilled(manager, lot)).length,
-    context = { lotIndex: g.index, totalLots: g.pool.length, remainingLotsInGroup, managersMissingGroup };
+    context = {
+      lotIndex: g.index,
+      totalLots: g.pool.length,
+      remainingLotsInGroup,
+      managersMissingGroup,
+      bidIncrement: increment,
+    };
   const options = g.managers
     .map((manager, index) => {
       const rivalLimits = g.managers
@@ -598,7 +631,7 @@ export function settleBot(state: RoomState) {
         manager,
         index,
         max: manager.isBot
-          ? botMaximumBid(manager, lot, `${state.code}-${g.index}-${g.bid}`, state.settings.revealRatings, {
+          ? botMaximumBid(manager, lot, `${state.code}-${g.index}`, state.settings.revealRatings, {
               ...context,
               maxRivalLimit,
             })
@@ -615,17 +648,18 @@ export function settleBot(state: RoomState) {
     g.nextBotAt = undefined;
     return false;
   }
-  captureUndo(state);
+  if (g.nextBotAt === undefined) {
+    g.nextBotAt = now + 650;
+    return true;
+  }
+  if (g.nextBotAt > now) return false;
+  if (!g.undo) captureUndo(state);
   g.bid = offer;
   g.leader = choice.index;
   g.activeTurn = choice.index;
   g.deadline = deadlineFor(state);
   const difficulty =
-    choice.manager.botStyle === 'aggressive'
-      ? 'expert'
-      : choice.manager.botStyle === 'value'
-        ? 'beginner'
-        : 'average';
+    choice.manager.botStyle === 'aggressive' ? 'expert' : choice.manager.botStyle === 'value' ? 'beginner' : 'average';
   g.nextBotAt = now + botThinkDelayMs(`${state.code}-${g.index}-${offer}`, difficulty);
   record(state, `${choice.manager.name} (AI), $${offer}M teklif verdi.`);
   return true;
@@ -663,7 +697,7 @@ export function autoCompleteAuction(state: RoomState) {
         .sort((a, b) => b.valuation - a.valuation || b.manager.budget - a.manager.budget || a.index - b.index);
     if (!candidates.length) {
       g.autoAssignments = undefined;
-      completeCurrentGroupIfLeaving(state);
+      recordUnsoldLot(state, lot);
       advanceLot(state);
       continue;
     }
@@ -760,55 +794,4 @@ export async function restartAuction(state: RoomState, roomCode: string) {
   openAuction(state, pool, 'Açık artırma oda sahibi onayıyla en baştan yeniden başlatıldı.');
 }
 
-export type RecentSale = { key: string; playerName: string; managerName: string; amount?: number };
-
-const saleLine = /^(.+?), (.+) takımına \$(\d+)M karşılığında katıldı\.$/;
-
-function paidAmountsFromFeed(feed: string[] = []) {
-  const amounts = new Map<string, number>();
-  for (const line of feed) {
-    const match = saleLine.exec(line);
-    if (!match) continue;
-    const key = `${match[1]}|${match[2]}`;
-    if (!amounts.has(key)) amounts.set(key, Number(match[3]));
-  }
-  return amounts;
-}
-
-type LedgerGame = Pick<NonNullable<RoomState['game']>, 'managers' | 'pool' | 'index' | 'feed' | 'publicMeta'>;
-
-function lotOwners(game: LedgerGame) {
-  const owners = new Map<string, { managerName: string; paidPrice?: number }>();
-  for (const manager of game.managers) {
-    const lots = [
-      ...Object.values(manager.squad || {}),
-      ...Object.values(manager.bench || {}),
-      ...(manager.coach ? [manager.coach] : []),
-    ].filter((lot): lot is AuctionLot => Boolean(lot));
-    for (const lot of lots) owners.set(lot.id, { managerName: manager.name, paidPrice: lot.paidPrice });
-  }
-  return owners;
-}
-
-export function lotOwnerName(game: LedgerGame, lotId: string) {
-  return lotOwners(game).get(lotId)?.managerName;
-}
-
-export function recentSales(game: LedgerGame, limit = 6): RecentSale[] {
-  const amounts = paidAmountsFromFeed(game.feed),
-    owners = lotOwners(game),
-    sales: RecentSale[] = [];
-  for (let index = Math.min(game.index, game.pool.length) - 1; index >= 0 && sales.length < limit; index -= 1) {
-    const lot = game.pool[index],
-      owned = owners.get(lot.id);
-    if (!owned) continue;
-    const amount = owned.paidPrice ?? lot.paidPrice ?? amounts.get(`${lot.name}|${owned.managerName}`);
-    sales.push({ key: lot.id, playerName: lot.name, managerName: owned.managerName, amount });
-  }
-  return sales;
-}
-
-export function remainingLotCount(game: LedgerGame) {
-  const total = game.publicMeta?.totalLots ?? game.pool.length;
-  return Math.max(0, total - game.index - 1);
-}
+export { lotOwnerName, recentSales, remainingLotCount, type RecentSale } from './auction-ledger.ts';

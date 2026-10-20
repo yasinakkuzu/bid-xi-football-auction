@@ -6,7 +6,7 @@
  * state, while upcoming lots are redacted server-side (`hidden-N` / "Gizli lot").
  */
 
-import { lotOwnerName, recentSales, remainingLotCount, type RecentSale } from '../../lib/auction-runtime';
+import { lotOwnerName, recentSales, remainingLotCount, type RecentSale } from '../../lib/auction-ledger';
 import { money, type Game } from './view-types';
 
 export { lotOwnerName, recentSales, remainingLotCount, type RecentSale };
@@ -20,7 +20,7 @@ export function LotLedger({ game }: { game: Game }) {
       <div className="mz-ledger__block">
         <p className="eyebrow">SON SATILANLAR</p>
         {sales.length ? (
-          <ul className="mz-ledger__sales">
+          <ul className="mz-ledger__sales" role="list">
             {sales.map((sale) => (
               <li key={sale.key}>
                 <b>{sale.playerName}</b>
@@ -36,7 +36,7 @@ export function LotLedger({ game }: { game: Game }) {
       </div>
       <div className="mz-ledger__block mz-ledger__block--upcoming">
         <p className="eyebrow">SIRADAKİ</p>
-        <ul className="mz-ledger__upcoming">
+        <ul className="mz-ledger__upcoming" role="list">
           {Array.from({ length: preview }, (_, index) => (
             <li className="mz-lot-pill" key={`upcoming-${index}`}>
               Gizli lot

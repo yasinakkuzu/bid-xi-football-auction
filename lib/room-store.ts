@@ -5,11 +5,21 @@ import { RoomError, type RoomState } from './room-types.ts';
 type DBEnv = { DB: D1Database };
 export const db = () => (env as unknown as DBEnv).DB;
 let ready = false;
+let ensurePromise: Promise<void> | null = null;
 let lastMaintenance = 0;
 export async function ensure() {
   if (ready) return;
-  for (const sql of ROOM_SCHEMA) await db().prepare(sql).run();
-  ready = true;
+  if (!ensurePromise) {
+    ensurePromise = (async () => {
+      try {
+        await db().batch(ROOM_SCHEMA.map((sql) => db().prepare(sql)));
+        ready = true;
+      } finally {
+        ensurePromise = null;
+      }
+    })();
+  }
+  await ensurePromise;
 }
 export async function digest(v: string) {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v));
@@ -24,28 +34,33 @@ export function code() {
 export async function cleanup() {
   await ensure();
   const now = Date.now();
-  await db()
-    .prepare('DELETE FROM room_members WHERE room_code IN (SELECT code FROM rooms WHERE expires_at < ?)')
-    .bind(now)
-    .run();
-  await db().prepare('DELETE FROM rooms WHERE expires_at < ?').bind(now).run();
-  await db()
-    .prepare('DELETE FROM room_actions WHERE created_at < ?')
-    .bind(now - 7 * 86400000)
-    .run();
-  await db()
-    .prepare('DELETE FROM request_limits WHERE window_start < ?')
-    .bind(now - 10 * 60000)
-    .run();
+  await db().batch([
+    db().prepare('DELETE FROM room_members WHERE room_code IN (SELECT code FROM rooms WHERE expires_at < ?)').bind(now),
+    db().prepare('DELETE FROM rooms WHERE expires_at < ?').bind(now),
+    db()
+      .prepare('DELETE FROM room_actions WHERE created_at < ?')
+      .bind(now - 7 * 86400000),
+    db()
+      .prepare('DELETE FROM request_limits WHERE window_start < ?')
+      .bind(now - 10 * 60000),
+    db()
+      .prepare('DELETE FROM leaderboard_deletions WHERE deleted_at < ?')
+      .bind(now - 8 * 86400000),
+  ]);
   lastMaintenance = now;
 }
 const pollWindowCache = new Map<string, { windowStart: number; count: number }>();
 
-export function checkMemoryRateLimit(key: string, max = 40, windowMs = 60000, now = Date.now()): number {
+export function checkMemoryRateLimit(key: string, windowMs = 60000, now = Date.now()): number {
   const start = now - windowMs;
   if (pollWindowCache.size > 5000) {
     for (const [k, v] of pollWindowCache) {
       if (v.windowStart < start) pollWindowCache.delete(k);
+    }
+    while (pollWindowCache.size >= 5000) {
+      const oldestKey = pollWindowCache.keys().next().value;
+      if (oldestKey === undefined) break;
+      pollWindowCache.delete(oldestKey);
     }
   }
   const existing = pollWindowCache.get(key);
@@ -59,7 +74,7 @@ export function checkMemoryRateLimit(key: string, max = 40, windowMs = 60000, no
 
 export async function rateLimit(key: string, max = 40, windowMs = 60000) {
   if (key.startsWith('poll:')) {
-    if (checkMemoryRateLimit(key, max, windowMs) > max)
+    if (checkMemoryRateLimit(key, windowMs) > max)
       throw new RoomError('RATE_LIMITED', 'Çok fazla istek gönderildi. Lütfen kısa süre sonra tekrar deneyin.', 429);
     return;
   }
@@ -67,15 +82,7 @@ export async function rateLimit(key: string, max = 40, windowMs = 60000) {
   const now = Date.now(),
     start = now - windowMs;
   if (now - lastMaintenance > 5 * 60000) {
-    await db()
-      .prepare('DELETE FROM request_limits WHERE window_start < ?')
-      .bind(now - 10 * 60000)
-      .run();
-    await db()
-      .prepare('DELETE FROM room_actions WHERE created_at < ?')
-      .bind(now - 7 * 86400000)
-      .run();
-    lastMaintenance = now;
+    await cleanup();
   }
   const row = await db()
     .prepare(

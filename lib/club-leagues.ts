@@ -12,14 +12,19 @@ const LEAGUE_NAMES: Record<string, string> = {
   PO1: 'Portekiz Ligi',
   NL1: 'Hollanda Eredivisie',
   MLS1: 'ABD MLS',
+  BR1: 'Brezilya Série A',
   BRA1: 'Brezilya Série A',
+  AR1: 'Arjantin Primera División',
   ARG1: 'Arjantin Primera División',
   SA1: 'Suudi Arabistan Pro Ligi',
+  JP1: 'Japonya J1 Ligi',
   JAP1: 'Japonya J1 Ligi',
+  MX1: 'Meksika Liga MX',
   MEX1: 'Meksika Liga MX',
   TS1: 'Türkiye 1. Lig',
   PL1: 'Polonya Ekstraklasa',
   RO1: 'Romanya SuperLiga',
+  RS1: 'Sırbistan SuperLiga',
   SER1: 'Sırbistan SuperLiga',
 };
 
@@ -138,8 +143,10 @@ const fold = (value: string) =>
     .toLocaleLowerCase('tr')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
-export const leagueForClub = (club: string) =>
-  Object.entries(LEAGUE_CLUBS).find(([, clubs]) => clubs.includes(club))?.[0];
+export const leagueForClub = (club: string) => {
+  const foldedClub = fold(club);
+  return Object.entries(LEAGUE_CLUBS).find(([, clubs]) => clubs.some((item) => fold(item) === foldedClub))?.[0];
+};
 export function customPoolOptions(sources: ClubPoolSource[], query: string): CustomPoolSelection[] {
   const q = fold(query.trim());
   if (q.length < 2) return [];
@@ -183,9 +190,13 @@ export function customPoolOptions(sources: ClubPoolSource[], query: string): Cus
   return [...clubMatches, ...leagueMatches].slice(0, 12);
 }
 export function matchesCustomPool(club: string, selections: CustomPoolSelection[], leagueCode?: string) {
+  const foldedClub = fold(club);
   return selections.some((item) =>
     item.type === 'club'
-      ? item.name === club
-      : Boolean((item.code && leagueCode === item.code) || LEAGUE_CLUBS[item.name]?.includes(club)),
+      ? fold(item.name) === foldedClub
+      : Boolean(
+          (item.code && leagueCode === item.code) ||
+          LEAGUE_CLUBS[item.name]?.some((candidate) => fold(candidate) === foldedClub),
+        ),
   );
 }

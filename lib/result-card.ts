@@ -38,15 +38,15 @@ export async function shareResultCard(ranked: ScoreBreakdown[]) {
 
   ctx.fillStyle = '#ffb45c';
   ctx.font = '900 28px system-ui';
-  ctx.letterSpacing = '6px';
+  if ('letterSpacing' in ctx) ctx.letterSpacing = '6px';
   ctx.fillText('MEZAT TAMAMLANDI', 70, 90);
-  ctx.letterSpacing = '0px';
+  if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
   ctx.fillStyle = '#f7efe2';
   ctx.font = '950 76px system-ui';
   ctx.fillText('Gecenin şampiyonu', 70, 185);
   ctx.fillStyle = '#ffb45c';
   ctx.font = '950 92px system-ui';
-  ctx.fillText(winner.name.slice(0, 20), 70, 290);
+  ctx.fillText(winner.name.slice(0, 20), 70, 290, 940);
   ctx.fillStyle = '#f7efe2';
   ctx.font = '900 46px system-ui';
   ctx.fillText(`${winner.score.toFixed(2)} TAKIM PUANI`, 72, 365);
@@ -105,7 +105,10 @@ export async function shareResultCard(ranked: ScoreBreakdown[]) {
     const player = winner.squad[slot],
       point = formation[slot],
       x = pitch.x + (Number.parseFloat(point.left) / 100) * pitch.w,
-      y = pitch.y + (Number.parseFloat(point.top) / 100) * pitch.h;
+      y = pitch.y + (Number.parseFloat(point.top) / 100) * pitch.h,
+      rawName = player?.name || slot,
+      parts = rawName.trim().split(/\s+/),
+      displayName = rawName.length > 14 && parts.length > 1 ? `${parts[0][0]}. ${parts.slice(1).join(' ')}` : rawName;
     ctx.fillStyle = '#ffb45c';
     ctx.beginPath();
     ctx.arc(x, y, 29, 0, Math.PI * 2);
@@ -115,8 +118,8 @@ export async function shareResultCard(ranked: ScoreBreakdown[]) {
     ctx.textAlign = 'center';
     ctx.fillText(player ? player.rating.toFixed(0) : slot, x, y + 6);
     ctx.fillStyle = '#f7efe2';
-    ctx.font = '800 18px system-ui';
-    ctx.fillText((player?.name || slot).slice(0, 16), x, y + 53);
+    ctx.font = '800 17px system-ui';
+    ctx.fillText(displayName.slice(0, 16), x, y + 53, 152);
     ctx.fillStyle = '#ffb45c';
     ctx.font = '800 14px system-ui';
     ctx.fillText(slot, x, y + 72);

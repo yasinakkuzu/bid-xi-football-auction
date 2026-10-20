@@ -82,6 +82,7 @@ export type RoomState = {
       groupOrdinal: number;
       totalLots: number;
       canUndo: boolean;
+      nextGroupLabel?: string;
     };
     bonusReveal?: { name: string; rating: number; role: string; image?: string };
     lastSold?: {

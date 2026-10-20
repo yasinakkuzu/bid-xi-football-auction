@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { rankManagers, resultInsights, simulateTournament, type Manager } from '../../lib/game-engine';
+import { buildMatchCommentary, computeNightAwards, computePartialTournamentTable } from '../../lib/player-card-flair';
 import { shareResultCard } from '../../lib/result-card';
 import { money, type Room } from './view-types';
 
@@ -17,11 +18,37 @@ export function OnlineResults({
   season?: Room['season'];
 }) {
   const [shareError, setShareError] = useState('');
-  const { ranked, insights } = useMemo(() => {
+  const { ranked, insights, awards } = useMemo(() => {
     const ordered = rankManagers(managers);
-    return { ranked: ordered, insights: resultInsights(ordered) };
+    return {
+      ranked: ordered,
+      insights: resultInsights(ordered),
+      awards: computeNightAwards(ordered),
+    };
   }, [managers]);
   const tournament = useMemo(() => simulateTournament(managers, 'online-results'), [managers]);
+  const [simStep, setSimStep] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (simStep === null) return;
+    if (simStep >= tournament.matches.length) return;
+    const timer = setTimeout(() => {
+      setSimStep((prev) => (prev === null ? null : Math.min(tournament.matches.length, prev + 1)));
+    }, 1100);
+    return () => clearTimeout(timer);
+  }, [simStep, tournament.matches.length]);
+
+  const activeTable = useMemo(() => {
+    if (simStep === null || simStep >= tournament.matches.length) return tournament.table;
+    return computePartialTournamentTable(managers, tournament.matches, simStep);
+  }, [managers, simStep, tournament]);
+
+  const activeCommentary = useMemo(() => {
+    if (simStep === null || simStep === 0) return null;
+    const idx = Math.min(simStep, tournament.matches.length) - 1;
+    const match = tournament.matches[idx];
+    return match ? buildMatchCommentary(match, managers, idx + 1) : null;
+  }, [managers, simStep, tournament.matches]);
 
   async function shareCard() {
     setShareError('');
@@ -67,22 +94,54 @@ export function OnlineResults({
             </p>
             <p className="result-impact">
               <b>İlk 11 etkisi {manager.starterImpact}</b>
-              <span>Yedek etkisi +${manager.benchDepth}</span>
-              <span>Teknik direktör etkisi +${manager.coachBoost}</span>
+              <span>Yedek etkisi +{manager.benchDepth}</span>
+              <span>Teknik direktör etkisi +{manager.coachBoost}</span>
             </p>
           </article>
         ))}
       </div>
+      {awards.length > 0 && (
+        <section className="mz-awards-section" aria-label="Gecenin özel ödülleri">
+          <p className="eyebrow">GECENİN ÖZEL ÖDÜLLERİ</p>
+          <div className="mz-awards-grid">
+            {awards.map((award) => (
+              <div key={award.id} className="mz-award-card">
+                <span className="mz-award-icon" aria-hidden="true">
+                  {award.icon}
+                </span>
+                <div>
+                  <small>{award.title}</small>
+                  <b>{award.winnerName}</b>
+                  <strong>{award.stat}</strong>
+                  <p>{award.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       {tournament.table.length > 2 && (
         <section className="tournament">
-          <p className="eyebrow">MUHTEMEL MİNİ LİG</p>
+          <div className="mz-tournament-head">
+            <p className="eyebrow">MUHTEMEL MİNİ LİG</p>
+            <button type="button" className="mz-sim-btn" onClick={() => setSimStep(0)}>
+              {simStep !== null && simStep < tournament.matches.length
+                ? `⚽ Oynanıyor (${simStep}/${tournament.matches.length})`
+                : '⚽ Mini Ligi Canlı Oynat'}
+            </button>
+          </div>
+          {activeCommentary && (
+            <div className="mz-match-ticker" role="status" aria-live="polite">
+              {activeCommentary}
+            </div>
+          )}
           <div className="tournament-table">
             <b>#</b>
             <b>Takım</b>
             <b>O</b>
             <b>AV</b>
             <b>P</b>
-            {tournament.table.map((row, index) => (
+            {activeTable.map((row, index) => (
               <span key={row.managerId} className="tournament-row">
                 <i>{index + 1}</i>
                 <strong>{row.name}</strong>

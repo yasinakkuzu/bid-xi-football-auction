@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { awardCurrentLot, startAuction } from '../lib/auction-runtime.ts';
 import { canPlaceLotBid, auctionOpeningPrice } from '../lib/game-engine.ts';
-import { nextRoomAlarm, RoomCoordinator, tickRoomAlarm, viewerSnapshot } from '../lib/room-actor.ts';
+import { nextRoomAlarm, RoomCoordinator, tickRoomAlarm, viewerSnapshot, withRoomLock } from '../lib/room-actor.ts';
 import { defaultSettings, normalizedSettings, type RoomMember, type RoomState } from '../lib/room-types.ts';
 
 function sampleRoom(botIndexes: number[] = [1]): RoomState {
@@ -143,4 +143,19 @@ test('RoomCoordinator serialises concurrent mutations, schedules alarms and broa
 
   coordinator.disconnect(pendingSocket);
   assert.equal(coordinator.subscriberCount, 1);
+});
+
+test('withRoomLock serialises concurrent operations for the same room code', async () => {
+  const order: number[] = [];
+  await Promise.all([
+    withRoomLock('LOCK01', async () => {
+      order.push(1);
+      await new Promise((r) => setTimeout(r, 15));
+      order.push(2);
+    }),
+    withRoomLock('LOCK01', async () => {
+      order.push(3);
+    }),
+  ]);
+  assert.deepEqual(order, [1, 2, 3]);
 });

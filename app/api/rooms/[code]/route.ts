@@ -15,9 +15,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
     const { code } = await params,
       roomCode = code.toUpperCase(),
       token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') || '',
-      ip = request.headers.get('cf-connecting-ip') || 'unknown';
+      ip = request.headers.get('cf-connecting-ip') || 'unknown',
+      sinceParam = new URL(request.url).searchParams.get('sinceRevision'),
+      sinceRevision = sinceParam !== null ? Number(sinceParam) : undefined;
     await rateLimit(`poll:${roomCode}:${(await digest(ip)).slice(0, 16)}`, POLLS_PER_MINUTE_PER_ROOM_IP);
-    return NextResponse.json(await publicRoom(roomCode, token), { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json(await publicRoom(roomCode, token, sinceRevision), {
+      headers: { 'Cache-Control': 'no-store' },
+    });
   } catch (error) {
     const known = error instanceof RoomError;
     const headers = known && error.status === 429 ? { 'Retry-After': '30' } : undefined;

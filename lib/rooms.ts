@@ -4,12 +4,10 @@ import {
   autoCompleteAuction,
   awardCurrentLot,
   captureUndo,
-  completeCurrentGroupIfLeaving,
   deadlineFor,
-  estimateAuctionDuration,
-  pendingStateView,
   publicStateView,
   record,
+  recordUnsoldLot,
   rematchAuction,
   restartAuction,
   restoreUndo,
@@ -17,20 +15,14 @@ import {
   settleExpired,
   startAuction,
 } from './auction-runtime.ts';
-import {
-  FORMATIONS,
-  auctionOpeningPrice,
-  canPlaceLotBid,
-  isCoach,
-  type BotStyle,
-  type Formation,
-} from './game-engine.ts';
+import { FORMATIONS, auctionOpeningPrice, canPlaceLotBid, type BotStyle, type Formation } from './game-engine.ts';
 import {
   persistLeaderboard,
   pruneLeaderboardIfDue,
   removeMemberLeaderboard,
   removeRoundLeaderboard,
 } from './leaderboard.ts';
+import { tickRoomAlarm, viewerSnapshot, withRoomLock } from './room-actor.ts';
 import {
   CHAT_HISTORY_LIMIT,
   chatModerationMessage,
@@ -140,10 +132,19 @@ export async function joinRoom(
       .bind(JSON.stringify(state), roomCode, row.revision)
       .run();
     if (!updated.meta.changes) continue;
-    await db()
-      .prepare('INSERT INTO room_members VALUES (?,?,?,?,?,?,?)')
-      .bind(roomCode, memberId, await digest(memberToken), name, role, 0, Date.now())
-      .run();
+    try {
+      await db()
+        .prepare('INSERT INTO room_members VALUES (?,?,?,?,?,?,?)')
+        .bind(roomCode, memberId, await digest(memberToken), name, role, 0, Date.now())
+        .run();
+    } catch (error) {
+      state.members = state.members.filter((m) => m.id !== memberId);
+      await db()
+        .prepare('UPDATE rooms SET state_json=?,revision=revision+1 WHERE code=?')
+        .bind(JSON.stringify(state), roomCode)
+        .run();
+      throw error;
+    }
     return { code: roomCode, memberToken, memberId };
   }
   throw new RoomError('REVISION_CONFLICT', 'Oda aynı anda güncellendi. Tekrar deneyin.', 409);
@@ -303,13 +304,6 @@ async function actInternal(roomCode: string, plain: string, type: string, payloa
       await saveState(roomCode, state, ctx.room.revision);
       return state;
     }
-    if (settleExpired(state)) {
-      await saveState(roomCode, state, ctx.room.revision);
-      try {
-        await persistLeaderboard(state);
-      } catch {}
-      throw new RoomError('LOT_EXPIRED', 'Süre doldu; oda güncel duruma geçirildi.', 409);
-    }
     const g = state.game,
       lot = g.pool[g.index];
     if (!ctx.member || !ctx.member.approved || ctx.member.role !== 'manager')
@@ -318,131 +312,147 @@ async function actInternal(roomCode: string, plain: string, type: string, payloa
       .filter((m) => m.approved && m.role === 'manager')
       .findIndex((m) => m.id === ctx.member?.member_id);
     if (managerId < 0) throw new Error('Menajer bulunamadı');
-    if (['bid', 'pass', 'sell', 'close', 'skip', 'reopen', 'manualSell', 'manualSkip', 'pause'].includes(type))
-      captureUndo(state);
-    if (type === 'bid') {
-      if (auctionMode(state) !== 'live') throw new Error('Manuel modda teklif verilmez');
-      if (g.paused || g.activeTurn === null) throw new RoomError('LOT_EXPIRED', 'Teklif süresi sona erdi', 409);
-      if (g.leader === managerId) throw new Error('En yüksek teklif zaten sizde');
-      const requested = payload.amount === undefined ? null : Math.round(Number(payload.amount)),
-        increment = Number(payload.increment || state.settings.bidIncrement || 5),
-        opening = auctionOpeningPrice(lot, g.managers);
-      if (
-        requested !== null &&
-        (!Number.isFinite(requested) || requested < opening || (g.leader !== null && requested <= g.bid))
-      )
-        throw new Error(`Teklif en az $${g.leader === null ? opening : g.bid + 1}M olmalı`);
-      if (requested === null && g.leader !== null && ![5, 10, 25].includes(increment))
-        throw new Error('Teklif artışı geçersiz');
-      const offer = requested ?? (g.leader === null ? opening : g.bid + increment),
-        m = g.managers[managerId];
-      if (!canPlaceLotBid(m, lot, offer, managerId, g.passed))
-        throw new Error('Bütçe, kadro veya pas durumu teklife uygun değil');
-      g.bid = offer;
-      g.leader = managerId;
-      g.nextBotAt = Date.now() + 650;
-      record(state, `${m.name}, $${offer}M teklif verdi.`);
-      const nextOffer = offer + 1,
-        challenger = g.managers.some(
-          (candidate, index) => index !== managerId && canPlaceLotBid(candidate, lot, nextOffer, index, g.passed),
-        );
-      if (challenger) {
-        g.deadline = deadlineFor(state);
-        g.activeTurn = managerId;
-      } else {
-        g.deadline = null;
-        g.activeTurn = null;
-        awardCurrentLot(state, managerId, offer);
-      }
-    } else if (type === 'pass') {
-      if (auctionMode(state) !== 'live') throw new Error('Manuel modda teklif verilmez');
-      if (g.paused || g.activeTurn === null) throw new Error('Teklifler kapalı');
-      if (g.passed.includes(managerId)) throw new Error('Zaten pas geçtiniz');
-      g.passed.push(managerId);
-      g.feed = [`${g.managers[managerId].name} pas geçti.`, ...g.feed].slice(0, 8);
-      const offer = g.leader === null ? auctionOpeningPrice(lot, g.managers) : g.bid + 1;
-      const available = g.managers.some((m, i) => i !== g.leader && canPlaceLotBid(m, lot, offer, i, g.passed));
-      if (available) {
-        g.activeTurn = managerId;
-        g.deadline = deadlineFor(state);
-      } else if (g.leader === null) {
-        g.activeTurn = null;
-        g.deadline = null;
-        g.autoAssignments = undefined;
-        record(state, `${lot.name} için tüm uygun menajerler pas geçti; lot otomatik geçildi.`);
-        completeCurrentGroupIfLeaving(state);
-        advanceLot(state);
-      } else {
-        g.activeTurn = null;
-        g.deadline = null;
-        awardCurrentLot(state, g.leader, g.bid);
-      }
-    } else if (type === 'sell') {
-      requireHost();
-      if (auctionMode(state) !== 'live') throw new Error('Manuel modda oyuncu atama alanını kullanın');
-      if (g.leader === null || g.activeTurn !== null) throw new Error('Önce teklifleri kapatın');
-      awardCurrentLot(state, g.leader, g.bid);
-    } else if (type === 'close') {
-      requireHost();
-      if (auctionMode(state) !== 'live') throw new Error('Bu işlem canlı moda aittir');
-      if (g.leader === null)
-        throw new RoomError('NO_BID', 'Teklif yok. Oyuncuyu geçirmek için “Lotu geç” düğmesini kullanın.', 409);
-      g.activeTurn = null;
-      g.deadline = null;
-      record(state, 'Oda sahibi teklifleri kapattı.');
-    } else if (type === 'skip') {
-      requireHost();
-      if (auctionMode(state) !== 'live') throw new Error('Bu işlem canlı moda aittir');
-      if (g.leader !== null) throw new RoomError('HAS_BID', 'Teklif bulunan lot doğrudan geçilemez.', 409);
-      g.autoAssignments = undefined;
-      if (state.settings.secondChance && g.stage === 'primary' && !isCoach(lot)) g.unsold = [...(g.unsold || []), lot];
-      record(state, `${lot.name} kurucu onayıyla satılmadan geçildi.`);
-      completeCurrentGroupIfLeaving(state);
-      advanceLot(state);
-    } else if (type === 'reopen') {
-      requireHost();
-      if (auctionMode(state) !== 'live') throw new Error('Bu işlem canlı moda aittir');
-      if (!reopenLiveLot(g, state.settings.timerSeconds || 20))
-        throw new RoomError('NO_CHALLENGER', 'Teklifi yeniden açabilecek uygun başka menajer yok.', 409);
-      g.nextBotAt = Date.now() + 650;
-      g.feed = ['Oda sahibi teklifleri yeniden açtı; önceki paslar temizlendi.', ...g.feed].slice(0, 8);
-    } else if (type === 'formation') {
+    if (type === 'formation') {
       const formation = String(payload.formation) as Formation;
       if (!FORMATIONS.includes(formation)) throw new Error('Diziliş geçersiz');
       g.managers[managerId].formation = formation;
       record(state, `${g.managers[managerId].name}, ${formation} dizilişine geçti.`);
-    } else if (type === 'manualSell') {
-      requireHost();
-      if (auctionMode(state) !== 'manual') throw new Error('Manuel mod etkin değil');
-      const target = Number(payload.managerIndex),
-        amount = Math.round(Number(payload.amount));
-      if (!Number.isInteger(target) || !Number.isFinite(amount)) throw new Error('Menajer ve tutar gerekli');
-      awardCurrentLot(state, target, amount);
-    } else if (type === 'manualSkip') {
-      requireHost();
-      if (auctionMode(state) !== 'manual') throw new Error('Manuel mod etkin değil');
-      g.autoAssignments = undefined;
-      if (state.settings.secondChance && g.stage === 'primary' && !isCoach(lot)) g.unsold = [...(g.unsold || []), lot];
-      g.feed = [`${lot.name} satılmadı.`, ...g.feed].slice(0, 8);
-      completeCurrentGroupIfLeaving(state);
-      advanceLot(state);
-    } else if (type === 'pause') {
-      requireHost();
-      if (auctionMode(state) !== 'live') throw new Error('Manuel modda duraklatma gerekmez');
-      if (g.paused) {
-        if (g.activeTurn === null)
-          throw new RoomError('AUCTION_CLOSED', 'Kapalı teklif yeniden başlatılamaz; “Yeniden aç” kullanın.', 409);
-        g.paused = false;
-        g.deadline = Date.now() + Math.max(1000, g.pausedRemainingMs ?? (state.settings.timerSeconds || 20) * 1000);
-        g.pausedRemainingMs = undefined;
-      } else {
-        if (g.activeTurn === null || !g.deadline)
-          throw new RoomError('AUCTION_CLOSED', 'Yalnız açık bir teklif duraklatılabilir.', 409);
-        g.pausedRemainingMs = Math.max(0, g.deadline - Date.now());
-        g.paused = true;
-        g.deadline = null;
+    } else {
+      if (settleExpired(state)) {
+        await saveState(roomCode, state, ctx.room.revision);
+        try {
+          await persistLeaderboard(state);
+        } catch {}
+        throw new RoomError('LOT_EXPIRED', 'Süre doldu; oda güncel duruma geçirildi.', 409);
       }
-    } else throw new Error('Bilinmeyen işlem');
+      if (['bid', 'pass', 'sell', 'close', 'skip', 'reopen', 'manualSell', 'manualSkip', 'pause'].includes(type))
+        captureUndo(state);
+      if (type === 'bid') {
+        if (auctionMode(state) !== 'live') throw new Error('Manuel modda teklif verilmez');
+        if (g.paused || g.activeTurn === null) throw new RoomError('LOT_EXPIRED', 'Teklif süresi sona erdi', 409);
+        if (g.leader === managerId) throw new Error('En yüksek teklif zaten sizde');
+        const requested = payload.amount === undefined ? null : Math.round(Number(payload.amount)),
+          increment = Number(payload.increment || state.settings.bidIncrement || 5),
+          opening = auctionOpeningPrice(lot, g.managers);
+        if (
+          requested !== null &&
+          (!Number.isFinite(requested) || requested < opening || (g.leader !== null && requested <= g.bid))
+        )
+          throw new Error(`Teklif en az $${g.leader === null ? opening : g.bid + 1}M olmalı`);
+        if (requested === null && g.leader !== null && ![5, 10, 25].includes(increment))
+          throw new Error('Teklif artışı geçersiz');
+        const offer = requested ?? (g.leader === null ? opening : g.bid + increment),
+          m = g.managers[managerId];
+        if (!canPlaceLotBid(m, lot, offer, managerId, g.passed))
+          throw new Error('Bütçe, kadro veya pas durumu teklife uygun değil');
+        g.bid = offer;
+        g.leader = managerId;
+        g.nextBotAt = Date.now() + 650;
+        record(state, `${m.name}, $${offer}M teklif verdi.`);
+        const defaultInc = state.settings.bidIncrement || 5,
+          challenger = g.managers.some((candidate, index) => {
+            if (index === managerId) return false;
+            const minOffer = candidate.isBot ? offer + defaultInc : offer + 1;
+            return canPlaceLotBid(candidate, lot, minOffer, index, g.passed);
+          });
+        if (challenger) {
+          g.deadline = deadlineFor(state);
+          g.activeTurn = managerId;
+        } else {
+          g.deadline = null;
+          g.activeTurn = null;
+          awardCurrentLot(state, managerId, offer);
+        }
+      } else if (type === 'pass') {
+        if (auctionMode(state) !== 'live') throw new Error('Manuel modda teklif verilmez');
+        if (g.paused || g.activeTurn === null) throw new Error('Teklifler kapalı');
+        if (g.passed.includes(managerId)) throw new Error('Zaten pas geçtiniz');
+        g.passed.push(managerId);
+        g.feed = [`${g.managers[managerId].name} pas geçti.`, ...g.feed].slice(0, 8);
+        const defaultInc = state.settings.bidIncrement || 5,
+          opening = auctionOpeningPrice(lot, g.managers),
+          available = g.managers.some((m, i) => {
+            if (i === g.leader) return false;
+            const minOffer = g.leader === null ? opening : m.isBot ? g.bid + defaultInc : g.bid + 1;
+            return canPlaceLotBid(m, lot, minOffer, i, g.passed);
+          });
+        if (available) {
+          g.activeTurn = managerId;
+          g.deadline = deadlineFor(state);
+        } else if (g.leader === null) {
+          g.activeTurn = null;
+          g.deadline = null;
+          g.autoAssignments = undefined;
+          recordUnsoldLot(state, lot);
+          record(state, `${lot.name} için tüm uygun menajerler pas geçti; lot otomatik geçildi.`);
+          advanceLot(state);
+        } else {
+          g.activeTurn = null;
+          g.deadline = null;
+          awardCurrentLot(state, g.leader, g.bid);
+        }
+      } else if (type === 'sell') {
+        requireHost();
+        if (auctionMode(state) !== 'live') throw new Error('Manuel modda oyuncu atama alanını kullanın');
+        if (g.leader === null || g.activeTurn !== null) throw new Error('Önce teklifleri kapatın');
+        awardCurrentLot(state, g.leader, g.bid);
+      } else if (type === 'close') {
+        requireHost();
+        if (auctionMode(state) !== 'live') throw new Error('Bu işlem canlı moda aittir');
+        if (g.leader === null)
+          throw new RoomError('NO_BID', 'Teklif yok. Oyuncuyu geçirmek için “Lotu geç” düğmesini kullanın.', 409);
+        state.autoCompleted = true;
+        g.activeTurn = null;
+        g.deadline = null;
+        record(state, 'Oda sahibi teklifleri kapattı.');
+      } else if (type === 'skip') {
+        requireHost();
+        if (auctionMode(state) !== 'live') throw new Error('Bu işlem canlı moda aittir');
+        if (g.leader !== null) throw new RoomError('HAS_BID', 'Teklif bulunan lot doğrudan geçilemez.', 409);
+        g.autoAssignments = undefined;
+        recordUnsoldLot(state, lot);
+        record(state, `${lot.name} kurucu onayıyla satılmadan geçildi.`);
+        advanceLot(state);
+      } else if (type === 'reopen') {
+        requireHost();
+        if (auctionMode(state) !== 'live') throw new Error('Bu işlem canlı moda aittir');
+        if (!reopenLiveLot(g, state.settings.timerSeconds || 20, Date.now(), state.settings.bidIncrement || 5))
+          throw new RoomError('NO_CHALLENGER', 'Teklifi yeniden açabilecek uygun başka menajer yok.', 409);
+        state.autoCompleted = true;
+        g.nextBotAt = Date.now() + 650;
+        g.feed = ['Oda sahibi teklifleri yeniden açtı; önceki paslar temizlendi.', ...g.feed].slice(0, 8);
+      } else if (type === 'manualSell') {
+        requireHost();
+        if (auctionMode(state) !== 'manual') throw new Error('Manuel mod etkin değil');
+        const target = Number(payload.managerIndex),
+          amount = Math.round(Number(payload.amount));
+        if (!Number.isInteger(target) || !Number.isFinite(amount)) throw new Error('Menajer ve tutar gerekli');
+        awardCurrentLot(state, target, amount);
+      } else if (type === 'manualSkip') {
+        requireHost();
+        if (auctionMode(state) !== 'manual') throw new Error('Manuel mod etkin değil');
+        g.autoAssignments = undefined;
+        recordUnsoldLot(state, lot);
+        g.feed = [`${lot.name} satılmadı.`, ...g.feed].slice(0, 8);
+        advanceLot(state);
+      } else if (type === 'pause') {
+        requireHost();
+        if (auctionMode(state) !== 'live') throw new Error('Manuel modda duraklatma gerekmez');
+        if (g.paused) {
+          if (g.activeTurn === null)
+            throw new RoomError('AUCTION_CLOSED', 'Kapalı teklif yeniden başlatılamaz; “Yeniden aç” kullanın.', 409);
+          g.paused = false;
+          g.deadline = Date.now() + Math.max(1000, g.pausedRemainingMs ?? (state.settings.timerSeconds || 20) * 1000);
+          g.pausedRemainingMs = undefined;
+        } else {
+          if (g.activeTurn === null || !g.deadline)
+            throw new RoomError('AUCTION_CLOSED', 'Yalnız açık bir teklif duraklatılabilir.', 409);
+          g.pausedRemainingMs = Math.max(0, g.deadline - Date.now());
+          g.paused = true;
+          g.deadline = null;
+        }
+      } else throw new Error('Bilinmeyen işlem');
+    }
   }
   if (state.status === 'auction') settleBot(state);
   await saveState(roomCode, state, ctx.room.revision);
@@ -481,38 +491,71 @@ export async function act(
       if (!cached) throw new RoomError('ACTION_RETRY', 'İşlem kaydı okunamadı; tekrar deneyin.', 409);
       if (cached.result_json === done || (!cached.result_json.startsWith('__') && cached.result_json.startsWith('{'))) {
         const current = await auth(roomCode, plain);
-        return publicStateView(current.state);
+        const band = current.state.members.find((item) => item.id === current.member?.member_id)?.ageBand ?? 'unknown';
+        return publicStateView(current.state, band);
       }
       if (cached.result_json !== pending)
         throw new RoomError('REQUEST_ID_REUSED', 'Aynı işlem kimliği farklı bir işlem için kullanılamaz.', 409);
       if (Date.now() - cached.created_at > 15000) {
-        const current = await auth(roomCode, plain);
-        return publicStateView(current.state);
+        const takeover = await db()
+          .prepare(
+            'UPDATE room_actions SET created_at=? WHERE room_code=? AND actor_hash=? AND request_id=? AND result_json=? AND created_at=?',
+          )
+          .bind(Date.now(), roomCode, actorHash, safeId, pending, cached.created_at)
+          .run();
+        if (!takeover.meta.changes)
+          throw new RoomError(
+            'ACTION_IN_PROGRESS',
+            'İşlem halen uygulanıyor; oda durumu yenilendiğinde tekrar kontrol edin.',
+            409,
+          );
+      } else {
+        throw new RoomError(
+          'ACTION_IN_PROGRESS',
+          'İşlem halen uygulanıyor; oda durumu yenilendiğinde tekrar kontrol edin.',
+          409,
+        );
       }
-      throw new RoomError(
-        'ACTION_IN_PROGRESS',
-        'İşlem halen uygulanıyor; oda durumu yenilendiğinde tekrar kontrol edin.',
-        409,
-      );
     }
   }
+  const RETRYABLE_ACTIONS = new Set([
+    'bid',
+    'chat',
+    'pass',
+    'formation',
+    'leaderboardPreference',
+    'approve',
+    'addBot',
+    'removeBot',
+    'pause',
+    'close',
+    'sell',
+    'skip',
+    'reopen',
+    'manualSell',
+    'manualSkip',
+    'undo',
+  ]);
   try {
     let result: RoomState | undefined;
     for (let attempt = 0; attempt < 3; attempt++)
       try {
-        result = await actInternal(roomCode, plain, type, payload);
+        result = await withRoomLock(roomCode, () => actInternal(roomCode, plain, type, payload));
         break;
       } catch (error) {
         if (
           !(error instanceof RoomError) ||
           error.code !== 'REVISION_CONFLICT' ||
-          !['bid', 'chat', 'pass', 'formation', 'leaderboardPreference'].includes(type) ||
+          !RETRYABLE_ACTIONS.has(type) ||
           attempt === 2
         )
           throw error;
       }
     if (!result) throw new RoomError('ACTION_FAILED', 'İşlem tamamlanamadı.', 409);
-    const safe = publicStateView(result);
+    const current = await auth(roomCode, plain);
+    const viewerBand =
+      current.state.members.find((item) => item.id === current.member?.member_id)?.ageBand ?? 'unknown';
+    const safe = publicStateView(result, viewerBand);
     if (safeId)
       await db()
         .prepare(
@@ -530,24 +573,19 @@ export async function act(
     throw error;
   }
 }
-export async function publicRoom(roomCode: string, plain: string) {
+export async function publicRoom(roomCode: string, plain: string, sinceRevision?: number) {
   let ctx = await auth(roomCode, plain);
   if (!ctx.isHost && ctx.member && !ctx.member.approved)
-    return {
-      state: pendingStateView(ctx.state),
-      revision: ctx.room.revision,
+    return viewerSnapshot(ctx.state, ctx.room.revision, {
       isHost: false,
       memberId: ctx.member.member_id,
-      viewerAgeBand: ctx.state.members.find((item) => item.id === ctx.member?.member_id)?.ageBand ?? 'unknown',
-      serverTime: Date.now(),
-      estimatedDuration: estimateAuctionDuration(
-        ctx.state.settings,
-        ctx.state.members.filter((member) => member.approved && member.role === 'manager').length,
-      ),
-    };
-  if (settleExpired(ctx.state) || settleBot(ctx.state)) {
+      approved: false,
+    });
+  if (tickRoomAlarm(ctx.state).changed) {
     try {
-      await saveState(roomCode, ctx.state, ctx.room.revision);
+      await withRoomLock(roomCode, async () => {
+        await saveState(roomCode, ctx.state, ctx.room.revision);
+      });
       ctx.room.revision++;
       try {
         await persistLeaderboard(ctx.state);
@@ -556,18 +594,27 @@ export async function publicRoom(roomCode: string, plain: string) {
       ctx = await auth(roomCode, plain);
     }
   }
-  return {
-    state: publicStateView(ctx.state),
-    revision: ctx.room.revision,
+  if (
+    typeof sinceRevision === 'number' &&
+    Number.isFinite(sinceRevision) &&
+    sinceRevision > 0 &&
+    ctx.room.revision === sinceRevision
+  ) {
+    const latestAgeBand = ctx.state.members.find((item) => item.id === ctx.member?.member_id)?.ageBand ?? 'unknown';
+    return {
+      unchanged: true,
+      revision: ctx.room.revision,
+      isHost: ctx.isHost,
+      memberId: ctx.member?.member_id || null,
+      viewerAgeBand: latestAgeBand,
+      serverTime: Date.now(),
+    };
+  }
+  return viewerSnapshot(ctx.state, ctx.room.revision, {
     isHost: ctx.isHost,
     memberId: ctx.member?.member_id || null,
-    viewerAgeBand: ctx.state.members.find((item) => item.id === ctx.member?.member_id)?.ageBand ?? 'unknown',
-    serverTime: Date.now(),
-    estimatedDuration: estimateAuctionDuration(
-      ctx.state.settings,
-      ctx.state.members.filter((member) => member.approved && member.role === 'manager').length,
-    ),
-  };
+    approved: Boolean(ctx.isHost || ctx.member?.approved),
+  });
 }
 
 export { RoomError, defaultSettings } from './room-types.ts';

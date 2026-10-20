@@ -102,7 +102,7 @@ export function viewerSnapshot(
   }
 
   return {
-    state: publicStateView(state),
+    state: publicStateView(state, viewerAgeBand),
     revision,
     isHost: viewer.isHost,
     memberId: viewer.memberId,
@@ -110,6 +110,27 @@ export function viewerSnapshot(
     serverTime: now,
     estimatedDuration,
   };
+}
+
+const isolateRoomQueues = new Map<string, Promise<unknown>>();
+
+/**
+ * Serialises async operations per room code within the current Worker isolate
+ * so concurrent requests to the same room do not collide on D1 optimistic locks.
+ */
+export function withRoomLock<T>(roomCode: string, fn: () => Promise<T> | T): Promise<T> {
+  const key = roomCode.toUpperCase();
+  const previous = isolateRoomQueues.get(key) ?? Promise.resolve();
+  const current = previous.then(() => fn());
+  const tracked = current
+    .catch(() => {})
+    .finally(() => {
+      if (isolateRoomQueues.get(key) === tracked) {
+        isolateRoomQueues.delete(key);
+      }
+    });
+  isolateRoomQueues.set(key, tracked);
+  return current;
 }
 
 export type CoordinatorHooks = {

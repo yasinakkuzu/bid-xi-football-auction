@@ -12,7 +12,9 @@ let lastLeaderboardPrune = 0;
  * room snapshot cannot recreate a deleted entry.
  * Set to 0 to keep entries indefinitely (not recommended).
  */
-export const LEADERBOARD_RETENTION_DAYS = Number(process.env.LEADERBOARD_RETENTION_DAYS ?? 365);
+const rawRetention = process.env.LEADERBOARD_RETENTION_DAYS?.trim();
+export const LEADERBOARD_RETENTION_DAYS =
+  rawRetention !== undefined && rawRetention !== '' ? Number(rawRetention) : 365;
 /** D1 allows at most 100 bound parameters per statement, so keep the batch small. */
 export const LEADERBOARD_PRUNE_BATCH = 50;
 

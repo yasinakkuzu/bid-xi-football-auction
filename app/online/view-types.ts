@@ -74,6 +74,7 @@ export type Game = {
     groupOrdinal: number;
     totalLots: number;
     canUndo: boolean;
+    nextGroupLabel?: string;
   };
 };
 

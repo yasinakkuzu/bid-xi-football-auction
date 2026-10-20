@@ -9,12 +9,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
       token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') || '',
       ip = request.headers.get('cf-connecting-ip') || 'unknown';
     await rateLimit(`action-ip:${roomCode}:${(await digest(ip)).slice(0, 16)}`, 180);
-    await rateLimit(`action:${roomCode}:${(await digest(token)).slice(0, 16)}`, 60);
     const body = (await request.json()) as { type?: string; payload?: Record<string, unknown>; requestId?: string };
     if (!token || !body.type) throw new RoomError('INVALID_ACTION', 'Eksik işlem', 400);
+    await rateLimit(`action:${roomCode}:${(await digest(token)).slice(0, 16)}`, 60);
     if (body.type === 'chat') await rateLimit(`chat:${roomCode}:${(await digest(token)).slice(0, 16)}`, 20);
     const requestId = request.headers.get('idempotency-key') || body.requestId;
-    return NextResponse.json({ state: await act(roomCode, token, body.type, body.payload, requestId || undefined) });
+    return NextResponse.json({
+      state: await act(roomCode, token, body.type, body.payload, requestId || undefined),
+      serverTime: Date.now(),
+    });
   } catch (error) {
     const known = error instanceof RoomError,
       message = (error as Error).message;

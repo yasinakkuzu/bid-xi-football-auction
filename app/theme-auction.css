@@ -218,9 +218,9 @@
 }
 .mz-lot-plate small {
   color: var(--mz-dim);
-  font-size: 8.5px;
+  font-size: 9.5px;
   font-weight: 900;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.15em;
 }
 .mz-lot-plate strong {
   color: var(--mz-text);
@@ -243,7 +243,7 @@
   top: 6px;
   right: 8px;
   color: var(--mz-accent);
-  font-size: 8px;
+  font-size: 9.5px;
   font-weight: 900;
   letter-spacing: 0.1em;
 }
@@ -402,9 +402,9 @@
   position: absolute;
   bottom: 7px;
   color: var(--mz-dim);
-  font-size: 7.5px;
+  font-size: 9px;
   font-weight: 900;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 .mz-timer.is-critical .mz-timer__value {
@@ -527,9 +527,9 @@
 .mz-action-bar .custom-bid-form label {
   width: 100%;
   color: var(--mz-dim) !important;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 900;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
 }
 .mz-action-bar .custom-bid-form input {
@@ -583,9 +583,9 @@
 .mz-rail-stats small {
   display: block;
   color: var(--mz-dim);
-  font-size: 8px;
+  font-size: 9.5px;
   font-weight: 900;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
 }
 .mz-rail-stats strong {
   color: var(--mz-accent);
@@ -733,6 +733,32 @@
   }
 }
 
+@media (min-width: 1025px) {
+  .online-player.mz-lot-card {
+    min-height: 232px !important;
+    padding: 22px 26px !important;
+  }
+  .online-auction.mz-auction .mz-lot-head {
+    padding-bottom: 8px !important;
+  }
+  .online-auction.mz-auction .mz-lot-stage {
+    padding-bottom: 4px !important;
+  }
+}
+
+@media (min-width: 761px) {
+  .mz-action-bar {
+    position: sticky;
+    z-index: 30;
+    bottom: 10px;
+    box-shadow: 0 -14px 34px rgba(0, 0, 0, 0.45);
+  }
+  .presentation-mode .online-auction.mz-auction .mz-action-bar {
+    position: static;
+    box-shadow: none;
+  }
+}
+
 @media (max-width: 760px) {
   /* 6. mobil: durum çubuğu + geri sayım + artışlar + birincil CTA sabit dipte */
   .room-header.mz-header {
@@ -754,25 +780,39 @@
     width: 30px;
   }
   .room-header.mz-header .manager-identity {
-    order: 3;
     flex: 1 1 auto;
     width: auto !important;
     margin-left: 0;
     text-align: left;
   }
   .room-header.mz-header .room-share {
-    order: 2;
     margin-left: auto;
   }
   .room-header.mz-header .mz-header__tools {
-    order: 4;
     margin-left: 0;
   }
   .online-room.mz-mobile-dock {
-    padding-bottom: calc(202px + env(safe-area-inset-bottom)) !important;
+    padding-bottom: calc(122px + env(safe-area-inset-bottom)) !important;
   }
   .mz-mobile-dock .mz-action-bar {
     padding: 10px 12px !important;
+  }
+  .mz-mobile-dock .mz-action-bar .bid-summary {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 10px;
+    width: 100%;
+  }
+  .mz-mobile-dock .mz-action-bar .current-leader {
+    flex: 0 1 auto;
+    max-width: 100%;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 11px;
+    padding: 1px 8px !important;
   }
   .mz-mobile-dock .mz-action-bar__dock {
     position: fixed !important;
@@ -781,30 +821,33 @@
     right: 0;
     bottom: 0;
     grid-template-columns: auto minmax(0, 1fr) !important;
-    gap: 8px 12px;
+    gap: 4px 8px;
     border-top: 1px solid var(--mz-line);
     background: rgba(12, 10, 7, 0.97);
-    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
     box-shadow: 0 -14px 40px rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(18px);
   }
   .mz-mobile-dock .mz-action-bar__dock > .mz-timer {
     grid-column: 1;
     grid-row: 1;
-    height: 52px;
-    width: 52px;
+    height: 38px;
+    width: 38px;
   }
   .mz-mobile-dock .mz-action-bar__dock > .mz-timer .mz-timer__seconds {
-    font-size: 16px;
+    font-size: 12px;
   }
   .mz-mobile-dock .mz-action-bar__dock > .mz-bid-hero {
     grid-column: 2;
     grid-row: 1;
+    min-width: 0;
+  }
+  .mz-mobile-dock .mz-action-bar__dock > .mz-bid-hero strong {
+    font-size: 23px !important;
   }
   .mz-mobile-dock .mz-action-bar__dock > .mz-bid-actions {
     grid-column: 1 / -1;
     grid-row: 2;
-    /* mobil referans: artışlar tek satırda, altında geniş birincil CTA + pas */
     display: grid !important;
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
     gap: 8px !important;
@@ -812,11 +855,13 @@
   .mz-mobile-dock .mz-action-bar__dock .online-actions button {
     width: auto !important;
     min-width: 0;
-    padding: 12px 6px !important;
+    padding: 8px 4px !important;
+    font-size: 13.5px;
   }
   .mz-mobile-dock .mz-action-bar__dock .online-actions .primary-action.mz-bid-cta {
     grid-column: 1 / 3;
-    padding: 13px 18px !important;
+    padding: 9px 14px !important;
+    font-size: 14.5px !important;
   }
   .mz-mobile-dock .mz-action-bar__dock .online-actions .mz-bid-pass {
     grid-column: 3;
@@ -837,15 +882,17 @@
   .online-room .manager-view-tabs button {
     min-height: 52px;
   }
+  .online-room.mz-mobile-dock > .chat-fab,
   .mz-mobile-dock .chat-fab {
-    bottom: calc(206px + env(safe-area-inset-bottom)) !important;
+    bottom: calc(128px + env(safe-area-inset-bottom)) !important;
   }
   .mz-mobile-dock .room-chat {
-    bottom: calc(206px + env(safe-area-inset-bottom)) !important;
+    bottom: calc(184px + env(safe-area-inset-bottom)) !important;
   }
   .online-lot-head.mz-lot-head {
     grid-template-columns: minmax(0, 1fr) auto !important;
     gap: 6px 10px !important;
+    padding-bottom: 6px !important;
   }
   .mz-lot-head__count {
     grid-column: 1;
@@ -863,8 +910,39 @@
     grid-row: 1;
     justify-self: end;
   }
-  .online-player.mz-lot-card {
-    padding: 18px !important;
+  /* lot kartı: tutarlı esnek düzen, mini diziliş sağ üstte sabit */
+  .online-player.mz-lot-card,
+  .online-player {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-end !important;
+    gap: 12px !important;
+    padding: 16px !important;
+    min-height: 0 !important;
+  }
+  .online-player.mz-lot-card:not(.coach-lot) .online-player-copy {
+    padding-top: 64px;
+  }
+  .online-player-copy h1 {
+    font-size: 24px !important;
+    line-height: 1.05 !important;
+  }
+  .online-player-visual {
+    width: 84px !important;
+    height: 104px !important;
+    min-height: 104px !important;
+  }
+  .auction-mini-formation {
+    position: absolute !important;
+    left: auto !important;
+    right: 14px !important;
+    top: 14px !important;
+    width: 132px !important;
+    height: 66px !important;
+    min-height: 0 !important;
+  }
+  .mz-lot-plates {
+    margin-top: 6px !important;
   }
   .mz-lot-stamp {
     top: 12px;
@@ -896,174 +974,6 @@
   }
   .mz-header__tools .tool-btn {
     padding: 7px 9px !important;
-    font-size: 9px !important;
-  }
-}
-
-/* ---------------------------------------------------------------------------
-   Lead düzeltmeleri (alt ajan teslimi sonrası inceleme):
-   1) mobilde lider adı kesiliyordu ("Al Menaje…") — tutar satırı sarılabilir,
-      lider çipi tam genişlikte alt satıra iner;
-   2) masaüstünde aksiyon çubuğu 1440×980'de katlanma altında kalıyordu —
-      lot kartı ve başlık dikey ritmi sıkılaştırıldı.
-   -------------------------------------------------------------------------- */
-@media (max-width: 760px) {
-  .mz-mobile-dock .mz-action-bar .bid-summary {
-    display: flex !important;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 2px 10px;
-    width: 100%;
-  }
-  .mz-mobile-dock .mz-action-bar .current-leader {
-    flex: 0 1 auto;
-    max-width: 100%;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .mz-mobile-dock .mz-action-bar__dock > .mz-bid-hero {
-    min-width: 0;
-  }
-}
-
-@media (min-width: 1025px) {
-  .online-player.mz-lot-card {
-    min-height: 232px !important;
-    padding: 22px 26px !important;
-  }
-  .online-auction.mz-auction .mz-lot-head {
-    padding-bottom: 8px !important;
-  }
-  .online-auction.mz-auction .mz-lot-stage {
-    padding-bottom: 4px !important;
-  }
-}
-
-/* ---------------------------------------------------------------------------
-   Alt ajan notu (aynı dosyada çakışmayı önlemek için en sonda):
-   Yeni dikey yığın (lot kartı + satılanlar şeridi) 1440×980 gibi dizüstü
-   yüksekliklerinde birincil "Teklif ver" düğmesini katlanmanın altında
-   bırakıyordu. Çubuk akıştaki yerini korur ama görüntü alanının dibine
-   yapışır; böylece teklif kontrolleri her kaydırma konumunda erişilebilir.
-   Sunum (TV) modunda yapışma kapatılır.
-   -------------------------------------------------------------------------- */
-@media (min-width: 761px) {
-  .mz-action-bar {
-    position: sticky;
-    z-index: 30;
-    bottom: 10px;
-    box-shadow: 0 -14px 34px rgba(0, 0, 0, 0.45);
-  }
-  .presentation-mode .online-auction.mz-auction .mz-action-bar {
-    position: static;
-    box-shadow: none;
-  }
-}
-
-/* ---------------------------------------------------------------------------
-   Lead: mobil sabit teklif çubuğu 196px yüksekti ve kaydırma başında oyuncu
-   adını örtüyordu. Çubuk ~150px'e sıkıştırıldı; rezerve edilen boşluk da yeni
-   yüksekliğe çekildi.
-   -------------------------------------------------------------------------- */
-@media (max-width: 760px) {
-  .online-room.mz-mobile-dock {
-    padding-bottom: calc(150px + env(safe-area-inset-bottom)) !important;
-  }
-  .mz-mobile-dock .mz-action-bar__dock {
-    gap: 6px 10px;
-    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
-  }
-  .mz-mobile-dock .mz-action-bar__dock > .mz-timer {
-    height: 42px;
-    width: 42px;
-  }
-  .mz-mobile-dock .mz-action-bar__dock > .mz-timer .mz-timer__seconds {
-    font-size: 13px;
-  }
-  .mz-mobile-dock .mz-action-bar__dock > .mz-bid-hero strong {
-    font-size: 26px !important;
-  }
-  .mz-mobile-dock .mz-action-bar .current-leader {
-    font-size: 11.5px;
-    padding: 2px 9px !important;
-  }
-  .mz-mobile-dock .mz-action-bar__dock .online-actions button {
-    padding: 10px 4px !important;
-    font-size: 14px;
-  }
-  .mz-mobile-dock .mz-action-bar__dock .online-actions .primary-action.mz-bid-cta {
-    padding: 11px 16px !important;
-    font-size: 15px !important;
-  }
-  .online-room.mz-mobile-dock > .chat-fab {
-    bottom: calc(158px + env(safe-area-inset-bottom)) !important;
-  }
-}
-
-/* ---------------------------------------------------------------------------
-   Lead (a)+(b): mobil sabit çubuk 161px -> ~130px ve mobil lot kartı ~40px daha
-   kompakt; böylece oyuncu adı kaydırmadan çubuğun üstünde görünür.
-   -------------------------------------------------------------------------- */
-@media (max-width: 760px) {
-  .online-room.mz-mobile-dock {
-    padding-bottom: calc(122px + env(safe-area-inset-bottom)) !important;
-  }
-  .mz-mobile-dock .mz-action-bar__dock {
-    gap: 4px 8px;
-    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
-  }
-  .mz-mobile-dock .mz-action-bar__dock > .mz-timer {
-    height: 36px;
-    width: 36px;
-  }
-  .mz-mobile-dock .mz-action-bar__dock > .mz-timer .mz-timer__seconds {
-    font-size: 12px;
-  }
-  .mz-mobile-dock .mz-action-bar__dock > .mz-bid-hero strong {
-    font-size: 23px !important;
-  }
-  .mz-mobile-dock .mz-action-bar .current-leader {
-    font-size: 11px;
-    padding: 1px 8px !important;
-  }
-  .mz-mobile-dock .mz-action-bar__dock .online-actions button {
-    padding: 8px 4px !important;
-    font-size: 13.5px;
-  }
-  .mz-mobile-dock .mz-action-bar__dock .online-actions .primary-action.mz-bid-cta {
-    padding: 9px 14px !important;
-    font-size: 14.5px !important;
-  }
-  .online-room.mz-mobile-dock > .chat-fab {
-    bottom: calc(128px + env(safe-area-inset-bottom)) !important;
-  }
-  /* lot kartı: daha az dikey alan, ad ve meta daha erken görünür */
-  .online-player.mz-lot-card,
-  .online-player {
-    gap: 10px !important;
-    padding: 16px !important;
-    min-height: 0 !important;
-  }
-  .online-player-copy h1 {
-    font-size: 24px !important;
-    line-height: 1.05 !important;
-  }
-  .online-player-visual {
-    width: 84px !important;
-    height: 104px !important;
-  }
-  .auction-mini-formation {
-    right: 14px !important;
-    top: 14px !important;
-    width: 132px !important;
-    height: 66px !important;
-  }
-  .mz-lot-plates {
-    margin-top: 4px !important;
-  }
-  .online-lot-head.mz-lot-head {
-    padding-bottom: 6px !important;
+    font-size: 10px !important;
   }
 }

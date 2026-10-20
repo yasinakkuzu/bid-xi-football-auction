@@ -8,6 +8,8 @@ ALTER TABLE leaderboard_entries ADD COLUMN scenario_id TEXT NOT NULL DEFAULT 'cl
 ALTER TABLE leaderboard_entries ADD COLUMN pool_mode TEXT NOT NULL DEFAULT 'generated';
 ALTER TABLE leaderboard_entries ADD COLUMN include_bench INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_leaderboard_standard_score ON leaderboard_entries(standard_eligible,score DESC,played_at DESC);
+CREATE INDEX IF NOT EXISTS idx_leaderboard_played_at ON leaderboard_entries(played_at);
+CREATE INDEX IF NOT EXISTS idx_leaderboard_room_member ON leaderboard_entries(room_code,member_id);
 CREATE TABLE IF NOT EXISTS leaderboard_deletions (
   entry_id TEXT PRIMARY KEY,
   deleted_at INTEGER NOT NULL

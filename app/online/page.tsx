@@ -23,7 +23,15 @@ import {
 import { ADULT_AGE, MIN_AGE, ageBand as bandForAge, ageFromBirthYear, type AgeBand } from '../../lib/age-policy';
 import type { AnalyticsEvent } from '../../lib/analytics';
 import { customPoolOptions } from '../../lib/club-leagues';
+import {
+  cardRarityClass,
+  evaluateTransferStamp,
+  nationFlag,
+  QUICK_REACTIONS,
+  scoutHintForLot,
+} from '../../lib/player-card-flair';
 import { SITE_URL } from '../../lib/site';
+import { ThemeSwitcher } from '../theme-switcher';
 
 import { AuctionActionBar } from './bid-bar';
 import { clockOffset, remainingSeconds } from './clock';
@@ -177,9 +185,25 @@ export function OnlineGame() {
   const [chatBusy, setChatBusy] = useState(false);
   const [loadIssue, setLoadIssue] = useState<'network' | 'timeout' | ''>('');
   const [customBid, setCustomBid] = useState('');
+  const [soundOn, setSoundOn] = useState(true);
+  const [duelBanner, setDuelBanner] = useState<string | null>(null);
+  const [soldCelebration, setSoldCelebration] = useState(false);
+  const [floatingReactions, setFloatingReactions] = useState<
+    Array<{ key: number; emoji: string; label: string; author: string }>
+  >([]);
+  const audioRef = useRef<AudioContext | null>(null);
+  const lotTrackerRef = useRef<{
+    lotId?: string;
+    bid: number;
+    leader: number | null;
+    leaders: number[];
+    soldAt?: number;
+  }>({ bid: 0, leader: null, leaders: [] });
   const seenChatIdsRef = useRef<Set<string>>(new Set());
   const chatInitializedRef = useRef(false);
   const inFlightActionRef = useRef(false);
+  const revisionRef = useRef(0);
+  const pollControllerRef = useRef<AbortController | null>(null);
   const clockOffsetRef = useRef(0);
   const chatDialogRef = useRef<HTMLElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
@@ -203,6 +227,64 @@ export function OnlineGame() {
     track(event);
   }, []);
 
+  const playAuctionSound = useCallback(
+    (kind: 'bid' | 'sold' | 'reaction', bidAmount = 0) => {
+      if (!soundOn || typeof window === 'undefined') return;
+      try {
+        const AudioCtx =
+          window.AudioContext ||
+          (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = audioRef.current ?? new AudioCtx();
+        audioRef.current = ctx;
+        const nowTime = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        if (kind === 'sold') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(160, nowTime);
+          osc.frequency.exponentialRampToValueAtTime(440, nowTime + 0.18);
+          gain.gain.setValueAtTime(0.08, nowTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, nowTime + 0.28);
+          osc.start(nowTime);
+          osc.stop(nowTime + 0.28);
+        } else if (kind === 'reaction') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(640, nowTime);
+          osc.frequency.exponentialRampToValueAtTime(880, nowTime + 0.09);
+          gain.gain.setValueAtTime(0.03, nowTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, nowTime + 0.1);
+          osc.start(nowTime);
+          osc.stop(nowTime + 0.1);
+        } else {
+          const pitchBoost = Math.min(340, Math.max(0, bidAmount * 1.4));
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(440 + pitchBoost, nowTime);
+          osc.frequency.exponentialRampToValueAtTime(560 + pitchBoost, nowTime + 0.12);
+          gain.gain.setValueAtTime(0.045, nowTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, nowTime + 0.14);
+          osc.start(nowTime);
+          osc.stop(nowTime + 0.14);
+        }
+      } catch {}
+    },
+    [soundOn],
+  );
+
+  const spawnReaction = useCallback(
+    (emoji: string, label: string, authorName?: string) => {
+      const key = Date.now() + Math.random();
+      setFloatingReactions((prev) => [...prev.slice(-4), { key, emoji, label, author: authorName || name || 'Masa' }]);
+      playAuctionSound('reaction');
+      setTimeout(() => {
+        setFloatingReactions((prev) => prev.filter((item) => item.key !== key));
+      }, 2400);
+    },
+    [name, playAuctionSound],
+  );
+
   const declaredAge = ageFromBirthYear(birthYear);
   const declaredBand: AgeBand = declaredAge === null ? 'unknown' : bandForAge(declaredAge);
   const ageProblem =
@@ -214,26 +296,38 @@ export function OnlineGame() {
   const canEnter = Boolean(name.trim()) && declaredAge !== null && declaredAge >= MIN_AGE && consentAccepted && !busy;
 
   const loadRoom = useCallback(async (s: Session) => {
+    if (inFlightActionRef.current) return false;
+    const controller = new AbortController();
+    pollControllerRef.current = controller;
+    const requestStart = Date.now();
+    const query = revisionRef.current > 0 ? `?sinceRevision=${revisionRef.current}` : '';
     try {
-      const data = await json(`/api/rooms/${s.code}`, {
-          headers: { Authorization: `Bearer ${s.token}` },
-          signal: AbortSignal.timeout(10000),
-        }),
-        next = data.state as Room;
-      if (next.game && next.game.activeTurn !== null && next.game.activeTurn < 0) next.game.activeTurn = null;
-      clockOffsetRef.current = clockOffset(data.serverTime as number | undefined);
+      const data = await json(`/api/rooms/${s.code}${query}`, {
+        headers: { Authorization: `Bearer ${s.token}` },
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]),
+      });
+      if (inFlightActionRef.current || controller.signal.aborted) return false;
+      const incomingRevision = typeof data.revision === 'number' ? data.revision : undefined;
+      if (incomingRevision !== undefined && incomingRevision < revisionRef.current) return true;
+      if (incomingRevision !== undefined) revisionRef.current = incomingRevision;
+      clockOffsetRef.current = clockOffset(data.serverTime as number | undefined, Date.now(), requestStart);
       setNow(Date.now() + clockOffsetRef.current);
       const serverBand: AgeBand =
         data.viewerAgeBand === 'adult' ? 'adult' : data.viewerAgeBand === 'minor' ? 'minor' : 'unknown';
       setViewerBand(serverBand);
       if (s.ageBand !== serverBand) saveSession({ ...s, ageBand: serverBand });
-      setRoom(next);
+      if (!data.unchanged && data.state) {
+        const next = data.state as Room;
+        if (next.game && next.game.activeTurn !== null && next.game.activeTurn < 0) next.game.activeTurn = null;
+        setRoom(next);
+      }
       setIsHost(Boolean(data.isHost));
       setMemberId(data.memberId as string | null);
       setOnline(true);
       setLoadIssue('');
       return true;
     } catch (caught) {
+      if (controller.signal.aborted || inFlightActionRef.current) return false;
       setOnline(false);
       const known = caught instanceof ApiError ? caught : null;
       if (known && ['AUTH_INVALID', 'ROOM_EXPIRED', 'ROOM_NOT_FOUND'].includes(known.code)) {
@@ -254,6 +348,8 @@ export function OnlineGame() {
         setError((caught as Error).message);
       }
       return false;
+    } finally {
+      if (pollControllerRef.current === controller) pollControllerRef.current = null;
     }
   }, []);
   const refresh = useCallback(async () => {
@@ -433,11 +529,56 @@ export function OnlineGame() {
   const myManagerIndex = approvedManagers.findIndex((member) => member.id === memberId);
   const myManager = myManagerIndex >= 0 ? game?.managers[myManagerIndex] : undefined;
   const current = game?.pool[game.index];
+
+  useEffect(() => {
+    if (!game || !current) return;
+    const tracker = lotTrackerRef.current;
+    if (tracker.lotId !== current.id) {
+      tracker.lotId = current.id;
+      tracker.bid = game.bid;
+      tracker.leader = game.leader;
+      tracker.leaders = game.leader !== null ? [game.leader] : [];
+      const clearId = setTimeout(() => setDuelBanner(null), 0);
+      return () => clearTimeout(clearId);
+    }
+    if (game.leader !== null && (game.leader !== tracker.leader || game.bid > tracker.bid)) {
+      tracker.bid = game.bid;
+      tracker.leader = game.leader;
+      if (tracker.leaders[tracker.leaders.length - 1] !== game.leader) {
+        tracker.leaders.push(game.leader);
+      }
+      playAuctionSound('bid', game.bid);
+      if (tracker.leaders.length >= 3) {
+        const lastTwo = [...new Set(tracker.leaders.slice(-3))];
+        if (lastTwo.length === 2) {
+          const nameA = game.managers[lastTwo[0]]?.name || 'Menajer 1';
+          const nameB = game.managers[lastTwo[1]]?.name || 'Menajer 2';
+          setTimeout(() => setDuelBanner(`⚔️ BÜTÇE DÜELLOSU: ${nameA} vs ${nameB}`), 0);
+        }
+      }
+    }
+  }, [current, game, playAuctionSound]);
+
+  useEffect(() => {
+    const soldAt = game?.lastSold?.at;
+    if (!soldAt || lotTrackerRef.current.soldAt === soldAt) return;
+    lotTrackerRef.current.soldAt = soldAt;
+    playAuctionSound('sold', game?.lastSold?.amount || 0);
+    try {
+      navigator.vibrate?.([35, 50, 90]);
+    } catch {}
+    const startId = setTimeout(() => setSoldCelebration(true), 0);
+    const endId = setTimeout(() => setSoldCelebration(false), 2600);
+    return () => {
+      clearTimeout(startId);
+      clearTimeout(endId);
+    };
+  }, [game?.lastSold?.amount, game?.lastSold?.at, playAuctionSound]);
   const mode: AuctionMode = room?.settings.auctionMode || 'live';
   const bonusLot = Boolean(
     game && (game.publicMeta?.currentIsBonus ?? isBonusPlayerLot(game.pool, game.index, game.managers.length)),
   );
-  const nextGroupLabel = 'bir sonraki pozisyon grubu';
+  const nextGroupLabel = game?.publicMeta?.nextGroupLabel || 'bir sonraki pozisyon grubu';
 
   function toggleTier(tier: RatingTier) {
     setSettings((value) => {
@@ -536,6 +677,7 @@ export function OnlineGame() {
   async function action(type: string, payload: Record<string, unknown> = {}) {
     if (!session || inFlightActionRef.current) return false;
     inFlightActionRef.current = true;
+    pollControllerRef.current?.abort();
     const actionId =
       typeof crypto !== 'undefined' && crypto.randomUUID
         ? crypto.randomUUID()
@@ -551,6 +693,7 @@ export function OnlineGame() {
       outgoingPayload = { ...payload, lotId, actionId };
     } else outgoingPayload = { ...payload, actionId };
     setBusy(true);
+    const requestStart = Date.now();
     const send = () =>
       json(`/api/rooms/${session.code}/actions`, {
         method: 'POST',
@@ -570,11 +713,17 @@ export function OnlineGame() {
         await new Promise((resolve) => setTimeout(resolve, 120));
         data = await send();
       }
+      if (typeof data.revision === 'number') revisionRef.current = Math.max(revisionRef.current, data.revision);
+      if (typeof data.serverTime === 'number') {
+        clockOffsetRef.current = clockOffset(data.serverTime, Date.now(), requestStart);
+        setNow(Date.now() + clockOffsetRef.current);
+      }
       setRoom(data.state as Room);
       setError('');
       return true;
     } catch (caught) {
       setError((caught as Error).message);
+      inFlightActionRef.current = false;
       await refresh();
       return false;
     } finally {
@@ -730,7 +879,10 @@ export function OnlineGame() {
               <small>FUTBOL AÇIK ARTIRMA OYUNU</small>
             </span>
           </button>
-          <span className="mode-label">Çok oyunculu</span>
+          <div className="flex items-center gap-3">
+            <ThemeSwitcher />
+            <span className="mode-label">Çok oyunculu</span>
+          </div>
         </nav>
         <section className="online-entry">
           <div>
@@ -750,9 +902,22 @@ export function OnlineGame() {
             </div>
           </div>
           <div className="panel online-panel">
-            <div className="online-tabs" role="tablist" aria-label="Oda işlemi">
+            <div
+              className="online-tabs"
+              role="tablist"
+              aria-label="Oda işlemi"
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                event.preventDefault();
+                const nextTab = tab === 'create' ? 'join' : 'create';
+                setTab(nextTab);
+                const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+                buttons[nextTab === 'create' ? 0 : 1]?.focus();
+              }}
+            >
               <button
                 role="tab"
+                tabIndex={tab === 'create' ? 0 : -1}
                 aria-selected={tab === 'create'}
                 className={tab === 'create' ? 'active' : ''}
                 onClick={() => setTab('create')}
@@ -761,6 +926,7 @@ export function OnlineGame() {
               </button>
               <button
                 role="tab"
+                tabIndex={tab === 'join' ? 0 : -1}
                 aria-selected={tab === 'join'}
                 className={tab === 'join' ? 'active' : ''}
                 onClick={() => setTab('join')}
@@ -1378,10 +1544,16 @@ export function OnlineGame() {
           )}
         </div>
         <div className="mz-header__tools">
+          <ThemeSwitcher />
           {game && room.status === 'auction' && (
-            <button className="tool-btn tv-mode" onClick={togglePresentation}>
-              {presentation ? 'TV modundan çık' : '▣ TV modu'}
-            </button>
+            <>
+              <button className="tool-btn" aria-pressed={!soundOn} onClick={() => setSoundOn((value) => !value)}>
+                {soundOn ? '♪ Ses' : '× Sessiz'}
+              </button>
+              <button className="tool-btn tv-mode" onClick={togglePresentation}>
+                {presentation ? 'TV modundan çık' : '▣ TV modu'}
+              </button>
+            </>
           )}
           <button className="tool-btn leave-room" onClick={() => confirmLeave(false)}>
             {room.status === 'lobby' ? 'Odadan çık' : 'Ana sayfaya dön'}
@@ -1550,7 +1722,8 @@ export function OnlineGame() {
               const filled = lotFilled(manager, current),
                 passed = game.passed.includes(index),
                 leader = game.leader === index,
-                nextOffer = game.leader === null ? auctionOpeningPrice(current, game.managers) : game.bid + 1,
+                minStep = Math.max(5, room.settings.bidIncrement || 5),
+                nextOffer = game.leader === null ? auctionOpeningPrice(current, game.managers) : game.bid + minStep,
                 eligible =
                   !filled && !passed && !leader && canPlaceLotBid(manager, current, nextOffer, index, game.passed),
                 stateClass = filled
@@ -1575,7 +1748,10 @@ export function OnlineGame() {
                 <button
                   className={`online-manager-card ${stateClass}`}
                   key={manager.id}
-                  onClick={() => setSelectedManager(index)}
+                  onClick={() => {
+                    setChatOpen(false);
+                    setSelectedManager(index);
+                  }}
                   aria-label={`${manager.name}: ${status}`}
                 >
                   <span className="avatar">{manager.name[0]}</span>
@@ -1618,6 +1794,21 @@ export function OnlineGame() {
                 {game.deadline || (game.paused && remaining > 0) ? `${remaining}s` : '—'}
               </em>
             </div>
+            {game.lastSold && (
+              <div
+                className={`auto-assignment-card last-sold-card ${soldCelebration ? 'is-celebrating' : ''}`}
+                role="status"
+              >
+                <span>{evaluateTransferStamp(game.lastSold.amount, 20).icon}</span>
+                <div>
+                  <b>SON SATIŞ · {evaluateTransferStamp(game.lastSold.amount, 20).label}</b>
+                  <p>
+                    <strong>{game.lastSold.playerName}</strong> → <strong>{game.lastSold.managerName}</strong> (
+                    {money(game.lastSold.amount)})
+                  </p>
+                </div>
+              </div>
+            )}
             {game.bonusReveal && (
               <div className="missed-bonus-card">
                 {game.bonusReveal.image ? <img src={game.bonusReveal.image} alt="" /> : <span>?</span>}
@@ -1656,9 +1847,35 @@ export function OnlineGame() {
                 <span>Bu pozisyonun son açık artırması. Ardından {nextGroupLabel} başlayacak.</span>
               </div>
             )}
+            {duelBanner && (
+              <div className="mz-duel-banner" role="status" aria-live="polite">
+                <span>{duelBanner}</span>
+                <small>Teklifler peş peşe yükseliyor!</small>
+              </div>
+            )}
             <article
-              className={`online-player mz-lot-card ${isCoach(current) ? 'coach-lot' : ''} ${bonusLot ? 'bonus-lot-card' : ''}`}
+              className={`online-player mz-lot-card ${cardRarityClass(current, revealRating, room.settings.era)} ${isCoach(current) ? 'coach-lot' : ''} ${bonusLot ? 'bonus-lot-card' : ''}`}
+              onPointerMove={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                const x = (event.clientX - rect.left) / Math.max(1, rect.width) - 0.5;
+                const y = (event.clientY - rect.top) / Math.max(1, rect.height) - 0.5;
+                event.currentTarget.style.setProperty('--tilt-x', `${(y * -5).toFixed(2)}deg`);
+                event.currentTarget.style.setProperty('--tilt-y', `${(x * 5).toFixed(2)}deg`);
+              }}
+              onPointerLeave={(event) => {
+                event.currentTarget.style.setProperty('--tilt-x', '0deg');
+                event.currentTarget.style.setProperty('--tilt-y', '0deg');
+              }}
             >
+              {floatingReactions.length > 0 && (
+                <div className="mz-floating-reactions" aria-live="polite">
+                  {floatingReactions.map((reaction) => (
+                    <span key={reaction.key} className="mz-floating-reaction">
+                      <b>{reaction.emoji}</b> {reaction.label} <em>· {reaction.author}</em>
+                    </span>
+                  ))}
+                </div>
+              )}
               {lotStamp && (
                 <span
                   className={`mz-lot-stamp mz-lot-stamp--${lotStamp}`}
@@ -1693,11 +1910,17 @@ export function OnlineGame() {
                 </div>
               )}
               <div className="online-player-visual">
-                <span>{current.name[0]}</span>
                 <PlayerImage player={current} className="online-player-photo" />
               </div>
               <div className="online-player-copy">
-                <span>{current.role}</span>
+                <div className="mz-lot-role-row">
+                  <span>{current.role}</span>
+                  {current.nation && (
+                    <em className="mz-nation-chip" title={`Ülke: ${current.nation}`}>
+                      <i aria-hidden="true">{nationFlag(current.nation)}</i> {current.nation}
+                    </em>
+                  )}
+                </div>
                 <h1>{current.name}</h1>
                 {isCoach(current) ? (
                   <p>
@@ -1710,6 +1933,10 @@ export function OnlineGame() {
                     {current.league ? ` · ${current.league}` : ''}
                   </p>
                 )}
+                <div className="mz-scout-hint" title={scoutHintForLot(current, revealRating).detail}>
+                  <b>{scoutHintForLot(current, revealRating).badge}</b>
+                  <small>{scoutHintForLot(current, revealRating).detail}</small>
+                </div>
                 <div className="mz-lot-plates" aria-label="Lot bilgileri">
                   <div className={`mz-lot-plate ${revealRating ? '' : 'is-hidden'}`}>
                     <small>PUAN</small>
@@ -1742,6 +1969,20 @@ export function OnlineGame() {
               </div>
             </article>
             <LotLedger game={game} />
+            <div className="mz-reaction-bar" role="group" aria-label="Anlık masa tepkileri">
+              <span className="mz-reaction-label">MASA TEPKİSİ</span>
+              {QUICK_REACTIONS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="mz-reaction-chip"
+                  onClick={() => spawnReaction(item.emoji, item.label, myManager?.name || name)}
+                >
+                  <span aria-hidden="true">{item.emoji}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
             <AuctionActionBar
               game={game}
               current={current}
@@ -1826,6 +2067,7 @@ export function OnlineGame() {
           ref={chatTriggerRef}
           className={`chat-fab ${chatUnread > 0 ? 'has-unread' : ''}`}
           onClick={() => {
+            setSelectedManager(null);
             setChatOpen((value) => !value);
             setChatUnread(0);
           }}

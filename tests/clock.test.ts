@@ -8,6 +8,7 @@ test('clock offset is derived from the server timestamp and ignored when missing
   assert.equal(clockOffset(Number.NaN, 1_000), 0);
   assert.equal(clockOffset(9_000, 1_000), 8_000);
   assert.equal(clockOffset(1_000, 9_000), -8_000);
+  assert.equal(clockOffset(5_000, 1_400, 1_000), 3_800, 'uses RTT midpoint when requestStart is provided');
 });
 
 test('countdown renders on the server timeline and never goes negative', () => {

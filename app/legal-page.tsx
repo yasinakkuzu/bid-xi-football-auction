@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
  * is not configured the page falls back to the generic guidance below, which is
  * why the value is rendered as plain text instead of a link.
  */
-const contact = process.env.MODERATION_CONTACT?.trim();
+const contact = process.env.MODERATION_CONTACT?.trim() || 'info@mezat11.com';
 
 export function LegalPage({ eyebrow, title, children }: { eyebrow: string; title: string; children: ReactNode }) {
   return (

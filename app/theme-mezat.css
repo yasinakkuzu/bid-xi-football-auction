@@ -26,11 +26,46 @@
   --mz-radius: 20px;
 }
 
+:root[data-theme='champions'] {
+  --lime: #38bdf8;
+  --ink: #050914;
+  --mz-bg: #050914;
+  --mz-panel: #0a1224;
+  --mz-panel-2: #0f1a33;
+  --mz-line: #1b2a4a;
+  --mz-line-2: #253b66;
+  --mz-accent: #38bdf8;
+  --mz-accent-dim: #0284c7;
+  --mz-amber: #f59e0b;
+  --mz-text: #f0f6ff;
+  --mz-muted: #9eb3d2;
+  --mz-dim: #6981a5;
+  --mz-shadow: 0 24px 60px rgba(2, 6, 23, 0.72);
+}
+
+:root[data-theme='stadium'] {
+  --lime: #34d399;
+  --ink: #06120b;
+  --mz-bg: #06120b;
+  --mz-panel: #0b1d13;
+  --mz-panel-2: #10281b;
+  --mz-line: #1b3b29;
+  --mz-line-2: #245037;
+  --mz-accent: #34d399;
+  --mz-accent-dim: #10b981;
+  --mz-amber: #fbbf24;
+  --mz-text: #ecfdf5;
+  --mz-muted: #9dc4b1;
+  --mz-dim: #668f7c;
+  --mz-shadow: 0 24px 60px rgba(2, 18, 9, 0.65);
+}
+
 /* ---------- zemin ---------- */
 body {
   background:
-    radial-gradient(1200px 600px at 15% -10%, rgba(255, 180, 92, 0.07), transparent 60%),
-    radial-gradient(900px 520px at 110% 110%, rgba(255, 180, 92, 0.05), transparent 55%), var(--mz-bg) !important;
+    radial-gradient(1200px 600px at 15% -10%, color-mix(in oklab, var(--mz-accent) 9%, transparent), transparent 60%),
+    radial-gradient(900px 520px at 110% 110%, color-mix(in oklab, var(--mz-amber) 6%, transparent), transparent 55%),
+    var(--mz-bg) !important;
   color: var(--mz-text);
 }
 
@@ -109,8 +144,8 @@ h3 {
 }
 .brand-lockup small {
   color: var(--mz-dim) !important;
-  font-size: 8.5px !important;
-  letter-spacing: 0.22em !important;
+  font-size: 9.5px !important;
+  letter-spacing: 0.2em !important;
   font-weight: 800 !important;
 }
 .room-brand b {
@@ -180,7 +215,10 @@ h3 {
 .online-input:focus {
   border-color: var(--mz-accent) !important;
   box-shadow: 0 0 0 4px rgba(255, 180, 92, 0.13) !important;
-  outline: none !important;
+}
+.online-input:focus-visible {
+  outline: 2px solid var(--mz-accent) !important;
+  outline-offset: 2px !important;
 }
 
 /* seçenek grupları — tek "çip" dili */
@@ -950,11 +988,11 @@ h3 {
   }
 }
 
-/* Global alt bilgi: iletişim adresi her sayfada görünür. */
+/* Global alt bilgi: iletişim adresi ve yasal bağlantılar her sayfada görünür. */
 .site-contact {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 18px;
+  gap: 8px 20px;
   align-items: center;
   justify-content: center;
   border-top: 1px solid var(--mz-line);
@@ -964,6 +1002,12 @@ h3 {
   font-size: 12px;
   text-align: center;
 }
+.site-contact nav {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+}
 .site-contact a {
   color: var(--mz-accent);
   font-weight: 800;
@@ -971,4 +1015,413 @@ h3 {
 }
 .site-contact a:hover {
   text-decoration: underline;
+}
+body:has(.bid-bar--sticky) .site-contact {
+  display: none;
+}
+
+/* ============================================================================
+   Hibrit Tasarım Sistemi & Etkileşimli Oyun Deneyimi Katmanı
+   ========================================================================== */
+
+/* 1. Tema / Atmosfer Seçici */
+.mz-theme-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid var(--mz-line-2);
+  border-radius: 999px;
+  background: var(--mz-panel);
+  padding: 3px;
+}
+.mz-theme-switcher button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 5px 10px;
+  color: var(--mz-muted);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.mz-theme-switcher button:hover {
+  color: var(--mz-text);
+}
+.mz-theme-switcher button.active {
+  background: var(--mz-accent);
+  color: #140f06;
+  font-weight: 900;
+}
+@media (max-width: 640px) {
+  .mz-theme-switcher button span:last-child {
+    display: none;
+  }
+  .mz-theme-switcher button {
+    padding: 6px 8px;
+    min-height: 32px !important;
+  }
+}
+
+/* 2. Holografik Nadirlik Kartları & 3D Tilt */
+.online-player.mz-lot-card,
+.player-card {
+  position: relative;
+  overflow: hidden;
+  transform: perspective(1100px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transition:
+    transform 0.18s ease-out,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+  will-change: transform;
+}
+.online-player.mz-lot-card.rarity-superstar,
+.player-card.rarity-superstar {
+  border-color: rgba(251, 191, 36, 0.72) !important;
+  background:
+    radial-gradient(circle at 22% 18%, rgba(251, 191, 36, 0.22), transparent 52%),
+    radial-gradient(circle at 82% 80%, rgba(56, 189, 248, 0.14), transparent 50%), var(--mz-panel) !important;
+  box-shadow:
+    0 0 0 1px rgba(251, 191, 36, 0.28),
+    0 20px 52px rgba(251, 191, 36, 0.16) !important;
+}
+.online-player.mz-lot-card.rarity-elite,
+.player-card.rarity-elite {
+  border-color: rgba(192, 132, 252, 0.58) !important;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(192, 132, 252, 0.18), transparent 52%),
+    radial-gradient(circle at 80% 75%, rgba(255, 180, 92, 0.12), transparent 50%), var(--mz-panel) !important;
+  box-shadow: 0 18px 46px rgba(168, 85, 247, 0.14) !important;
+}
+.online-player.mz-lot-card.rarity-legend,
+.player-card.rarity-legend {
+  border-color: rgba(245, 158, 11, 0.68) !important;
+  background: radial-gradient(circle at 50% 0%, rgba(254, 243, 199, 0.2), transparent 58%), var(--mz-panel) !important;
+  box-shadow: 0 18px 50px rgba(245, 158, 11, 0.18) !important;
+}
+.online-player.mz-lot-card.rarity-mystery,
+.player-card.rarity-mystery {
+  border-color: color-mix(in oklab, var(--mz-accent) 48%, #a855f7) !important;
+  background:
+    radial-gradient(circle at 75% 20%, rgba(168, 85, 247, 0.15), transparent 50%),
+    radial-gradient(circle at 20% 80%, color-mix(in oklab, var(--mz-accent) 14%, transparent), transparent 52%),
+    var(--mz-panel) !important;
+}
+
+/* 3. Ülke Bayrağı Çipi ve Gözlemci Raporu Rozeti */
+.mz-lot-role-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.mz-nation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--mz-line-2);
+  border-radius: 999px;
+  background: var(--mz-panel-2);
+  padding: 2px 10px;
+  color: var(--mz-text);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+.mz-nation-chip i {
+  font-style: normal;
+}
+.mz-scout-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 10px;
+  border: 1px solid color-mix(in oklab, var(--mz-accent) 32%, var(--mz-line));
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--mz-accent) 7%, var(--mz-panel-2));
+  padding: 7px 11px;
+}
+.mz-scout-hint b {
+  color: var(--mz-accent);
+  font-size: 11.5px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+}
+.mz-scout-hint small {
+  color: var(--mz-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* 4. Bütçe Düellosu Şeridi & Anlık Masa Tepkileri */
+.mz-duel-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  border: 1px solid rgba(251, 146, 60, 0.55);
+  border-radius: 14px;
+  background: linear-gradient(90deg, rgba(234, 88, 12, 0.22), rgba(251, 191, 36, 0.12));
+  padding: 8px 14px;
+  color: #fed7aa;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  animation: mz-duel-glow 1.4s ease-in-out infinite alternate;
+}
+.mz-duel-banner small {
+  color: var(--mz-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+@keyframes mz-duel-glow {
+  from {
+    box-shadow: 0 0 0 rgba(251, 146, 60, 0);
+  }
+  to {
+    box-shadow: 0 0 22px rgba(251, 146, 60, 0.28);
+  }
+}
+
+.mz-reaction-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--mz-line);
+  border-radius: 14px;
+  background: var(--mz-panel);
+  padding: 7px 11px;
+}
+.mz-reaction-label {
+  margin-right: 4px;
+  color: var(--mz-dim);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+.mz-reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--mz-line-2) !important;
+  border-radius: 999px !important;
+  background: var(--mz-panel-2) !important;
+  padding: 5px 11px !important;
+  color: var(--mz-text) !important;
+  font-size: 11.5px !important;
+  font-weight: 800 !important;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    border-color 0.15s ease;
+}
+.mz-reaction-chip:hover {
+  transform: translateY(-1px) scale(1.03);
+  border-color: var(--mz-accent) !important;
+}
+.mz-floating-reactions {
+  position: absolute;
+  z-index: 8;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  pointer-events: none;
+}
+.mz-floating-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--mz-accent);
+  border-radius: 999px;
+  background: rgba(12, 10, 7, 0.92);
+  padding: 6px 12px;
+  color: var(--mz-text);
+  font-size: 12px;
+  font-weight: 850;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  animation: mz-float-up 2.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.mz-floating-reaction em {
+  color: var(--mz-muted);
+  font-style: normal;
+  font-size: 10.5px;
+}
+@keyframes mz-float-up {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.88);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  85% {
+    opacity: 1;
+    transform: translateY(-16px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.95);
+  }
+}
+.last-sold-card.is-celebrating {
+  border-color: var(--mz-accent) !important;
+  box-shadow: 0 0 28px color-mix(in oklab, var(--mz-accent) 32%, transparent);
+}
+
+/* 5. Görsel Saha Kimyası (Pitch Chemistry SVG Ağı) */
+.mz-chemistry-svg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.mz-chem-line {
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.mz-chem-line--strong {
+  stroke: var(--mz-accent);
+  stroke-width: 2.5px;
+  stroke-opacity: 0.78;
+  filter: drop-shadow(0 0 6px var(--mz-accent));
+}
+.mz-chem-line--medium {
+  stroke: var(--mz-muted);
+  stroke-width: 1.75px;
+  stroke-dasharray: 5 4;
+  stroke-opacity: 0.55;
+}
+.online-formation-player,
+.result-player {
+  z-index: 2;
+}
+.mz-chemistry-badge {
+  position: absolute;
+  z-index: 3;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in oklab, var(--mz-accent) 45%, transparent);
+  border-radius: 999px;
+  background: rgba(12, 10, 7, 0.84);
+  padding: 4px 10px;
+  color: var(--mz-accent);
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  backdrop-filter: blur(8px);
+}
+.mz-chemistry-badge small {
+  color: var(--mz-text);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* 6. Gece Sonu Ödül Töreni & Canlı Mini Lig Maç Simülatörü */
+.mz-awards-section {
+  margin-top: 22px;
+  border: 1px solid var(--mz-line);
+  border-radius: 20px;
+  background: var(--mz-panel);
+  padding: 18px 20px;
+}
+.mz-awards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.mz-award-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid var(--mz-line-2);
+  border-radius: 16px;
+  background: var(--mz-panel-2);
+  padding: 13px 14px;
+}
+.mz-award-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--mz-accent) 14%, var(--mz-panel));
+  font-size: 20px;
+}
+.mz-award-card small {
+  display: block;
+  color: var(--mz-accent);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.mz-award-card b {
+  display: block;
+  margin-top: 2px;
+  color: var(--mz-text);
+  font-size: 15px;
+  font-weight: 900;
+}
+.mz-award-card strong {
+  display: inline-block;
+  margin-top: 2px;
+  color: var(--mz-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.mz-award-card p {
+  margin-top: 5px;
+  color: var(--mz-dim);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.mz-tournament-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.mz-sim-btn {
+  border: 1px solid var(--mz-accent) !important;
+  border-radius: 999px !important;
+  background: color-mix(in oklab, var(--mz-accent) 14%, var(--mz-panel-2)) !important;
+  padding: 7px 14px !important;
+  color: var(--mz-accent) !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  cursor: pointer;
+}
+.mz-sim-btn:hover {
+  background: var(--mz-accent) !important;
+  color: #140f06 !important;
+}
+.mz-match-ticker {
+  margin-bottom: 12px;
+  border: 1px solid color-mix(in oklab, var(--mz-accent) 45%, transparent);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--mz-accent) 10%, var(--mz-panel-2));
+  padding: 10px 14px;
+  color: var(--mz-text);
+  font-size: 13px;
+  font-weight: 800;
 }

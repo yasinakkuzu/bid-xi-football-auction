@@ -22,6 +22,8 @@ export async function DELETE(request: Request) {
     if (Number(request.headers.get('content-length') || 0) > 4096)
       throw new RoomError('BODY_TOO_LARGE', 'İstek çok büyük', 413);
     const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') || '';
+    const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+    await rateLimit(`leaderboard-delete-ip:${(await digest(ip)).slice(0, 16)}`, 20);
     const body = (await request.json()) as { roomCode?: string; entryId?: string };
     const roomCode = String(body.roomCode || '').toUpperCase(),
       entryId = String(body.entryId || '');

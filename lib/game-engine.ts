@@ -1,3 +1,5 @@
+import { moderateDisplayName } from './moderation.ts';
+
 export type Era = 'current' | 'legends';
 export type QualityMode = 'best' | 'all';
 export type RatingTier = 'Süperstar' | 'Elit' | 'Çok iyi' | 'İyi' | 'Ortalama' | 'Standart';
@@ -96,6 +98,7 @@ export type BotDecisionContext = {
   remainingLotsInGroup?: number;
   managersMissingGroup?: number;
   maxRivalLimit?: number;
+  bidIncrement?: number;
 };
 export type AuctionEstimateInput = {
   managerCount: number;
@@ -317,6 +320,11 @@ function botDifficulty(manager: Manager, context: BotDecisionContext): BotDiffic
     (manager.botStyle === 'aggressive' ? 'expert' : manager.botStyle === 'value' ? 'beginner' : 'average')
   );
 }
+export function canonicalFormation(preferred: string): Formation {
+  if (preferred === '4-3-3' || preferred === '3-4-3') return '4-3-3';
+  if (preferred === '4-1-4-1' || preferred === '4-4-2' || preferred === '3-5-2') return '4-1-4-1';
+  return '4-2-3-1';
+}
 function botSector(slot: AuctionLot['slot']) {
   return slot === 'COACH'
     ? 'coach'
@@ -328,6 +336,16 @@ function botSector(slot: AuctionLot['slot']) {
 }
 function botLineNeed(manager: Manager, lot: AuctionLot) {
   if (isCoach(lot)) return manager.coach ? 0 : 1;
+  if (lot.benchSlot) {
+    if (manager.bench?.[lot.benchSlot]) return 0;
+    const group = BENCH_SLOTS.find((item) => item.key === lot.benchSlot);
+    const starterRatings = (group?.sourceSlots || [lot.slot])
+      .map((slot) => manager.squad[slot]?.rating)
+      .filter((rating): rating is number => typeof rating === 'number');
+    if (!starterRatings.length) return 1;
+    const weakestStarter = Math.min(...starterRatings);
+    return weakestStarter < 85 ? 1 : 0.55;
+  }
   const sector = botSector(lot.slot),
     slots =
       sector === 'defense'
@@ -355,7 +373,7 @@ function botLineNeed(manager: Manager, lot: AuctionLot) {
 function botTacticalFit(manager: Manager, lot: AuctionLot) {
   if (isCoach(lot)) {
     const formation = manager.formation || chooseBotFormation(manager);
-    return lot.preferredFormation === formation ? 1 : 0.35 + lot.adaptability / 200;
+    return canonicalFormation(lot.preferredFormation) === formation ? 1 : 0.35 + lot.adaptability / 200;
   }
   const formation = manager.formation || chooseBotFormation(manager),
     favored: Record<Formation, Slot[]> = {
@@ -369,7 +387,8 @@ function botTacticalFit(manager: Manager, lot: AuctionLot) {
   if (
     (specialty === 'attack' && sector === 'attack') ||
     (specialty === 'defense' && sector === 'defense') ||
-    (specialty === 'development' && botLineNeed(manager, lot) >= 1)
+    (specialty === 'development' && botLineNeed(manager, lot) >= 1) ||
+    (specialty === 'motivation' && lot.price >= 60)
   )
     fit += 0.25;
   return fit;
@@ -405,9 +424,13 @@ export function botMaximumBid(
       (0.9 + reserveRatio * 0.1) *
       (0.94 + random() * 0.12),
     rounded = Math.round(utility / 5) * 5,
+    increment = context.bidIncrement || 5,
+    opening = Math.max(5, Math.min(lot.price, limit)),
     rivalCap =
       typeof context.maxRivalLimit === 'number' && Number.isFinite(context.maxRivalLimit) && difficulty !== 'beginner'
-        ? Math.max(lot.price, Math.round((context.maxRivalLimit + 5) / 5) * 5)
+        ? context.maxRivalLimit <= 0
+          ? opening
+          : Math.max(lot.price, Math.round((context.maxRivalLimit + increment) / 5) * 5)
         : rounded;
   return Math.max(5, Math.min(limit, rounded, rivalCap));
 }
@@ -532,7 +555,12 @@ export function fillMissingSlot(
   selectedTiers: RatingTier[] = RATING_TIERS,
 ) {
   const random = seededRandom(hashSeed(`${seed}-${slot}`)),
-    used = new Set([...excludedNames, ...managers.flatMap((m) => Object.values(m.squad).map((p) => p?.name || ''))]);
+    used = new Set([
+      ...excludedNames,
+      ...managers.flatMap((m) =>
+        [...Object.values(m.squad), ...Object.values(m.bench || {})].map((p) => p?.name || ''),
+      ),
+    ]);
   const targetTier = fallbackTierForSelection(selectedTiers),
     tierPool = candidates.filter((candidate) => ratingLevel(candidate.rating) === targetTier),
     sourcePool = tierPool.length ? tierPool : candidates;
@@ -675,7 +703,12 @@ export function fillMissingCoaches(managers: Manager[], coaches: Coach[], seed: 
   let cursor = 0;
   const next = managers.map((manager) => {
     if (manager.coach) return manager;
-    const source = available[cursor++ % Math.max(1, available.length)];
+    const source =
+      available.find((candidate, index) => index >= cursor && !used.has(candidate.name)) ||
+      available.find((candidate) => !used.has(candidate.name)) ||
+      available[cursor % Math.max(1, available.length)];
+    cursor++;
+    if (source) used.add(source.name);
     const fee = Math.min(5, Math.max(0, manager.budget));
     const coach: Coach = source
       ? {
@@ -720,6 +753,14 @@ export function optimizeStartingEleven(manager: Manager): Manager {
   for (const group of BENCH_SLOTS) {
     const reserve = bench[group.key];
     if (!reserve) continue;
+    const emptySlot = group.sourceSlots.find((slot) => !squad[slot]);
+    if (emptySlot) {
+      const promoted: Footballer = { ...reserve, slot: emptySlot, role: emptySlot };
+      delete promoted.benchSlot;
+      squad[emptySlot] = promoted;
+      delete bench[group.key];
+      continue;
+    }
     const target = group.sourceSlots
         .filter((slot) => squad[slot])
         .sort((a, b) => (squad[a]?.rating || 0) - (squad[b]?.rating || 0))[0],
@@ -738,9 +779,11 @@ export function auctionGroupKey(lot: AuctionLot) {
 }
 export function isBonusPlayerLot(pool: AuctionLot[], index: number, managerCount: number) {
   const lot = pool[index];
-  if (!lot || isCoach(lot)) return false;
+  if (!lot || isCoach(lot) || lot.id.endsWith('-r2')) return false;
   const key = auctionGroupKey(lot),
-    ordinal = pool.slice(0, index + 1).filter((item) => auctionGroupKey(item) === key).length;
+    ordinal = pool
+      .slice(0, index + 1)
+      .filter((item) => !item.id.endsWith('-r2') && auctionGroupKey(item) === key).length;
   return ordinal > managerCount;
 }
 export function auctionProgressLabel(pool: AuctionLot[], index: number) {
@@ -756,16 +799,20 @@ export function auctionProgressLabel(pool: AuctionLot[], index: number) {
 export function coachImpact(m: Manager, defense: number, midfield: number, attack: number) {
   const c = m.coach;
   if (!c) return { coachBoost: 0, coachFit: 0 };
-  const sector =
-    c.specialty === 'attack'
-      ? attack
-      : c.specialty === 'defense'
-        ? defense
-        : c.specialty === 'development'
-          ? Math.min(defense, midfield, attack)
-          : (defense + midfield + attack) / 3;
-  const formationFit =
-    c.preferredFormation === (m.formation || '4-2-3-1') ? 100 : Math.min(80, 55 + c.adaptability * 0.22);
+  const balanced = (defense + midfield + attack) / 3,
+    sector =
+      c.specialty === 'attack'
+        ? attack
+        : c.specialty === 'defense'
+          ? defense
+          : c.specialty === 'development'
+            ? Math.min(defense, midfield, attack)
+            : c.specialty === 'motivation'
+              ? Math.max(defense, midfield, attack) * 0.6 + balanced * 0.4
+              : balanced;
+  const activeFormation = m.formation || '4-2-3-1',
+    formationFit =
+      canonicalFormation(c.preferredFormation) === activeFormation ? 100 : Math.min(80, 55 + c.adaptability * 0.22);
   const fit =
     c.tactics * 0.3 +
     c.motivation * 0.18 +
@@ -953,7 +1000,7 @@ export function safeCsvCell(value: unknown) {
 export function validManagerNames(names: string[]) {
   const clean = names.map((n) => n.trim());
   return (
-    clean.every((n) => n.length > 0 && n.length <= 24) &&
+    clean.every((n) => n.length > 0 && n.length <= 24 && moderateDisplayName(n).ok) &&
     new Set(clean.map((n) => n.toLocaleLowerCase('tr'))).size === clean.length
   );
 }

@@ -166,16 +166,17 @@ db.exec('BEGIN');
 for (const r of rows) {
   if (!r[ix.player_id]) continue;
   const playerId = Number(r[ix.player_id]);
+  const lastSeason = Number(r[ix.last_season]) || null;
   const signal = ratingSignals(
     {
       internationalCaps: Number(r[ix.international_caps]) || 0,
       internationalGoals: Number(r[ix.international_goals]) || 0,
       dateOfBirth: r[ix.date_of_birth] || null,
       competitionId: r[ix.current_club_domestic_competition_id] || null,
-      lastSeason: Number(r[ix.last_season]) || null,
+      lastSeason,
       performance: performanceAggregates.get(playerId) ?? null,
     },
-    { referenceYear: CURRENT_MIN_SEASON, legend: false },
+    { referenceYear: CURRENT_MIN_SEASON, legend: (lastSeason || 0) < CURRENT_MIN_SEASON },
   );
   insert.run(
     Number(r[ix.player_id]),
@@ -205,7 +206,6 @@ db.exec(
 const baseSlots = ['GK', 'RB', 'CB', 'LB', 'DM', 'CM', 'AM', 'RW', 'LW', 'ST'];
 const pool = { current: {}, legends: {} };
 for (const era of ['current', 'legends']) for (const slot of baseSlots) pool[era][slot] = [];
-const overlapLimit = Math.floor(POOL_SIZE * OVERLAP_LIMIT_RATIO);
 // Factual per-season performance is the primary ranking signal. Players without
 // it (absent from appearances.csv) keep the caps-only fallback score but are
 // ranked below every player that has real data, so an obscure high-caps profile
@@ -262,12 +262,14 @@ const finalizeSlot = (list) =>
     };
   });
 for (const slot of baseSlots) {
-  const current = pool.current[slot].sort(byRankThenName).slice(0, POOL_SIZE);
+  const slotLimit = slot === 'CB' ? POOL_SIZE * 2 : POOL_SIZE;
+  const slotOverlapLimit = Math.floor(slotLimit * OVERLAP_LIMIT_RATIO);
+  const current = pool.current[slot].sort(byRankThenName).slice(0, slotLimit);
   const currentIds = new Set(current.map((player) => player.id));
   const legendCandidates = pool.legends[slot].sort(byRankThenName);
-  const returning = legendCandidates.filter((player) => currentIds.has(player.id)).slice(0, overlapLimit),
-    historic = legendCandidates.filter((player) => !currentIds.has(player.id)).slice(0, POOL_SIZE - returning.length);
-  const legends = [...historic, ...returning].sort(byRankThenName).slice(0, POOL_SIZE);
+  const returning = legendCandidates.filter((player) => currentIds.has(player.id)).slice(0, slotOverlapLimit),
+    historic = legendCandidates.filter((player) => !currentIds.has(player.id)).slice(0, slotLimit - returning.length);
+  const legends = [...historic, ...returning].sort(byRankThenName).slice(0, slotLimit);
   pool.current[slot] = finalizeSlot(current);
   pool.legends[slot] = finalizeSlot(legends);
 }

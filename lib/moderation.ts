@@ -68,9 +68,15 @@ const BLOCKED_TERMS = [
   'resmi hesap',
 ];
 
+const PREFIX_ONLY_LONG_TERMS = new Set(['oldur', 'salak', 'admin']);
+
+export const INVISIBLE_OR_CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/;
+const INVISIBLE_OR_CONTROL_CHARS_GLOBAL = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g;
+
 /** Reduces common evasion tricks to a canonical form. */
 export function normalizeForModeration(value: string) {
   return value
+    .replace(INVISIBLE_OR_CONTROL_CHARS_GLOBAL, '')
     .toLocaleLowerCase('tr')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -88,22 +94,72 @@ export function normalizeForModeration(value: string) {
     .replace(/[^a-z0-9]+/g, '');
 }
 
+function collapseRepeatedChars(value: string) {
+  return value.replace(/([a-z])\1+/g, '$1');
+}
+
+function stripEdgeDigits(value: string) {
+  return value.replace(/^\d+|\d+$/g, '');
+}
+
+function joinSingleCharRuns(tokens: string[]): string[] {
+  const joined: string[] = [];
+  let buffer = '';
+  for (const token of tokens) {
+    if (token.length === 1) {
+      buffer += token;
+    } else {
+      if (buffer.length > 1) joined.push(buffer);
+      buffer = '';
+    }
+  }
+  if (buffer.length > 1) joined.push(buffer);
+  return joined;
+}
+
 export function containsBlockedTerm(value: string) {
   const collapsed = normalizeForModeration(value);
   if (!collapsed) return false;
-  const withoutTrailingDigits = collapsed.replace(/\d+$/, '');
-  const tokens = value
+  const withoutEdgeDigits = stripEdgeDigits(collapsed);
+  const rawWords = value
+    .replace(INVISIBLE_OR_CONTROL_CHARS_GLOBAL, '')
     .split(/[^\p{L}\p{N}]+/u)
-    .map((token) => normalizeForModeration(token).replace(/\d+$/, ''))
     .filter(Boolean);
+  const rawTokens = rawWords.map((token) => stripEdgeDigits(normalizeForModeration(token))).filter(Boolean);
+  const edgeStrippedTokens = rawWords
+    .map((token) => stripEdgeDigits(normalizeForModeration(token.replace(/^\d+|\d+$/g, ''))))
+    .filter(Boolean);
+  const singleCharRuns = joinSingleCharRuns(rawTokens);
+  const tokens = [...new Set([...rawTokens, ...edgeStrippedTokens, ...singleCharRuns])];
+  const dedupedTokens = tokens.map(collapseRepeatedChars);
+  const dedupedCollapsed = collapseRepeatedChars(withoutEdgeDigits);
 
   return BLOCKED_TERMS.some((rawTerm) => {
     const term = normalizeForModeration(rawTerm);
     if (!term) return false;
-    if (collapsed === term || withoutTrailingDigits === term) return true;
+    const dedupedTerm = collapseRepeatedChars(term);
+
+    if (rawTerm.includes(' ')) {
+      const parts = rawTerm
+        .split(/\s+/)
+        .map((part) => normalizeForModeration(part))
+        .filter(Boolean);
+      if (collapsed === term || withoutEdgeDigits === term || dedupedCollapsed === dedupedTerm) return true;
+      for (let i = 0; i <= rawTokens.length - parts.length; i++) {
+        if (parts.every((part, offset) => rawTokens[i + offset] === part)) return true;
+      }
+      return false;
+    }
+
+    if (collapsed === term || withoutEdgeDigits === term || dedupedCollapsed === dedupedTerm) return true;
     if (tokens.some((token) => token === term)) return true;
+    if (dedupedTerm.length >= 3 && dedupedTokens.some((token) => token === dedupedTerm)) return true;
     if (term.length >= 4 && tokens.some((token) => token.startsWith(term))) return true;
-    if (term.length >= 5 && collapsed.includes(term)) return true;
+    if (dedupedTerm.length >= 4 && dedupedTokens.some((token) => token.startsWith(dedupedTerm))) return true;
+    if (term.length >= 5 && !PREFIX_ONLY_LONG_TERMS.has(term)) {
+      if (tokens.some((token) => token.includes(term))) return true;
+      if (dedupedTerm.length >= 5 && dedupedTokens.some((token) => token.includes(dedupedTerm))) return true;
+    }
     return false;
   });
 }
@@ -116,7 +172,7 @@ export type ModerationResult = { ok: true } | { ok: false; reason: 'empty' | 'to
 
 export function moderateDisplayName(raw: unknown, maxLength = DISPLAY_NAME_MAX_LENGTH): ModerationResult {
   const value = typeof raw === 'string' ? raw : '';
-  if (/[\u0000-\u001f\u007f]/.test(value)) return { ok: false, reason: 'control-chars' };
+  if (INVISIBLE_OR_CONTROL_CHARS.test(value)) return { ok: false, reason: 'control-chars' };
   const trimmed = value.trim();
   if (!trimmed) return { ok: false, reason: 'empty' };
   if (trimmed.length > maxLength) return { ok: false, reason: 'too-long' };
@@ -127,7 +183,7 @@ export function moderateDisplayName(raw: unknown, maxLength = DISPLAY_NAME_MAX_L
 /** Normalises an accepted display name for storage. */
 export function normalizeDisplayName(raw: unknown, maxLength = DISPLAY_NAME_MAX_LENGTH) {
   return String(raw ?? '')
-    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(INVISIBLE_OR_CONTROL_CHARS_GLOBAL, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, maxLength);
@@ -136,7 +192,7 @@ export function normalizeDisplayName(raw: unknown, maxLength = DISPLAY_NAME_MAX_
 /** Strips control characters and enforces the chat length budget. */
 export function sanitizeChatMessage(raw: unknown, maxLength = CHAT_MESSAGE_MAX_LENGTH) {
   return String(raw ?? '')
-    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(INVISIBLE_OR_CONTROL_CHARS_GLOBAL, ' ')
     .trim()
     .slice(0, maxLength);
 }

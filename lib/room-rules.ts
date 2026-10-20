@@ -38,14 +38,15 @@ type ReopenableGame = {
   deadline: number | null;
 };
 
-export function reopenLiveLot(game: ReopenableGame, timerSeconds: number, now = Date.now()) {
+export function reopenLiveLot(game: ReopenableGame, timerSeconds: number, now = Date.now(), bidIncrement = 5) {
   const lot = game.pool[game.index];
   if (!lot || game.activeTurn !== null || game.leader === null) return false;
   game.passed = [];
-  const offer = game.bid + 1;
-  const challenger = game.managers.findIndex(
-    (manager, index) => index !== game.leader && canPlaceLotBid(manager, lot, offer, index, game.passed),
-  );
+  const challenger = game.managers.findIndex((manager, index) => {
+    if (index === game.leader) return false;
+    const requiredOffer = manager.isBot ? game.bid + bidIncrement : game.bid + 1;
+    return canPlaceLotBid(manager, lot, requiredOffer, index, game.passed);
+  });
   if (challenger < 0) return false;
   game.activeTurn = challenger;
   game.deadline = now + timerSeconds * 1000;

@@ -4,8 +4,8 @@
   "description": "Arkadaşlarınla canlı futbol mezatı",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#090c0a",
-  "theme_color": "#c9ff45",
+  "background_color": "#0c0a07",
+  "theme_color": "#ffb45c",
   "icons": [
     {
       "src": "/favicon.svg",

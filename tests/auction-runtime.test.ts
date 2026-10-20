@@ -120,6 +120,17 @@ test('publicStateView reveals the active rating only when the room asks for it',
   assert.equal(view.game!.pool[2].name, 'Gizli lot');
 });
 
+test('publicStateView redacts chat history for minor and unknown age bands', () => {
+  const state = stateWith({
+    status: 'auction',
+    game: gameWith([lot('a', 'GK', 90)]),
+    chat: [{ id: 'c1', memberId: 'm0', name: 'Menajer 0', text: 'selam', at: 1 }],
+  });
+  assert.equal(publicStateView(state, 'adult').chat?.length, 1);
+  assert.equal(publicStateView(state, 'minor').chat, undefined);
+  assert.equal(publicStateView(state, 'unknown').chat, undefined);
+});
+
 test('pendingStateView exposes lobby metadata only', () => {
   const state = stateWith({
     status: 'auction',
@@ -335,4 +346,73 @@ test('standardEligibility separates comparable games from assisted ones', () => 
   const evaluation = standardEligibility(assisted);
   assert.equal(evaluation.standardEligible, false);
   assert.ok(evaluation.autoCompleted);
+});
+
+test('secondChance defers forced slot completion and brings unsold lots back at a discount before coaches', async () => {
+  const { advanceLot, recordUnsoldLot, restoreUndo } = await import('../lib/auction-runtime.ts');
+  const gk1: Footballer = { ...lot('gk-1', 'GK', 90), price: 50 };
+  const gk2: Footballer = { ...lot('gk-2', 'GK', 88), price: 40 };
+  const gk3: Footballer = { ...lot('gk-3', 'GK', 86), price: 30 };
+  const coachLot = {
+    kind: 'coach' as const,
+    id: 'coach-1',
+    name: 'Test Coach',
+    slot: 'COACH' as const,
+    role: 'Teknik Direktör' as const,
+    rating: 88,
+    price: 20,
+    nation: 'TUR',
+    tactics: 88,
+    motivation: 88,
+    adaptability: 88,
+    development: 88,
+    preferredFormation: '4-2-3-1',
+    specialty: 'balance' as const,
+  };
+  const state = stateWith(
+    {
+      status: 'auction',
+      game: gameWith([gk1, gk2, gk3, coachLot], { stage: 'primary', unsold: [] }),
+    },
+    { secondChance: true },
+  );
+
+  // Skip all 3 GK lots as unsold
+  for (let i = 0; i < 3; i++) {
+    recordUnsoldLot(state, state.game!.pool[state.game!.index]);
+    advanceLot(state);
+  }
+
+  assert.equal(state.game!.stage, 'secondChance');
+  assert.equal(state.game!.managers[0].squad.GK, undefined, 'GK slot is not force-filled before secondChance');
+  const current = state.game!.pool[state.game!.index];
+  assert.equal(current.id, 'gk-1-r2');
+  assert.equal(current.price, 35, '70% discounted price rounded to 5M');
+  assert.equal(publicStateView(state).game!.publicMeta?.currentIsBonus, false, 'secondChance lots are not bonus lots');
+
+  captureUndo(state);
+  advanceLot(state);
+  assert.equal(restoreUndo(state), true);
+  assert.equal(state.game!.pool[state.game!.index].id, 'gk-1-r2');
+  assert.equal(state.game!.pool[state.game!.index].price, 35);
+});
+
+test('settleBot preserves existing human undo snapshot and keeps deterministic ceiling across bids', () => {
+  const state = stateWith({ members: members(2, [1]) });
+  startAuction(state);
+  captureUndo(state);
+  const humanUndo = state.game!.undo;
+  state.game!.bid = 15;
+  state.game!.leader = 0;
+  state.game!.nextBotAt = 0;
+  const acted = settleBot(state);
+  if (acted) {
+    assert.equal(state.game!.undo, humanUndo, 'bot bid does not overwrite human undo snapshot');
+  }
+
+  const humansOnly = stateWith({ members: members(2) });
+  startAuction(humansOnly);
+  humansOnly.game!.nextBotAt = 0;
+  assert.equal(settleBot(humansOnly), false, 'room without bots does not mutate state on settleBot');
+  assert.equal(humansOnly.game!.nextBotAt, undefined);
 });

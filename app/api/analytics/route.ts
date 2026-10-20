@@ -32,13 +32,20 @@ export async function POST(request: Request) {
 }
 
 /** Public aggregate read: totals plus a zero-filled per-day breakdown. Contains no room or member data. */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+    await rateLimit(`analytics-read:${await digest(ip)}`, 60);
     return NextResponse.json(
       { ok: true, ...(await analyticsSummary(db())) },
-      { headers: { 'Cache-Control': 'no-store' } },
+      { headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=60' } },
     );
   } catch (error) {
-    return NextResponse.json({ error: (error as Error).message, code: 'ANALYTICS_FAILED' }, { status: 500 });
+    const known = error instanceof RoomError;
+    const headers = known && error.status === 429 ? { 'Retry-After': '30' } : undefined;
+    return NextResponse.json(
+      { error: (error as Error).message, code: known ? error.code : 'ANALYTICS_FAILED' },
+      { status: known ? error.status : 500, headers },
+    );
   }
 }

@@ -55,7 +55,7 @@ test('the shipped pool carries no third-party media or market valuations at all'
     'current' | 'legends',
     Record<string, Array<Record<string, unknown>>>
   >;
-  const players = Object.values(pool.current).flat();
+  const players = [...Object.values(pool.current).flat(), ...Object.values(pool.legends).flat()];
   assert.ok(players.length > 0);
   for (const player of players) {
     assert.equal('image' in player, false, 'no photo URLs ship in the dataset');
